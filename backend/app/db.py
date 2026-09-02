@@ -43,3 +43,7 @@ def get_session() -> Session:
         yield db
     finally:
         db.close()
+
+
+get_db = get_session
+

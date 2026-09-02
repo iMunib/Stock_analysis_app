@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { CompareOut, SearchOut } from "../api/types";
-import { CompanyLink, ErrorBanner, HalalBadge, Score, Spinner, useDebounced } from "../components/ui";
-import { PillarMiniBars } from "../components/bars";
+import { CompanyLink, ErrorBanner, HalalBadge, Spinner, useDebounced } from "../components/ui";
+import { MiniPillarBars, Sparkline } from "../components/viz";
+import { Card, Page } from "../components/layout";
 import InfoTip from "../components/InfoTip";
 import { mixedCurrencyWarning } from "../api/copy";
 import { multiple, percentish } from "../lib/format";
@@ -43,44 +44,59 @@ export default function Compare() {
   const warning = data ? mixedCurrencyWarning(data.currencies) : null;
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <header className="space-y-2">
-        <h1 className="font-display text-3xl tracking-tight">Compare companies</h1>
-        <p className="text-sm text-fog">
-          Pick 2 to 8 names. Ratios and scores are comparable across currencies; money amounts stay in each
-          company's own currency and are never converted.
-        </p>
-      </header>
-
+    <Page
+      title="Compare companies"
+      description="Pick 2 to 8 names. Ratios and scores are comparable across currencies; money amounts stay in each company's own currency and are never converted."
+    >
       <AddRows ids={ids} onChange={setIds} />
 
       {ids.length > 0 && (
-        <p className="font-mono text-xs text-dim">
-          Selected ({ids.length}/{MAX}): {ids.join(" · ")}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          <span className="text-ink-2">Selected ({ids.length}/{MAX}):</span>
+          {ids.map((id) => (
+            <span key={id} className="inline-flex items-center gap-1 rounded-chip border border-border bg-bg-2 px-2 py-0.5 text-ink-0">
+              <span>{id}</span>
+              <button
+                type="button"
+                onClick={() => setIds(ids.filter((x) => x !== id))}
+                className="text-ink-2 hover:text-neg ml-1"
+                aria-label={`Remove ${id}`}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {ids.length < 2 && (
+        <p className="rounded-card border border-border bg-bg-1 p-4 text-xs text-ink-1">
+          Add at least two companies to compare side by side.
         </p>
       )}
-      {ids.length < 2 && <p className="text-sm text-fog">Add at least two companies to compare.</p>}
 
       {loading && <Spinner label="Comparing…" />}
       {error && <ErrorBanner message={error} />}
 
       {data && !loading && (
-        <>
+        <div className="space-y-4">
           {warning && (
-            <div role="alert" className="rounded-md border border-warn/60 bg-warn/10 px-4 py-3 text-sm text-paper">
+            <div role="alert" className="rounded-card border border-warn/60 bg-warn-weak px-4 py-3 text-xs text-ink-0">
               {warning}
             </div>
           )}
-          <div className="overflow-x-auto rounded-md border border-line">
-            <CompareTable data={data} showHalal={showHalal} />
-          </div>
-          <p className="text-xs text-dim">
-            Best value per column is highlighted (min PE/PB/EV-EBITDA, max ROE/composite). “—” means the field is
+          <Card padding="none" className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <CompareTable data={data} showHalal={showHalal} />
+            </div>
+          </Card>
+          <p className="text-xs text-ink-2">
+            Best value per column is highlighted with a gold accent band (min PE/PB/EV-EBITDA, max ROE/composite). “—” means the field is
             not on file.
           </p>
-        </>
+        </div>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -114,10 +130,10 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
   ];
 
   return (
-    <table className="w-full text-sm">
+    <table className="w-full text-xs">
       <thead>
-        <tr className="border-b border-line bg-panel text-left font-mono text-[10px] uppercase tracking-widest text-dim">
-          <th scope="col" className="sticky left-0 z-10 bg-panel px-4 py-3">Company</th>
+        <tr className="border-b border-border bg-bg-2/70 text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
+          <th scope="col" className="sticky left-0 z-10 bg-bg-2 px-4 py-3 border-r border-border">Company</th>
           <th scope="col" className="px-3 py-3 whitespace-nowrap" aria-label="Pillar bars">
             <span>Q·V·G·R</span>
             <InfoTip term="Q·V·G·R" />
@@ -139,16 +155,25 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
           {showHalal && <th scope="col" className="px-3 py-3">Halal</th>}
         </tr>
       </thead>
-      <tbody className="divide-y divide-line">
+      <tbody className="divide-y divide-border">
         {data.rows.map((r) => (
-          <tr key={r.company_id} className={r.found ? "" : "opacity-40"}>
-            <td className="sticky left-0 z-10 bg-panel px-4 py-3">
-              {r.found ? <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink> : <span className="text-dim">{r.company_id} (not found)</span>}
+          <tr key={r.company_id} className={`hover:bg-bg-2/40 transition-colors ${r.found ? "" : "opacity-40"}`}>
+            <td className="sticky left-0 z-10 bg-bg-1 px-4 py-3 border-r border-border">
+              {r.found ? (
+                <CompanyLink companyId={r.company_id} className="font-semibold text-ink-0">
+                  {r.name ?? r.company_id}
+                </CompanyLink>
+              ) : (
+                <span className="text-ink-2 font-mono">{r.company_id} (not found)</span>
+              )}
             </td>
             <td className="px-3 py-3">
-              <PillarMiniBars p={{ quality: r.quality, value: r.value, growth: r.growth, risk: r.risk }} />
+              <div className="flex items-center gap-2">
+                <MiniPillarBars quality={r.quality} value={r.value} growth={r.growth} risk={r.risk} />
+                <Sparkline data={[r.quality, r.value, r.growth, r.risk]} width={40} height={14} />
+              </div>
             </td>
-            <td className="px-3 py-3 font-mono text-xs text-info">{r.currency ?? "—"}</td>
+            <td className="px-3 py-3 font-mono text-xs text-info font-medium">{r.currency ?? "—"}</td>
             {compKeys.map(([label, key, , fmt]) => {
               const v = num(r[key] as number | null);
               const best = { composite: bestComposite, pe_calc: bestPe, pb_calc: bestPb, ev_to_ebitda_calc: bestEv, roe_calc: bestRoe, roa_calc: null, fcfmargin_calc: bestFcf }[
@@ -158,13 +183,13 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
               return (
                 <td
                   key={label}
-                  className={`px-3 py-3 text-right font-mono tabular-nums ${isBest ? "rounded bg-gold/15 font-semibold text-gold" : "text-fog"}`}
+                  className={`px-3 py-3 text-right font-mono tabular-nums ${isBest ? "rounded-chip bg-accent-weak font-semibold text-accent" : "text-ink-1"}`}
                 >
                   {v === null ? "—" : fmt(v)}
                 </td>
               );
             })}
-            <td className="px-3 py-3 text-right font-mono tabular-nums text-fog">{r.peer_rank ?? "—"}</td>
+            <td className="px-3 py-3 text-right font-mono tabular-nums text-ink-1">{r.peer_rank ?? "—"}</td>
             {showHalal && (
               <td className="px-3 py-3">
                 <HalalBadge status={r.halal_status} />
@@ -172,9 +197,9 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
             )}
           </tr>
         ))}
-        {/* highlight legend row */}
-        <tr className="border-t border-line bg-panel/60 font-mono text-[9px] uppercase tracking-widest text-dim">
-          <td className="sticky left-0 bg-panel px-4 py-1.5">best</td>
+        {/* Highlight legend row */}
+        <tr className="border-t border-border bg-bg-2/50 font-mono text-[9px] uppercase tracking-widest text-ink-2">
+          <td className="sticky left-0 bg-bg-2 px-4 py-2 border-r border-border font-bold text-accent">best</td>
           <td />
           <td />
           {compKeys.map(([label, key, dir]) => {
@@ -183,7 +208,7 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
               best === null
                 ? "—"
                 : (data.rows.find((r) => num(r[key] as number | null) === best)?.name ?? "—");
-            return <td key={label} className="px-3 py-1.5 text-right normal-case tracking-normal">{bestName}</td>;
+            return <td key={label} className="px-3 py-2 text-right normal-case tracking-normal text-ink-1 truncate max-w-[100px]">{bestName}</td>;
           })}
           <td />
           {showHalal && <td />}
@@ -203,56 +228,61 @@ function AddRows({ ids, onChange }: { ids: string[]; onChange: (ids: string[]) =
     const q = debounced.trim();
     if (!q) {
       setResults(null);
+      setErr(null);
       return;
     }
-    api
-      .search(q, 8)
-      .then(setResults)
-      .catch((e: ApiError) => setErr(e.message));
+    api.search(q, 6).then(setResults).catch((e: ApiError) => setErr(e.message));
   }, [debounced]);
 
-  const toggle = (cid: string) => {
-    if (ids.includes(cid)) onChange(ids.filter((x) => x !== cid));
-    else if (ids.length < MAX) onChange([...ids, cid]);
+  const add = (cid: string) => {
+    if (ids.includes(cid) || ids.length >= MAX) return;
+    onChange([...ids, cid]);
+    setQuery("");
+    setResults(null);
   };
 
   return (
-    <div className="space-y-3">
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search to add companies — e.g. Apple"
-        aria-label="Search companies to add to the comparison"
-        className="w-full rounded-md border border-line bg-panel px-4 py-2.5 placeholder:text-dim"
-      />
-      {err && <ErrorBanner message={err} onDismiss={() => setErr(null)} />}
+    <Card padding="sm" className="relative">
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          placeholder="Add ticker or company name to compare…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          disabled={ids.length >= MAX}
+          className="flex-1 min-w-[200px] rounded-card border border-border bg-bg-0 px-3 py-1.5 font-mono text-xs text-ink-0 placeholder:text-ink-2 disabled:opacity-50"
+        />
+        {ids.length >= MAX && (
+          <span className="text-[11px] text-ink-2 font-mono">Maximum {MAX} reached</span>
+        )}
+      </div>
+
+      {err && <p className="mt-2 text-xs text-neg font-mono">{err}</p>}
+
       {results && results.items.length > 0 && (
-        <ul className="divide-y divide-line rounded-md border border-line bg-panel" aria-label="Addable search results">
+        <ul className="absolute left-0 right-0 top-full mt-1.5 z-20 divide-y divide-border rounded-card border border-border bg-bg-1 shadow-card max-h-56 overflow-auto">
           {results.items.map((it) => {
-            const selected = ids.includes(it.company_id);
+            const added = ids.includes(it.company_id);
             return (
-              <li key={it.company_id} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                <label className="flex flex-1 cursor-pointer items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggle(it.company_id)}
-                    disabled={!selected && ids.length >= MAX}
-                    aria-label={`Add ${it.name ?? it.company_id} to comparison`}
-                    className="h-4 w-4 accent-[#e0a84f]"
-                  />
-                  <span className="text-paper">{it.name ?? it.company_id}</span>
-                  <span className="font-mono text-xs text-dim">{it.company_id}</span>
-                  {it.currency && <span className="font-mono text-xs text-info">{it.currency}</span>}
-                </label>
-                <Score value={it.composite} />
+              <li key={it.company_id}>
+                <button
+                  type="button"
+                  onClick={() => add(it.company_id)}
+                  disabled={added || ids.length >= MAX}
+                  className="w-full flex items-center justify-between px-3.5 py-2 text-left text-xs hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                >
+                  <span className="text-ink-0 font-medium truncate">
+                    {it.name ?? it.company_id} <span className="text-ink-2 font-mono ml-1.5 text-[10px]">{it.company_id}</span>
+                  </span>
+                  <span className="shrink-0 ml-2 font-mono text-xs text-accent">
+                    {added ? "Added" : "+ Add"}
+                  </span>
+                </button>
               </li>
             );
           })}
         </ul>
       )}
-      {ids.length >= MAX && <p className="text-xs text-warn">Maximum of 8 companies per comparison.</p>}
-    </div>
+    </Card>
   );
 }

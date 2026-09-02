@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { signalLabel } from "../api/copy";
+import { Chip, type ChipTone } from "./layout/Chip";
 
 export function ErrorBanner({ message, onDismiss, onRetry }: { message: string; onDismiss?: () => void; onRetry?: () => void }) {
   return (
-    <div role="alert" className="rounded-md border border-bad/50 bg-bad/10 px-4 py-3 text-sm text-paper flex items-start justify-between gap-4">
+    <div role="alert" className="rounded-card border border-neg/50 bg-neg-weak px-4 py-3 text-sm text-ink-0 flex items-start justify-between gap-4">
       <span>{message}</span>
       <span className="flex gap-2 shrink-0">
         {onRetry && (
-          <button onClick={onRetry} className="text-gold hover:underline" aria-label="Retry">
+          <button onClick={onRetry} className="text-accent hover:underline font-mono text-xs" aria-label="Retry">
             Retry
           </button>
         )}
         {onDismiss && (
-          <button onClick={onDismiss} className="text-dim hover:text-paper" aria-label="Dismiss error">
+          <button onClick={onDismiss} className="text-ink-2 hover:text-ink-0" aria-label="Dismiss error">
             ✕
           </button>
         )}
@@ -24,39 +25,42 @@ export function ErrorBanner({ message, onDismiss, onRetry }: { message: string; 
 
 export function SignalBadge({ signal, small }: { signal: string | null | undefined; small?: boolean }) {
   const label = signalLabel(signal);
-  const color =
+  const tone: ChipTone =
     signal === "strong_candidate" || signal === "constructive"
-      ? "text-good border-good/40"
+      ? "positive"
       : signal === "mixed"
-        ? "text-mid border-mid/40"
+        ? "warning"
         : signal === "weak" || signal === "avoid"
-          ? "text-bad border-bad/40"
-          : "text-info border-info/40";
+          ? "negative"
+          : "info";
+
   return (
-    <span className={`inline-block rounded border px-2 py-0.5 font-mono uppercase tracking-wider ${color} ${small ? "text-[10px]" : "text-xs"}`}>
+    <Chip tone={tone} size={small ? "sm" : "md"}>
       {label}
-    </span>
+    </Chip>
   );
 }
 
 export function HalalBadge({ status }: { status: string | null | undefined }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    halal_candidate: { label: "Halal candidate", cls: "text-good border-good/40" },
-    not_halal: { label: "Not halal", cls: "text-bad border-bad/40" },
-    unknown: { label: "Halal unknown", cls: "text-dim border-line2" },
+  const map: Record<string, { label: string; tone: ChipTone }> = {
+    halal_candidate: { label: "Halal candidate", tone: "positive" },
+    not_halal: { label: "Not halal", tone: "negative" },
+    unknown: { label: "Halal unknown", tone: "neutral" },
   };
   const it = map[status ?? "unknown"] ?? map.unknown;
   return (
-    <span className={`inline-block rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${it.cls}`}>{it.label}</span>
+    <Chip tone={it.tone} size="sm">
+      {it.label}
+    </Chip>
   );
 }
 
 export function Score({ value, size }: { value: number | null | undefined; size?: "lg" | "sm" }) {
   if (value === null || value === undefined) {
-    return <span className={`font-mono text-dim ${size === "lg" ? "text-4xl" : ""}`}>—</span>;
+    return <span className={`font-mono text-ink-2 ${size === "lg" ? "text-4xl" : ""}`}>—</span>;
   }
   return (
-    <span className={`font-mono tabular-nums text-gold ${size === "lg" ? "text-5xl" : "text-base"}`} title="Research score 0-10">
+    <span className={`font-mono tabular-nums text-accent ${size === "lg" ? "text-5xl" : "text-base"}`} title="Research score 0-10">
       {value.toFixed(1)}
     </span>
   );
@@ -64,8 +68,8 @@ export function Score({ value, size }: { value: number | null | undefined; size?
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <div className="flex items-center gap-3 text-sm text-fog" role="status" aria-live="polite">
-      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line2 border-t-gold" aria-hidden="true" />
+    <div className="flex items-center gap-3 text-sm text-ink-1" role="status" aria-live="polite">
+      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-border-strong border-t-accent" aria-hidden="true" />
       {label ?? "Loading…"}
     </div>
   );
@@ -73,7 +77,7 @@ export function Spinner({ label }: { label?: string }) {
 
 export function CompanyLink({ companyId, children, className }: { companyId: string; children: React.ReactNode; className?: string }) {
   return (
-    <Link to={`/c/${encodeURIComponent(companyId)}`} className={`text-paper underline decoration-line2 underline-offset-4 hover:decoration-gold ${className ?? ""}`}>
+    <Link to={`/c/${encodeURIComponent(companyId)}`} className={`text-ink-0 underline decoration-border-strong underline-offset-4 hover:decoration-accent ${className ?? ""}`}>
       {children}
     </Link>
   );

@@ -37,6 +37,7 @@ class Company(Base):
     cik: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reporting_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     filing_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     snapshots: Mapped[list["FinancialSnapshot"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     flags: Mapped[list["DataQualityFlag"]] = relationship(back_populates="company", cascade="all, delete-orphan")
@@ -248,3 +249,109 @@ class CompanyProfile(Base):
     quarterly_json: Mapped[list | None] = mapped_column(JSON, nullable=True)  # last 4 quarters
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+
+class FinancialSnapshotTTM(Base):
+    """Normalized 4-quarter rolling TTM financials with Sloan accruals and ROIC."""
+
+    __tablename__ = "financial_snapshots_ttm"
+
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), primary_key=True)
+    as_of_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    quarter_count: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    operating_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+    net_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+    diluted_shares: Mapped[float | None] = mapped_column(Float, nullable=True)
+    operating_cash_flow: Mapped[float | None] = mapped_column(Float, nullable=True)
+    capex: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fcf: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nopat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    invested_capital: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roic: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fcf_yield: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ev_ebitda: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pe_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sloan_accrual_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cash_conversion_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ValuationReverseDCF(Base):
+    """Deterministic reverse DCF solving for market-implied 10-year FCF growth."""
+
+    __tablename__ = "valuation_reverse_dcf"
+
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), primary_key=True)
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    current_share_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    diluted_shares: Mapped[float | None] = mapped_column(Float, nullable=True)
+    net_debt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    baseline_fcf: Mapped[float | None] = mapped_column(Float, nullable=True)
+    terminal_growth_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.025)
+    wacc: Mapped[float] = mapped_column(Float, nullable=False, default=0.09)
+    market_implied_growth_10y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    historical_5y_cagr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expectations_gap: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sensitivity_matrix_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="converged")
+
+
+class ScreenerPreset(Base):
+    """Deep-value and forensic screener presets."""
+
+    __tablename__ = "screener_presets"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    criteria_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    is_system_preset: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class CompanyKeyStats(Base):
+    """Per-metric market/valuation statistics with as-of dates and provider tracking.
+
+    Separate from FinancialSnapshot so that price-derived stats (which expire daily)
+    don't pollute the slower-changing annual fundamentals table.
+    """
+
+    __tablename__ = "company_key_stats"
+    __table_args__ = (
+        UniqueConstraint("company_id", "metric_name", name="uq_key_stats_company_metric"),
+        Index("ix_key_stats_company", "company_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=False)
+    metric_name: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g. "forward_pe", "beta", "52w_high"
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    str_value: Mapped[str | None] = mapped_column(String(64), nullable=True)  # for date strings like ex_dividend_date
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    as_of: Mapped[date | None] = mapped_column(Date, nullable=True)     # metric reference date
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(64), nullable=True)  # "yfinance", "owner_xlsx", etc.
+
+
+class ResearchEvidence(Base):
+    """Cached sourced snippets (SEC filing text, Yahoo news metadata).
+
+    LLM may summarize these but must cite them. No HTML scraping.
+    """
+
+    __tablename__ = "research_evidence"
+    __table_args__ = (
+        Index("ix_evidence_company", "company_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=True)
+    sector: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    topic: Mapped[str] = mapped_column(String(32), nullable=False)  # company_summary | industry | competitor | catalyst | risk
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    source_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    published_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)  # high | medium | low

@@ -290,3 +290,84 @@ def fetch_profile_and_quarterly(symbol: str) -> dict:
         "quarterly": quarterly,
     }
 
+
+def fetch_key_stats(symbol: str) -> dict:
+    """Fetch extended key statistics from Yahoo Finance info dict.
+
+    Returns a flat dict of {metric_name: {"value", "str_value", "currency", "as_of"}}.
+    All values are optional — absent fields return None without raising.
+    Never mixes currencies.
+    """
+    yf = _import_yf()
+    _polite_wait()
+    try:
+        tk = yf.Ticker(symbol)
+        info = tk.info or {}
+    except Exception:
+        return {}
+
+    import math as _math
+    from datetime import date as _date, datetime as _datetime
+
+    today = _date.today().isoformat()
+    trading_cur = (info.get("currency") or "").upper() or None
+
+    def _float(key: str) -> float | None:
+        v = info.get(key)
+        try:
+            f = float(v)
+            return None if _math.isnan(f) else f
+        except (TypeError, ValueError):
+            return None
+
+    def _date_str(key: str) -> str | None:
+        ts = info.get(key)
+        if ts is None:
+            return None
+        try:
+            from datetime import timezone as _tz
+            return _datetime.fromtimestamp(float(ts), tz=_tz.utc).strftime("%Y-%m-%d")
+        except (ValueError, TypeError, OSError):
+            return None
+
+    metrics: dict = {}
+
+    def _add(name: str, value: float | None, *, str_value: str | None = None, currency: str | None = None) -> None:
+        metrics[name] = {"value": value, "str_value": str_value, "currency": currency, "as_of": today}
+
+    _add("market_cap", _float("marketCap"), currency=trading_cur)
+    _add("enterprise_value", _float("enterpriseValue"), currency=trading_cur)
+    _add("shares_outstanding", _float("sharesOutstanding"))
+    _add("float_shares", _float("floatShares"))
+    _add("trailing_pe", _float("trailingPE"))
+    _add("forward_pe", _float("forwardPE"))
+    _add("peg_ratio", _float("pegRatio"))
+    _add("price_to_sales", _float("priceToSalesTrailingTwelveMonths"))
+    _add("price_to_book", _float("priceToBook"))
+    _add("ev_to_revenue", _float("enterpriseToRevenue"))
+    _add("ev_to_ebitda", _float("enterpriseToEbitda"))
+    _add("beta", _float("beta"))
+    _add("52w_high", _float("fiftyTwoWeekHigh"), currency=trading_cur)
+    _add("52w_low", _float("fiftyTwoWeekLow"), currency=trading_cur)
+    _add("52w_change_pct", _float("52WeekChange"))
+    _add("50d_avg", _float("fiftyDayAverage"), currency=trading_cur)
+    _add("200d_avg", _float("twoHundredDayAverage"), currency=trading_cur)
+    _add("institutional_ownership_pct", _float("heldPercentInstitutions"))
+    _add("insider_ownership_pct", _float("heldPercentInsiders"))
+    _add("short_ratio", _float("shortRatio"))
+    _add("short_pct_float", _float("shortPercentOfFloat"))
+    _add("dividend_yield", _float("dividendYield"))
+    _add("dividend_rate", _float("dividendRate"), currency=trading_cur)
+    _add("payout_ratio", _float("payoutRatio"))
+    _add("ex_dividend_date", None, str_value=_date_str("exDividendDate"))
+    _add("current_ratio", _float("currentRatio"))
+    _add("debt_to_equity", _float("debtToEquity"))
+    _add("book_value_per_share", _float("bookValue"), currency=trading_cur)
+    _add("profit_margin", _float("profitMargins"))
+    _add("operating_margin", _float("operatingMargins"))
+    _add("gross_margin", _float("grossMargins"))
+    _add("revenue_growth_yoy", _float("revenueGrowth"))
+    _add("earnings_growth_yoy", _float("earningsGrowth"))
+    next_earnings = _date_str("earningsTimestamp") or _date_str("earningsTimestampStart")
+    _add("next_earnings_date", None, str_value=next_earnings)
+    return metrics

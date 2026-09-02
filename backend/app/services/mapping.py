@@ -95,9 +95,27 @@ _PATTERNS = [
     re.compile(r"^([A-Za-z0-9.\-^]+)\.(TO|US|TSX|V|NEO|CN)$", re.I),
 ]
 
+# Exchange-prefix normalisers: convert "NASDAQ:AMD" / "TSE:KITS" / "NYSE:IBM" → bare ticker + inferred country
+_EXCHANGE_CA = re.compile(r"^(?:TSE|TSX|TSV|NEO|CSE)\s*:\s*([A-Za-z0-9.\-^]{1,16})$", re.I)
+_EXCHANGE_US = re.compile(r"^(?:NASDAQ|NYSE|AMEX|NYSEARCA|CBOE)\s*:\s*([A-Za-z0-9.\-^]{1,16})$", re.I)
+
+# Tickers that are definitively Canadian (CA universe) — avoid defaulting to US
+_CA_BARE_TICKERS: set[str] | None = None
+
+
+def _ca_bare_tickers() -> set[str]:
+    global _CA_BARE_TICKERS
+    if _CA_BARE_TICKERS is not None:
+        return _CA_BARE_TICKERS
+    by_id, by_primary = _universe_rows()
+    _CA_BARE_TICKERS = {rec["ticker"].upper() for rec in by_id.values() if rec.get("country") == "CA"}
+    return _CA_BARE_TICKERS
+
 
 def resolve(query: str) -> ResolveResult:
-    """Resolve 'AAPL', 'AAPL.US', 'RY.TO', 'CA:RY:TSX', 'US:MMM:US'."""
+    """Resolve 'AAPL', 'AAPL.US', 'RY.TO', 'CA:RY:TSX', 'US:MMM:US',
+    'NASDAQ:AMD', 'NYSE:IBM', 'TSE:KITS', 'TSX:KITS'.
+    Conservative default: unknown plain ticker → check CA universe first, then US."""
     q = (query or "").strip()
     if not q:
         raise MappingError("empty query")
@@ -107,13 +125,22 @@ def resolve(query: str) -> ResolveResult:
     if q.upper().endswith(".HK") or re.search(r"^\d{4}(\.HK)?$", q):
         raise MappingError("LISTING_AMBIGUOUS: Multiple listings. Pick US ADR or HK/TSX (show choices).")
 
+    # Exchange-prefix normalization: TSE:KITS / NASDAQ:AMD / NYSE:IBM / TSX:KITS
+    m_ca = _EXCHANGE_CA.match(q)
+    if m_ca:
+        return resolve(m_ca.group(1).upper() + ".TO")
+
+    m_us = _EXCHANGE_US.match(q)
+    if m_us:
+        return resolve(m_us.group(1).upper())
+
     cid = normalize_company_id(q)
     if cid and ":" in q:
         rec = by_id.get(cid)
         if rec:
             return ResolveResult(cid, rec["ticker"], rec["country"], rec["currency"], rec["yahoo"], rec["cik"], True, rec["name"])
-        parts = q.split(":")
-        ticker, country = parts[1].upper(), parts[0].upper()
+        cid_parts = cid.split(":")
+        country, ticker = cid_parts[0], cid_parts[1]
         sec_info = cik_for_unknown_us(ticker) if country == "US" else (None, None)
         cik, name = (sec_info[0], sec_info[1]) if isinstance(sec_info, tuple) else (sec_info, None)
         return ResolveResult(cid, ticker, country, "USD" if country == "US" else "CAD", yahoo_symbol_for(ticker, country), cik, False, name)
@@ -146,6 +173,10 @@ def resolve(query: str) -> ResolveResult:
         return ResolveResult(rec["company_id"], rec["ticker"], rec["country"], rec["currency"], rec["yahoo"], rec["cik"], True, rec["name"])
     if t.endswith(".TO"):
         return resolve(t)  # unreachable, kept for safety
+
+    # Unknown plain ticker: check if it's a known CA ticker first (e.g. KITS is only on TSX)
+    if t in _ca_bare_tickers():
+        return resolve(t + ".TO")
 
     # Unknown plain ticker: default US (conservative default, logged by callers)
     cid = f"US:{t}:US"

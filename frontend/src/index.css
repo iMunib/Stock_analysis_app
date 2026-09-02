@@ -1,3 +1,5 @@
+@import "./styles/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,24 +9,35 @@ html {
 }
 
 body {
-  @apply bg-ink text-paper font-sans antialiased;
+  background-color: var(--bg-0);
+  color: var(--ink-0);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
   background-image:
     linear-gradient(rgba(224, 168, 79, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(224, 168, 79, 0.02) 1px, transparent 1px);
   background-size: 56px 56px;
 }
 
+/* Ensure all monospace numbers align vertically */
+.font-mono, [class*="font-mono"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 input:focus-visible,
 button:focus-visible,
-a:focus-visible {
-  @apply outline-none ring-2 ring-gold/60 ring-offset-2 ring-offset-ink;
+a:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent);
 }
 
 table {
   border-collapse: collapse;
 }
 
-/* Phase 9: tasteful motion (CSS only). */
+/* Purposeful CSS Motion System */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -34,10 +47,10 @@ table {
   }
 }
 
-@keyframes riseIn {
+@keyframes pageEntrance {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -45,19 +58,85 @@ table {
   }
 }
 
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulseSubtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 .animate-fade-in {
-  animation: fadeIn 200ms ease-out;
+  animation: fadeIn 150ms ease-out both;
+}
+
+.animate-page {
+  animation: pageEntrance 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-rise {
-  animation: riseIn 220ms ease-out both;
+  animation: pageEntrance 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.animate-chip {
+  animation: scaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--bg-1) 25%, var(--bg-2) 50%, var(--bg-1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite ease-in-out;
+}
+
+.animate-pulse-subtle {
+  animation: pulseSubtle 1.8s ease-in-out infinite;
+}
+
+/* Stagger entrance delays (capped at 180ms total) */
+.stagger-1 { animation-delay: 30ms; }
+.stagger-2 { animation-delay: 60ms; }
+.stagger-3 { animation-delay: 90ms; }
+.stagger-4 { animation-delay: 120ms; }
+.stagger-5 { animation-delay: 150ms; }
+.stagger-6 { animation-delay: 180ms; }
+
+/* Interactive row / card hover transition */
+.interactive-card {
+  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+}
+.interactive-card:hover {
+  border-color: var(--border-strong);
+  background-color: var(--bg-2);
+}
+
+/* Strict prefers-reduced-motion: reduce overrides */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation: none !important;
+    animation-delay: 0ms !important;
     transition: none !important;
     scroll-behavior: auto !important;
   }
@@ -82,4 +161,3 @@ table {
     color: #000 !important;
   }
 }
-

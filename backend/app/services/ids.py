@@ -43,26 +43,41 @@ def format_company_id(country: str, ticker: str) -> str:
 
 
 def normalize_company_id(raw: str) -> str | None:
-    """Normalize loose IDs like US:AES:NYSE / CA:NA:TO into the frozen format.
+    """Normalize loose IDs into the frozen format (US:<TICKER>:US | CA:<TICKER>:TSX).
 
-    US:<ticker>:<anything> -> US:<TICKER>:US
-    CA:<ticker>:<anything> -> CA:<TICKER>:TSX
-    Tickers keep dots (CA:BN:TSX, US:BRK.B:US). CA:NA:TSX stays National Bank of Canada.
+    Supports:
+    - US:AES:NYSE -> US:AES:US
+    - CA:NA:TO -> CA:NA:TSX
+    - TSE:KITS / TSX:KITS / TO:KITS -> CA:KITS:TSX
+    - NYSE:IBM / NASDAQ:AAPL -> US:IBM:US / US:AAPL:US
+    - KITS:TSX -> CA:KITS:TSX
     """
     if raw is None:
         return None
-    s = str(raw).strip()
+    s = re.sub(r"\s*:\s*", ":", str(raw).strip())
     parts = s.split(":")
+    if len(parts) == 2:
+        prefix, ticker = parts[0].upper(), parts[1].strip().upper()
+        if not ticker:
+            return None
+        if prefix in ("TSE", "TSX", "TOR", "TO", "V", "NEO", "CSE", "CA"):
+            return f"CA:{ticker}:TSX"
+        if prefix in ("NYSE", "NASDAQ", "AMEX", "US"):
+            return f"US:{ticker}:US"
+        if ticker in ("TSX", "TSE", "TO", "V"):
+            return f"CA:{prefix}:TSX"
+        if ticker in ("US", "NYSE", "NASDAQ"):
+            return f"US:{prefix}:US"
+        return None
+
     if len(parts) != 3:
         return None
     country, ticker, suffix = parts[0].upper(), parts[1].strip().upper(), parts[2].upper()
-    if country == "US":
-        if not ticker or not suffix:
-            return None
+    if not ticker or not suffix:
+        return None
+    if country in ("US", "NYSE", "NASDAQ", "AMEX"):
         return f"US:{ticker}:US"
-    if country == "CA":
-        if not ticker or not suffix:
-            return None
+    if country in ("CA", "TSE", "TSX", "TOR", "TO"):
         return f"CA:{ticker}:TSX"
     return None
 

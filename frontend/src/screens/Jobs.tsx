@@ -2,14 +2,8 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { JobsListOut } from "../api/types";
 import { ErrorBanner, Spinner } from "../components/ui";
-
-const STATUS_COLOR: Record<string, string> = {
-  queued: "text-info border-info/40",
-  running: "text-mid border-mid/40",
-  succeeded: "text-good border-good/40",
-  failed: "text-bad border-bad/40",
-  cancelled: "text-dim border-line2",
-};
+import { Card, Chip, Page } from "../components/layout";
+import { EmptyState } from "../components/feedback";
 
 export default function Jobs() {
   const [jobs, setJobs] = useState<JobsListOut | null>(null);
@@ -58,69 +52,100 @@ export default function Jobs() {
 
   if (setupHint) {
     return (
-      <div className="space-y-4">
-        <h1 className="font-display text-3xl tracking-tight">Jobs</h1>
-        <div role="alert" className="rounded-md border border-warn/60 bg-warn/10 p-4 text-sm text-paper">
-          The jobs API (Phase 6A+) is not available at <span className="font-mono">/api/v1/jobs</span>. Update the
-          api container: <span className="font-mono">docker compose up --build -d</span>.
+      <Page title="Jobs">
+        <div role="alert" className="rounded-card border border-warn/60 bg-warn-weak p-4 text-xs text-ink-0 font-mono">
+          The jobs API (Phase 6A+) is not available at <span className="font-semibold">/api/v1/jobs</span>. Update the
+          api container: <span className="font-semibold">docker compose up --build -d</span>.
         </div>
-      </div>
+      </Page>
     );
   }
+
   if (error && !jobs) return <ErrorBanner message={error} onRetry={load} />;
   if (!jobs) return <Spinner label="Loading jobs…" />;
 
+  const headerAction = (
+    <button
+      onClick={refreshSample}
+      disabled={refreshing}
+      className="rounded-card border border-accent/60 bg-accent-weak px-4 py-2 text-xs font-mono text-accent hover:bg-accent/20 disabled:opacity-40 transition-colors"
+    >
+      {refreshing ? "Queueing…" : "Refresh sample (5 names)"}
+    </button>
+  );
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl tracking-tight">Jobs</h1>
-          <p className="text-sm text-fog">
-            Refresh pulls new fiscal years from EDGAR/Yahoo and re-scores. The owner row is never overwritten.
-          </p>
-        </div>
-        <button
-          onClick={refreshSample}
-          disabled={refreshing}
-          className="rounded-md border border-gold/60 bg-gold/10 px-4 py-2 text-sm text-gold hover:bg-gold/20 disabled:opacity-40"
-        >
-          {refreshing ? "Queueing…" : "Refresh sample (5 names)"}
-        </button>
-      </header>
+    <Page
+      title="Jobs"
+      description="Refresh pulls new fiscal years from EDGAR/Yahoo and re-scores. The owner row is never overwritten."
+      actions={headerAction}
+    >
       {refreshMsg && (
-        <p role="status" className="text-sm text-info">{refreshMsg}</p>
+        <p role="status" className="rounded-card border border-info/40 bg-info-weak px-4 py-2 text-xs font-mono text-info">
+          {refreshMsg}
+        </p>
       )}
+
       {jobs.items.length === 0 ? (
-        <p className="text-sm text-fog">No jobs yet. Backfills are enqueued from the API (POST /api/v1/jobs/backfill).</p>
+        <EmptyState
+          title="No jobs yet"
+          body="No background ingest or refresh jobs have run yet. Backfills are enqueued from the API (POST /api/v1/jobs/backfill)."
+        />
       ) : (
-        <ul className="divide-y divide-line rounded-md border border-line bg-panel">
-          {jobs.items.map((j) => (
-            <li key={j.id} className="px-4 py-3 space-y-1">
-              <div className="flex items-center justify-between gap-4">
-                <span className="font-mono text-xs text-paper">{j.id.slice(0, 12)}…</span>
-                <span className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${STATUS_COLOR[j.status] ?? "text-dim border-line2"}`}>
-                  {j.status}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-fog">
-                <span className="font-mono">{j.kind}</span>
-                <span>
-                  progress {j.progress_done}/{j.progress_total}
-                </span>
-                {j.error && <span className="text-bad">· {j.error}</span>}
-              </div>
-              {j.progress_total > 0 && (
-                <div className="h-1.5 w-full rounded bg-ink">
-                  <div
-                    className="h-1.5 rounded bg-gold"
-                    style={{ width: `${Math.round((j.progress_done / Math.max(1, j.progress_total)) * 100)}%` }}
-                  />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+        <Card padding="none" className="overflow-hidden">
+          <ul className="divide-y divide-border">
+            {jobs.items.map((j) => {
+              const tone =
+                j.status === "succeeded"
+                  ? "positive"
+                  : j.status === "failed"
+                    ? "negative"
+                    : j.status === "running"
+                      ? "warning"
+                      : "info";
+
+              const pct = Math.round((j.progress_done / Math.max(1, j.progress_total)) * 100);
+
+              return (
+                <li key={j.id} className="p-4 space-y-2 hover:bg-bg-2/30 transition-colors">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-ink-0">{j.id.slice(0, 12)}…</span>
+                      <span className="font-mono text-[11px] text-ink-2">({j.kind})</span>
+                    </div>
+                    <Chip tone={tone} size="sm">
+                      {j.status === "running" ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-warn animate-ping" />
+                          <span>running</span>
+                        </span>
+                      ) : (
+                        j.status
+                      )}
+                    </Chip>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-ink-1 font-mono">
+                    <span>
+                      Progress: {j.progress_done} / {j.progress_total} ({pct}%)
+                    </span>
+                    {j.error && <span className="text-neg font-sans">Error: {j.error}</span>}
+                  </div>
+
+                  {j.progress_total > 0 && (
+                    <div className="h-2 w-full rounded-full bg-bg-0 border border-border/50 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
-    </div>
+    </Page>
   );
 }

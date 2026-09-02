@@ -38,7 +38,7 @@ def list_companies(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_session),
 ):
-    stmt = select(Company)
+    stmt = select(Company).where(Company.is_deleted == False)
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where((Company.name.ilike(like)) | (Company.ticker.ilike(like)))

@@ -65,6 +65,8 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_
 const get = <T>(path: string, timeoutMs?: number) => request<T>(path, undefined, timeoutMs);
 const post = <T>(path: string, body?: unknown, timeoutMs?: number) =>
   request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined }, timeoutMs);
+const del = <T>(path: string, timeoutMs?: number) =>
+  request<T>(path, { method: "DELETE" }, timeoutMs);
 
 export const enc = encodeURIComponent;
 
@@ -88,6 +90,15 @@ export const api = {
     post<{ scored: number }>("/api/v1/scores/recompute", { universe: "company_id", company_id: companyId }),
   narrate: (endpoint: string) => post<NarrationResult>(endpoint, undefined, 180_000),
   swotResearch: (companyId: string) => post<import("./types").SwotOut>(`/api/v1/companies/${enc(companyId)}/research`, undefined, 180_000),
+  forensics: (companyId: string) => get<import("./types").ForensicsOut>(`/api/v1/companies/${enc(companyId)}/forensics`),
+  valuation: (companyId: string) => get<import("./types").ValuationOut>(`/api/v1/companies/${enc(companyId)}/valuation`),
+  deleteCompany: (companyId: string, hard = false) =>
+    del<import("./types").DeleteCompanyOut>(`/api/v1/companies/${enc(companyId)}${hard ? "?hard=true" : ""}`),
+  restoreCompany: (companyId: string) =>
+    post<import("./types").DeleteCompanyOut>(`/api/v1/companies/${enc(companyId)}/restore`),
+  screenerPresets: () => get<import("./types").ScreenerPreset[]>("/api/v1/screener/presets"),
+  runScreener: (criteria: Record<string, unknown>) =>
+    post<import("./types").ScreenerResult>("/api/v1/screener/run", criteria),
   screen: (params?: Record<string, string | number | boolean | null | undefined>) => {
     const q = new URLSearchParams();
     if (params) {

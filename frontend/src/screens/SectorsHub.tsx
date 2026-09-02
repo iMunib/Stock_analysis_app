@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
-import type { SectorsOut } from "../api/types";
+import type { CurrencyView, SectorsOut } from "../api/types";
 import { ErrorBanner, Spinner } from "../components/ui";
 import { gicsSheetParam, sectorCardKey } from "../lib/nav";
-import type { CurrencyView } from "../api/types";
+import { Page } from "../components/layout";
+import { CompositeGauge } from "../components/viz";
 
 const VIEWS: CurrencyView[] = ["ALL", "USD", "CAD"];
 
@@ -67,37 +68,42 @@ export default function SectorsHub() {
     };
   }, [data, view]);
 
-  return (
-    <div className="space-y-8 animate-fade-in">
-      <header className="space-y-3">
-        <h1 className="font-display text-3xl tracking-tight">Sectors</h1>
-        <div className="flex items-center gap-2" role="group" aria-label="Currency view">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-dim">View</span>
-          {VIEWS.map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              aria-pressed={view === v}
-              className={`rounded border px-3 py-1 font-mono text-xs transition-colors ${
-                view === v ? "border-gold bg-gold/15 text-gold" : "border-line text-fog hover:border-line2 hover:text-paper"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-          {view === "ALL" && (
-            <span className="ml-2 text-xs text-dim">
-              score-only view — money medians stay split per currency
-            </span>
-          )}
-        </div>
-      </header>
+  const viewControls = (
+    <div className="flex items-center gap-2" role="group" aria-label="Currency view">
+      <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2">View</span>
+      <div className="flex rounded-chip border border-border bg-bg-0 p-0.5">
+        {VIEWS.map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            aria-pressed={view === v}
+            className={`rounded-chip px-3 py-1 font-mono text-xs transition-colors ${
+              view === v ? "bg-bg-1 text-accent font-medium shadow-sm" : "text-ink-1 hover:text-ink-0"
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      {view === "ALL" && (
+        <span className="ml-2 text-xs text-ink-2 font-mono">
+          score-only view — money medians stay split per currency
+        </span>
+      )}
+    </div>
+  );
 
+  return (
+    <Page
+      title="Sectors"
+      description="Compare sector benchmarks, median composites, and valuation distributions."
+      actions={viewControls}
+    >
       {error && <ErrorBanner message={error} onRetry={load} />}
       {!data && !error && <Spinner label="Loading sectors…" />}
 
       {data && (
-        <>
+        <div className="space-y-8">
           <SectorGroup
             title="Custom industries"
             groups={data.custom_industries.map((s) => ({
@@ -124,9 +130,9 @@ export default function SectorsHub() {
             currency={view}
             loadingMedians={loadingMedians}
           />
-        </>
+        </div>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -143,27 +149,37 @@ function SectorGroup({
 }) {
   return (
     <section aria-label={title} className="space-y-3">
-      <h2 className="font-display text-xl">{title}</h2>
+      <div className="flex items-center justify-between border-b border-border pb-2">
+        <h2 className="font-heading text-lg font-semibold text-ink-0">{title}</h2>
+        <span className="font-mono text-xs text-ink-2">{groups.length} sectors</span>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((g) => (
           <Link
             key={g.key}
             to={`/sectors/${enc(g.sheet)}?currency=${currency}`}
-            className="group animate-rise rounded-md border border-line bg-panel px-4 py-4 transition-colors hover:border-gold/60"
+            className="group rounded-card border border-border bg-bg-1 p-4 transition-all shadow-card hover:border-accent/60 hover:bg-bg-2 flex items-center justify-between gap-3"
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="font-medium text-paper group-hover:text-gold transition-colors">{g.name}</span>
-              <span className="font-mono text-xs text-dim">{g.countLabel}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-ink-0 group-hover:text-accent transition-colors truncate">
+                  {g.name}
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-ink-2">{g.countLabel}</p>
+              <div className="mt-2 font-mono text-xs text-ink-1 flex items-center gap-1.5">
+                <span className="text-ink-2">Median score:</span>
+                {g.median === undefined && loadingMedians ? (
+                  <span className="text-ink-2 animate-pulse">…</span>
+                ) : g.median == null ? (
+                  <span className="text-ink-2">—</span>
+                ) : (
+                  <span className="text-accent font-semibold">{g.median.toFixed(1)}</span>
+                )}
+              </div>
             </div>
-            <div className="mt-2 font-mono text-xs text-fog">
-              median score{" "}
-              {g.median === undefined && loadingMedians ? (
-                <span className="text-dim">…</span>
-              ) : g.median == null ? (
-                <span className="text-dim">—</span>
-              ) : (
-                <span className="text-gold">{g.median.toFixed(1)}</span>
-              )}
+            <div className="shrink-0">
+              <CompositeGauge value={g.median} size="sm" showLabel={false} />
             </div>
           </Link>
         ))}

@@ -362,3 +362,92 @@ export interface JobsListOut {
 }
 
 export type CurrencyView = "ALL" | "USD" | "CAD";
+
+export interface FcfVsNiYear {
+  fiscal_year: number;
+  net_income: number | null;
+  fcf: number | null;
+}
+
+export interface ForensicsOut {
+  company_id: string;
+  currency: string;
+  sloan_accrual_ratio: number | null;
+  sloan_signal: "green" | "red" | "neutral" | "insufficient_data";
+  cash_conversion_ratio: number | null;
+  cash_conversion_signal: "weak" | "healthy" | "insufficient_data";
+  roic: number | null;
+  fcf_yield: number | null;
+  nopat: number | null;
+  invested_capital: number | null;
+  fcf_vs_ni_history: FcfVsNiYear[];
+}
+
+export interface SensitivityCell {
+  wacc: number;
+  terminal_g: number;
+  implied_growth: number | null;
+}
+
+export interface SensitivityMatrix {
+  wacc_headers: number[];
+  terminal_g_headers: number[];
+  grid: SensitivityCell[][];
+}
+
+export interface ValuationOut {
+  company_id: string;
+  status: string;
+  current_share_price: number | null;
+  diluted_shares: number | null;
+  net_debt: number | null;
+  baseline_fcf: number | null;
+  wacc: number;
+  terminal_growth_rate: number;
+  market_implied_growth_10y: number | null;
+  historical_5y_cagr: number | null;
+  expectations_gap: number | null;
+  sensitivity_matrix: SensitivityMatrix | null;
+}
+
+export interface ScreenerPreset {
+  id: string;
+  name: string;
+  criteria: Record<string, unknown>;
+  is_system: boolean;
+}
+
+export interface ScreenerRow {
+  company_id: string;
+  ticker: string | null;
+  name: string | null;
+  currency: string | null;
+  gics_sector: string | null;
+  custom_industry: string | null;
+  composite: number | null;
+  signal: string | null;
+  roic: number | null;
+  fcf_yield: number | null;
+  ev_ebitda: number | null;
+  pe_ratio: number | null;
+  sloan_accrual_ratio: number | null;
+  cash_conversion_ratio: number | null;
+  market_implied_growth_10y: number | null;
+  historical_5y_cagr: number | null;
+  expectations_gap: number | null;
+  dcf_status: string;
+}
+
+export interface ScreenerResult {
+  items: ScreenerRow[];
+  count: number;
+  limit: number;
+  offset: number;
+}
+
+export interface DeleteCompanyOut {
+  ok: boolean;
+  company_id: string;
+  message: string;
+}
+

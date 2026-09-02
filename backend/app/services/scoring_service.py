@@ -62,8 +62,10 @@ def snapshot_dict(snap: FinancialSnapshot | None) -> dict:
     }
 
 
-def load_universe(db: Session, company_id: str | None = None) -> list[dict]:
+def load_universe(db: Session, company_id: str | None = None, include_deleted: bool = False) -> list[dict]:
     comp_stmt = select(Company)
+    if not include_deleted:
+        comp_stmt = comp_stmt.where(Company.is_deleted == False)
     if company_id:
         comp_stmt = comp_stmt.where(Company.company_id == company_id)
     companies = db.execute(comp_stmt).scalars().all()

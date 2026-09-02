@@ -1,0 +1,59 @@
+:root {
+  /* Surface Layers */
+  --bg-0: #0a0e14;
+  --bg-1: #131922;
+  --bg-2: #1a222f;
+  --bg-3: #212c3b;
+
+  /* Typography / Inks */
+  --ink-0: #f0ede6;
+  --ink-1: #94a3b8;
+  --ink-2: #5c6b7d;
+
+  /* Accent (Research Gold) */
+  --accent: #e0a84f;
+  --accent-weak: rgba(224, 168, 79, 0.10);
+  --accent-strong: #f5ba5d;
+
+  /* Functional Status (Numeric direction & flags only, never decorative) */
+  --pos: #4ade80;
+  --pos-weak: rgba(74, 222, 128, 0.12);
+  --neg: #f87171;
+  --neg-weak: rgba(248, 113, 113, 0.12);
+  --warn: #fbbf24;
+  --warn-weak: rgba(251, 191, 36, 0.12);
+  --info: #60a5fa;
+  --info-weak: rgba(96, 165, 250, 0.12);
+
+  /* Hairlines & Borders */
+  --border: #232d3a;
+  --border-strong: #364556;
+
+  /* Typography Families */
+  --font-display: "Spectral", Georgia, serif;
+  --font-heading: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Spacing Scale (4, 8, 12, 16, 24, 32, 48px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Radii */
+  --radius-card: 8px;
+  --radius-chip: 4px;
+  --radius-sm: 2px;
+
+  /* Elevation */
+  --shadow-card: 0 2px 8px -2px rgba(0, 0, 0, 0.4), 0 1px 3px -1px rgba(0, 0, 0, 0.25);
+  --shadow-hover: 0 4px 12px -2px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 8px 30px -4px rgba(0, 0, 0, 0.6), 0 4px 10px -2px rgba(0, 0, 0, 0.4);
+
+  /* Max Page Width */
+  --max-page-width: 1280px;
+}

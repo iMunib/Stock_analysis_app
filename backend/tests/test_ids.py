@@ -28,6 +28,11 @@ def test_normalize_loose_exchange_suffixes():
     assert normalize_company_id("US:APA:NASDAQ") == "US:APA:US"
     assert normalize_company_id("CA:NA:TO") == "CA:NA:TSX"
     assert normalize_company_id("US:MMM:US") == "US:MMM:US"
+    assert normalize_company_id("TSE:KITS") == "CA:KITS:TSX"
+    assert normalize_company_id("TSE: KITS") == "CA:KITS:TSX"
+    assert normalize_company_id("TSX:KITS") == "CA:KITS:TSX"
+    assert normalize_company_id("KITS:TSX") == "CA:KITS:TSX"
+    assert normalize_company_id("NYSE:IBM") == "US:IBM:US"
 
 
 def test_format_from_country_ticker():

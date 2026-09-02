@@ -85,6 +85,7 @@ def search(
     stmt = (
         select(Company, Score)
         .outerjoin(Score, Score.company_id == Company.company_id)
+        .where(Company.is_deleted == False)
         .where(
             (Company.ticker.ilike(like))
             | (Company.name.ilike(like))
@@ -104,7 +105,7 @@ def search(
     for cid in yahoo_matched:
         if cid not in by_id:
             c = db.get(Company, cid)
-            if c is not None:
+            if c is not None and not c.is_deleted:
                 by_id[cid] = (c, db.get(Score, cid))
 
     items = []

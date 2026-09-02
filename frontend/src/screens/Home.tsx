@@ -6,6 +6,9 @@ import { CompanyLink, ErrorBanner, Score, SignalBadge, Spinner } from "../compon
 import { SIGNAL_ORDER, signalTone } from "../api/visuals";
 import { errorCatalogCopy, signalLabel } from "../api/copy";
 import { getOpenedAt, getWatchlist } from "../lib/watchlist";
+import { Card, Grid, Page, StatTile } from "../components/layout";
+import { CompositeGauge } from "../components/viz";
+import { EmptyState } from "../components/feedback";
 
 const LEGEND =
   "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers — average companies land mid-pack, not at 8.";
@@ -128,164 +131,182 @@ export default function Home() {
   }, [searchParams]);
 
   return (
-    <div className="space-y-10">
-      <section aria-label="Desk overview" className="space-y-2">
-        <h1 className="font-display text-3xl tracking-tight">The desk</h1>
-        <p className="max-w-2xl text-sm text-fog">
-          A local equity-research desk for the S&amp;P 500 and S&amp;P/TSX Composite. Search a name up top, or
-          browse by sector.
-        </p>
-      </section>
-
+    <Page
+      title={<h1 className="font-display text-3xl tracking-tight text-ink-0">The desk</h1>}
+      description="A local equity-research desk for the S&P 500 and S&P/TSX Composite. Search a name up top, or browse by sector."
+    >
       {metaError && <ErrorBanner message={metaError} onRetry={loadMeta} />}
       {!meta && !metaError && <Spinner label="Reading research status…" />}
 
       {meta && (
-        <section aria-label="Database status" className="space-y-3">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="Companies" value={meta.companies} />
-            <Stat label="Scored" value={meta.scored} />
-            <Stat label="Insufficient data" value={meta.insufficient_data} />
-            <Stat label="Growth not scored" value={meta.growth_null} />
-          </div>
+        <section aria-label="Database status" className="space-y-4">
+          <Grid cols={4}>
+            <StatTile label="Companies" value={meta.companies} />
+            <StatTile label="Scored" value={meta.scored} tone="positive" />
+            <StatTile label="Insufficient data" value={meta.insufficient_data} tone="warning" />
+            <StatTile label="Growth not scored" value={meta.growth_null} tone="neutral" />
+          </Grid>
+
           {meta.scored === 0 && (
-            <div className="rounded-md border border-warn/50 bg-warn/10 px-4 py-3 text-sm text-paper">
+            <div className="rounded-card border border-warn/50 bg-warn-weak px-4 py-3 text-sm text-ink-0">
               No scores yet — run a recompute (POST /api/v1/scores/recompute) or add a ticker below.
             </div>
           )}
-          <div className="rounded-md border border-line bg-panel p-4 text-sm text-fog">
-            <span className="font-mono text-xs uppercase tracking-widest text-dim">Needs history · </span>
-            {meta.growth_null} of {meta.scored} scored names lack the 3+ years of history needed to compute growth,
-            so their composite is reduced. That is the honest state of the data, not a bug.
-          </div>
-          <div className="space-y-2">
-            <p className="font-mono text-xs uppercase tracking-widest text-dim">Signal histogram</p>
-            <ul className="space-y-1.5">
+
+          <Card padding="sm">
+            <p className="text-xs text-ink-1 leading-relaxed">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2 font-semibold">Needs history · </span>
+              {meta.growth_null} of {meta.scored} scored names lack the 3+ years of history needed to compute growth,
+              so their composite is reduced. That is the honest state of the data, not a bug.
+            </p>
+          </Card>
+
+          <Card title="Signal Distribution" subtitle="System-wide classification histogram across the active universe">
+            <ul className="space-y-2">
               {SIGNAL_ORDER.map((sig) => {
                 const n = meta.signal_histogram[sig] ?? 0;
                 if (!n) return null;
                 const tone = signalTone(sig === "score_missing" ? null : sig);
-                const color = tone === "good" ? "bg-good" : tone === "mid" ? "bg-mid" : tone === "bad" ? "bg-bad" : "bg-info";
+                const color =
+                  tone === "good"
+                    ? "bg-pos"
+                    : tone === "mid"
+                      ? "bg-warn"
+                      : tone === "bad"
+                        ? "bg-neg"
+                        : "bg-info";
                 return (
-                  <li key={sig} className="flex items-center gap-3 text-sm">
-                    <span className="w-36 shrink-0 text-fog">{signalLabel(sig === "score_missing" ? null : sig)}</span>
-                    <span className="h-3 rounded-sm" style={{ width: `${Math.max(4, (n / meta.companies) * 420)}px` }}>
-                      <span className={`block h-3 rounded-sm ${color}`} />
+                  <li key={sig} className="flex items-center gap-3 text-xs">
+                    <span className="w-40 shrink-0 text-ink-1 font-medium">{signalLabel(sig === "score_missing" ? null : sig)}</span>
+                    <span className="h-2.5 rounded-sm bg-bg-2 overflow-hidden flex-1 max-w-md">
+                      <span
+                        className={`block h-full rounded-sm ${color} transition-all duration-300`}
+                        style={{ width: `${Math.max(2, (n / meta.companies) * 100)}%` }}
+                      />
                     </span>
-                    <span className="font-mono tabular-nums text-paper">{n}</span>
+                    <span className="font-mono tabular-nums font-semibold text-ink-0 text-right w-12">{n}</span>
                   </li>
                 );
               })}
             </ul>
-          </div>
-          <p className="max-w-3xl text-sm leading-relaxed text-fog">{LEGEND}</p>
+            <p className="mt-4 text-xs leading-relaxed text-ink-2 border-t border-border pt-3">{LEGEND}</p>
+          </Card>
         </section>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      {/* Hero Add Ticker Card */}
+      <Card
+        title="Add a ticker to the database"
+        subtitle="Pull annual history for any US or Canadian ticker (e.g. AAPL or KITS.TO), then score it. Free public sources only."
+        className="border-accent/40 bg-gradient-to-b from-bg-1 to-bg-1/90"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-1">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2">Quick try:</span>
+            {["AMD", "BABA", "SHOP.TO", "KITS.TO"].map((sample) => (
+              <button
+                key={sample}
+                type="button"
+                disabled={ingesting}
+                onClick={() => {
+                  setTicker(sample);
+                  addTicker(sample);
+                }}
+                className="rounded-chip border border-border bg-bg-2 px-2.5 py-1 font-mono text-xs text-ink-0 hover:border-accent/60 hover:text-accent disabled:opacity-40 transition-colors"
+              >
+                {sample}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="flex flex-wrap gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              addTicker();
+            }}
+          >
+            <input
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              placeholder="e.g. AMD, BABA, KITS.TO"
+              aria-label="Ticker to add"
+              className="w-full sm:w-72 rounded-card border border-border bg-bg-0 px-3 py-2 font-mono text-sm placeholder:text-ink-2 text-ink-0"
+            />
+            <button
+              type="submit"
+              disabled={ingesting || !ticker.trim()}
+              className="rounded-card border border-accent/60 bg-accent-weak px-4 py-2 text-xs font-semibold font-mono text-accent hover:bg-accent/20 disabled:opacity-40 transition-colors"
+            >
+              {ingesting ? "Fetching…" : "Add & score"}
+            </button>
+          </form>
+
+          {ingesting && (
+            <div className="space-y-3 rounded-card border border-border bg-bg-2 p-3 text-xs">
+              <div className="flex items-center gap-2 font-mono text-accent">
+                <span className="inline-block h-2 w-2 rounded-full bg-accent animate-ping" />
+                <span>{stepMessage || "Processing ingest job…"}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {INGEST_STEPS.map((s) => {
+                  const isCurrent = activeStep === s.key;
+                  return (
+                    <span
+                      key={s.key}
+                      className={`rounded-chip px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                        isCurrent
+                          ? "border border-accent bg-accent/20 text-accent font-bold animate-pulse"
+                          : "border border-border bg-bg-0/60 text-ink-2"
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {ingestMsg && (
+            <p
+              role="status"
+              className={`rounded-card border px-3 py-2 text-xs font-mono ${
+                ingestMsg.ok
+                  ? errorCode === "SCORE_PARTIAL"
+                    ? "border-warn/50 bg-warn-weak text-warn"
+                    : "border-pos/50 bg-pos-weak text-pos"
+                  : "border-neg/50 bg-neg-weak text-neg"
+              }`}
+            >
+              {ingestMsg.text}
+            </p>
+          )}
+        </div>
+      </Card>
+
+      <Grid cols={2}>
         <TopTable title="Top 10 — USD" rows={rankUsd?.items ?? []} />
         <TopTable title="Top 10 — CAD" rows={rankCad?.items ?? []} />
-      </div>
+      </Grid>
 
       <TopTableAll />
 
-      <section aria-label="Add a ticker" className="space-y-3 rounded-md border border-line bg-panel p-5">
-        <h2 className="font-display text-lg">Add a ticker to the database</h2>
-        <p className="text-sm text-fog">
-          Pull annual history for any US or Canadian ticker (e.g. <code className="font-mono text-goldsoft">AAPL</code> or{" "}
-          <code className="font-mono text-goldsoft">RY.TO</code>), then score it. Free public sources only.
-        </p>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-fog">
-          <span>Quick try:</span>
-          {["AMD", "BABA", "SHOP.TO", "KITS.TO"].map((sample) => (
-            <button
-              key={sample}
-              type="button"
-              disabled={ingesting}
-              onClick={() => {
-                setTicker(sample);
-                addTicker(sample);
-              }}
-              className="rounded border border-line bg-ink px-2.5 py-1 font-mono text-xs text-paper hover:border-gold/60 hover:text-gold disabled:opacity-40"
-            >
-              {sample}
-            </button>
-          ))}
-        </div>
-        <form
-          className="flex gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            addTicker();
-          }}
-        >
-          <input
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
-            placeholder="e.g. AMD, BABA, KITS.TO"
-            aria-label="Ticker to add"
-            className="w-64 rounded-md border border-line bg-ink px-3 py-2 font-mono text-sm placeholder:text-dim"
-          />
-          <button
-            type="submit"
-            disabled={ingesting || !ticker.trim()}
-            className="rounded-md border border-gold/60 bg-gold/10 px-4 py-2 text-sm font-medium text-gold hover:bg-gold/20 disabled:opacity-40"
-          >
-            {ingesting ? "Fetching…" : "Add & score"}
-          </button>
-        </form>
-
-        {ingesting && (
-          <div className="space-y-3 rounded-md border border-line bg-panel2 p-3 text-xs">
-            <div className="flex items-center gap-2 font-mono text-gold">
-              <span className="inline-block h-2 w-2 rounded-full bg-gold animate-ping" />
-              <span>{stepMessage || "Processing ingest job…"}</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {INGEST_STEPS.map((s) => {
-                const isCurrent = activeStep === s.key;
-                return (
-                  <span
-                    key={s.key}
-                    className={`rounded px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                      isCurrent
-                        ? "border border-gold bg-gold/20 text-gold font-bold animate-pulse"
-                        : "border border-line bg-ink/40 text-dim"
-                    }`}
-                  >
-                    {s.label}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {ingestMsg && (
-          <p
-            role="status"
-            className={`rounded border px-3 py-2 text-xs font-mono ${
-              ingestMsg.ok
-                ? errorCode === "SCORE_PARTIAL"
-                  ? "border-warn/50 bg-warn/10 text-warn"
-                  : "border-good/50 bg-good/10 text-good"
-                : "border-bad/50 bg-bad/10 text-bad"
-            }`}
-          >
-            {ingestMsg.text}
-          </p>
-        )}
-      </section>
-
       <section aria-label="Watchlist" className="space-y-3">
-        <h2 className="font-display text-lg">Watchlist</h2>
+        <div className="flex items-center justify-between border-b border-border pb-2">
+          <h2 className="font-heading text-xl font-semibold text-ink-0">Watchlist</h2>
+          <span className="text-xs text-ink-2 font-mono">Starred companies</span>
+        </div>
         <WatchGrid />
       </section>
 
-      <section aria-label="Browse" className="flex flex-wrap gap-4 text-sm">
-        <Link to="/sectors" className="text-gold hover:underline">Browse all sectors →</Link>
+      <section aria-label="Browse" className="flex flex-wrap gap-4 text-xs font-mono">
+        <Link to="/sectors" className="text-accent hover:underline flex items-center gap-1">
+          <span>Browse all sectors</span>
+          <span aria-hidden="true">→</span>
+        </Link>
       </section>
-    </div>
+    </Page>
   );
 }
 
@@ -306,13 +327,14 @@ function WatchGrid() {
 
   if (watched.length === 0) {
     return (
-      <p className="rounded-md border border-line bg-panel p-3 text-sm text-fog">
-        Nothing watched yet — open a dossier and press ☆ Watch.
-      </p>
+      <EmptyState
+        title="Nothing watched yet"
+        body="Open any company dossier and click ☆ Watch to track conviction names right here on your desk."
+      />
     );
   }
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {dossiers.map((d) => {
         const openedAt = getOpenedAt(d.identity.company_id);
         const openedStr = openedAt
@@ -322,18 +344,22 @@ function WatchGrid() {
           <Link
             key={d.identity.company_id}
             to={`/c/${enc(d.identity.company_id)}`}
-            className="rounded-md border border-line bg-panel px-3.5 py-2.5 hover:border-gold/60 transition-colors"
+            className="group rounded-card border border-border bg-bg-1 p-3.5 hover:border-accent/60 hover:bg-bg-2 transition-all shadow-card flex items-center justify-between gap-3"
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-medium text-paper truncate">{d.identity.name ?? d.identity.company_id}</span>
-              <span className="font-mono text-sm text-gold font-semibold">{d.score?.composite?.toFixed(1) ?? "—"}</span>
-            </div>
-            <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] text-dim">
-              <div className="flex items-center gap-1.5">
-                <SignalBadge signal={d.score?.signal} small />
-                <span>{d.identity.currency}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-ink-0 truncate group-hover:text-accent transition-colors">
+                  {d.identity.name ?? d.identity.company_id}
+                </span>
+                <span className="font-mono text-[10px] text-ink-2 shrink-0">{d.identity.currency}</span>
               </div>
-              <span>{openedStr ? `Opened ${openedStr}` : d.identity.company_id}</span>
+              <div className="mt-1.5 flex items-center gap-2 font-mono text-[10px] text-ink-2">
+                <SignalBadge signal={d.score?.signal} small />
+                <span>{openedStr ? `Opened ${openedStr}` : d.identity.company_id}</span>
+              </div>
+            </div>
+            <div className="shrink-0">
+              <CompositeGauge value={d.score?.composite} size="sm" showLabel={false} />
             </div>
           </Link>
         );
@@ -344,19 +370,20 @@ function WatchGrid() {
 
 function TopTable({ title, rows }: { title: string; rows: RankingsOut["items"] }) {
   return (
-    <section aria-label={title} className="space-y-3">
-      <h2 className="font-display text-xl">{title}</h2>
+    <Card title={title} subtitle="Deterministic math score rank">
       {rows.length === 0 ? (
-        <p className="text-sm text-fog">No scored names yet.</p>
+        <p className="text-xs text-ink-2 py-4 text-center">No scored names yet.</p>
       ) : (
-        <ul className="divide-y divide-line rounded-md border border-line bg-panel">
+        <ul className="divide-y divide-border">
           {rows.map((r) => (
-            <li key={r.company_id} className="flex items-center justify-between gap-4 px-4 py-2.5">
-              <div>
-                <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink>
-                <span className="ml-2 font-mono text-[10px] text-dim">#{r.rank}</span>
+            <li key={r.company_id} className="flex items-center justify-between gap-4 py-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-[10px] text-ink-2 w-5 shrink-0">#{r.rank}</span>
+                <CompanyLink companyId={r.company_id} className="font-medium truncate">
+                  {r.name ?? r.company_id}
+                </CompanyLink>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <Score value={r.composite} />
                 <SignalBadge signal={r.signal} small />
               </div>
@@ -364,45 +391,39 @@ function TopTable({ title, rows }: { title: string; rows: RankingsOut["items"] }
           ))}
         </ul>
       )}
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-line bg-panel px-4 py-3">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-dim">{label}</p>
-      <p className="mt-1 font-mono text-2xl tabular-nums text-paper">{value}</p>
-    </div>
+    </Card>
   );
 }
 
 function TopTableAll() {
   const [rows, setRows] = useState<RankingsOut | null>(null);
   useEffect(() => {
-    // Score-only top 10 across the whole seed (unitless composite — no money columns).
     fetch("/api/v1/rankings?scope=seed&limit=10")
       .then((r) => r.json())
       .then(setRows)
       .catch(() => setRows(null));
   }, []);
   return (
-    <section aria-label="Top 10 All (score only)" className="space-y-3">
-      <h2 className="font-display text-xl">
-        Top 10 — All <span className="font-mono text-xs text-dim">(score only, both currencies, no money columns)</span>
-      </h2>
+    <Card
+      title="Top 10 — All Universe"
+      subtitle="Score-only top 10 across both USD & CAD (strictly ratio/math signals, no FX conversion)"
+    >
       {!rows || rows.items.length === 0 ? (
-        <p className="text-sm text-fog">No scored names yet.</p>
+        <p className="text-xs text-ink-2 py-4 text-center">No scored names yet.</p>
       ) : (
-        <ul className="divide-y divide-line rounded-md border border-line bg-panel">
+        <ul className="divide-y divide-border">
           {rows.items.map((r) => (
-            <li key={r.company_id} className="flex items-center justify-between gap-4 px-4 py-2.5">
-              <div>
-                <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink>
-                <span className="ml-2 font-mono text-[10px] text-dim">#{r.rank}</span>
-                <span className="ml-2 font-mono text-[10px] text-info">{(r as unknown as { currency?: string }).currency ?? ""}</span>
+            <li key={r.company_id} className="flex items-center justify-between gap-4 py-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-[10px] text-ink-2 w-5 shrink-0">#{r.rank}</span>
+                <CompanyLink companyId={r.company_id} className="font-medium truncate">
+                  {r.name ?? r.company_id}
+                </CompanyLink>
+                <span className="font-mono text-[10px] text-info shrink-0">
+                  {(r as unknown as { currency?: string }).currency ?? ""}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <Score value={r.composite} />
                 <SignalBadge signal={r.signal} small />
               </div>
@@ -410,6 +431,6 @@ function TopTableAll() {
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

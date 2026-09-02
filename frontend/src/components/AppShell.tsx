@@ -65,32 +65,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-20 border-b border-line bg-panel/90 backdrop-blur">
+    <div className="min-h-screen flex flex-col bg-bg-0 text-ink-0">
+      <header className="sticky top-0 z-20 border-b border-border bg-bg-1/90 backdrop-blur shadow-sm">
         <div className="mx-auto max-w-desk px-6 py-3 flex items-center gap-6">
-          <Link to="/" className="flex items-baseline gap-2.5 shrink-0 group">
-            <span className="h-2.5 w-2.5 rounded-full bg-gold inline-block" aria-hidden="true" />
-            <span className="font-display text-lg tracking-tight text-paper group-hover:text-gold transition-colors">
+          <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+            <span className="h-2.5 w-2.5 rounded-full bg-accent inline-block" aria-hidden="true" />
+            <span className="font-display text-lg tracking-tight text-ink-0 group-hover:text-accent transition-colors font-semibold">
               Research Desk
             </span>
           </Link>
 
-          <nav className="flex gap-1 text-sm" aria-label="Main">
+          <nav className="flex gap-1 text-xs font-medium" aria-label="Main">
             {navItems(hasJobs).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `rounded px-3 py-1.5 transition-colors ${
-                    isActive ? "bg-panel2 text-gold" : "text-fog hover:text-paper"
+                  `rounded-chip px-3 py-1.5 transition-colors ${
+                    isActive
+                      ? "bg-bg-2 text-accent font-semibold shadow-xs"
+                      : "text-ink-1 hover:text-ink-0 hover:bg-bg-2/50"
                   }`
                 }
               >
                 {item.label}
                 {item.to === "/compare" && compareCount > 0 && (
                   <span
-                    className="ml-1.5 rounded bg-gold/20 px-1.5 py-0.5 font-mono text-[10px] text-gold"
+                    className="ml-1.5 rounded-chip bg-accent-weak px-1.5 py-0.5 font-mono text-[10px] text-accent"
                     aria-label={`${compareCount} companies in the compare basket`}
                   >
                     {compareCount}
@@ -112,15 +114,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onFocus={() => setOpen(true)}
               placeholder="Search name, ticker, or ID… (Press /)"
               aria-label="Search companies"
-              className="w-full rounded-md border border-line bg-ink px-3 py-2 text-sm placeholder:text-dim"
+              className="w-full rounded-card border border-border bg-bg-0 px-3 py-1.5 text-xs text-ink-0 placeholder:text-ink-2 focus:border-accent focus:outline-none transition-colors"
             />
             {open && (results || searchError) && (
-              <div className="absolute left-0 right-0 top-full mt-2 rounded-md border border-line bg-panel shadow-xl z-30">
+              <div className="absolute left-0 right-0 top-full mt-2 rounded-card border border-border bg-bg-1 shadow-modal z-30 overflow-hidden">
                 {searchError ? (
-                  <p className="px-4 py-3 text-sm text-bad">{searchError}</p>
+                  <p className="px-4 py-3 text-xs text-neg font-mono">{searchError}</p>
                 ) : results && results.items.length === 0 ? (
                   <div className="p-3 text-center">
-                    <p className="text-xs text-fog mb-2">Not in 720 library.</p>
+                    <p className="text-xs text-ink-1 mb-2">Not in 720 library.</p>
                     <button
                       type="button"
                       onClick={() => {
@@ -129,24 +131,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         setQuery("");
                         nav(`/?ingest=${enc(q)}`);
                       }}
-                      className="inline-flex items-center gap-1.5 rounded border border-gold/60 bg-gold/10 px-3 py-1.5 text-xs font-medium text-gold hover:bg-gold/20 transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-card border border-accent/60 bg-accent-weak px-3 py-1.5 text-xs font-mono text-accent hover:bg-accent/20 transition-colors"
                     >
                       Not in library — fetch {query.trim().toUpperCase()}?
                     </button>
                   </div>
                 ) : (
-                  <ul className="divide-y divide-line max-h-96 overflow-auto">
+                  <ul className="divide-y divide-border max-h-96 overflow-auto">
                     {results?.items.map((it) => (
                       <li key={it.company_id}>
                         <button
                           onClick={() => pick(it.company_id)}
-                          className="w-full flex items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-panel2"
+                          className="w-full flex items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-bg-2 transition-colors"
                         >
-                          <span>
-                            <span className="text-sm text-paper">{it.name ?? it.company_id}</span>
-                            <span className="ml-2 font-mono text-xs text-dim">{it.company_id}</span>
+                          <span className="truncate">
+                            <span className="text-xs font-medium text-ink-0">{it.name ?? it.company_id}</span>
+                            <span className="ml-2 font-mono text-[10px] text-ink-2">{it.company_id}</span>
                           </span>
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 shrink-0">
                             <Score value={it.composite} />
                             <SignalBadge signal={it.signal} small />
                           </span>
@@ -163,13 +165,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       <main className="mx-auto w-full max-w-desk flex-1 px-6 py-8">{children}</main>
 
-      <footer className="border-t border-line mt-12">
-        <div className="mx-auto max-w-desk px-6 py-6 text-xs leading-relaxed text-dim">
+      <footer className="border-t border-border mt-12">
+        <div className="mx-auto max-w-desk px-6 py-6 text-xs leading-relaxed text-ink-2">
           <p className="mb-1">
-            Personal research software. <span className="text-fog">Not investment advice.</span> Scores are
+            Personal research software. <span className="text-ink-1">Not investment advice.</span> Scores are
             research signals, never trade orders. Halal is an informational flag, not a religious ruling.
           </p>
-          <p className="font-mono text-[10px]">
+          <p className="font-mono text-[10px] text-ink-2">
             method_version v1 · data: owner workbook snapshot + SEC/Yahoo history · local only
           </p>
         </div>
