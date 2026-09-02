@@ -63,7 +63,7 @@ export const api = {
   rankings: (currency: "USD" | "CAD", limit = 10) =>
     get<RankingsOut>(`/api/v1/rankings?scope=seed&currency=${currency}&limit=${limit}`),
   sectors: () => get<SectorsOut>(`/api/v1/sectors`),
-  sectorRankings: (sheet: string, currency: "USD" | "CAD", limit = 500) =>
+  sectorRankings: (sheet: string, currency: "ALL" | "USD" | "CAD", limit = 500) =>
     get<SectorRankingsOut>(`/api/v1/sectors/${enc(sheet)}/rankings?currency=${currency}&limit=${limit}`),
   jobs: () => get<JobsListOut>(`/api/v1/jobs?limit=20`),
   researchMeta: () => get<import("./types").ResearchMetaOut>(`/api/v1/research/meta`),

@@ -240,11 +240,16 @@ export interface SectorRankingItem {
   rank: number;
   company_id: string;
   name: string | null;
+  ticker?: string | null;
+  currency?: string | null;
   composite: number | null;
   signal: string | null;
   peer_set_type: string | null;
   peer_rank: number | null;
   halal_status: string | null;
+  pe_calc?: number | null;
+  pb_calc?: number | null;
+  roe_calc?: number | null;
   method_version: string;
 }
 
@@ -277,3 +282,5 @@ export interface JobsListOut {
   method_version: string;
   disclaimer: string;
 }
+
+export type CurrencyView = "ALL" | "USD" | "CAD";

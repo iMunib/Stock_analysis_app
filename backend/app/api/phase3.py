@@ -73,49 +73,64 @@ def company_score(company_id: str, db: Session = Depends(get_session)):
 @router.get("/sectors/{sheet}/rankings")
 def sector_rankings(
     sheet: str,
-    currency: str = Query(..., pattern="^(USD|CAD)$"),
+    currency: str = Query(default="USD", pattern="^(USD|CAD|ALL)$"),
     limit: int = Query(default=50, ge=1, le=500),
     halal: str | None = Query(default=None, pattern="^(candidate)$"),
     db: Session = Depends(get_session),
 ):
-    """Rankings inside one custom industry (or GICS_ sheet) split by currency."""
-    like_sheet = sheet
+    """Ranked table for one sheet (composite desc, NULL last).
+
+    currency=ALL (Phase 9) returns both currencies in one score-only table. Per-row
+    money fields (PE/PB/ROE) come from each company's OWN snapshot — never averaged;
+    the response carries no money medians at all, so nothing can blend."""
     stmt = (
         select(Score, Company, HalalFlag)
         .join(Company, Company.company_id == Score.company_id)
         .outerjoin(HalalFlag, HalalFlag.company_id == Score.company_id)
         .where(Score.composite.isnot(None))
         .where(
-            (func.lower(Company.custom_industry_sheet) == like_sheet.lower())
-            | (func.lower(Company.gics_sector) == like_sheet.removeprefix("GICS_").lower())
+            (func.lower(Company.custom_industry_sheet) == sheet.lower())
+            | (func.lower(Company.gics_sector) == sheet.removeprefix("GICS_").lower())
         )
-        .where(Company.currency == currency.upper())
-        .order_by(Score.composite.desc())
-        .limit(limit)
     )
+    if currency != "ALL":
+        stmt = stmt.where(Company.currency == currency.upper())
     if halal == "candidate":
         stmt = stmt.where(HalalFlag.status == "halal_candidate")
-    rows = db.execute(stmt).all()
-    return {
-        "sheet": sheet,
-        "currency": currency.upper(),
-        "count": len(rows),
-        "items": [
+    rows = db.execute(stmt.order_by(Score.composite.desc()).limit(limit)).all()
+
+    from app.services.scoring_service import enrich_with_seed, load_universe
+
+    universe = {u["company_id"]: u for u in load_universe(db)}
+    items = []
+    for i, (s, c, h) in enumerate(rows):
+        entry = universe.get(c.company_id)
+        enriched = enrich_with_seed(entry["snapshot"], entry.get("seed_snapshot")) if entry else {}
+        items.append(
             {
                 "rank": i + 1,
                 "company_id": s.company_id,
                 "name": c.name,
+                "ticker": c.ticker,
+                "currency": c.currency,
                 "composite": s.composite,
                 "signal": s.signal,
                 "peer_set_type": s.peer_set_type,
                 "peer_rank": s.peer_rank,
                 "halal_status": (h.status if h else None),
+                "pe_calc": enriched.get("pe_calc"),
+                "pb_calc": enriched.get("pb_calc"),
+                "roe_calc": enriched.get("roe_calc"),
                 "method_version": s.method_version,
             }
-            for i, (s, c, h) in enumerate(rows)
-        ],
+        )
+    return {
+        "sheet": sheet,
+        "currency": currency.upper(),
+        "count": len(items),
+        "items": items,
         "disclaimer": DISCLAIMER,
-        "note": "halal is informational metadata; ?halal=candidate is opt-in and never a default filter",
+        "note": "currency=ALL is a score-only table; per-row money fields are native to each company and medians are never blended",
     }
 
 

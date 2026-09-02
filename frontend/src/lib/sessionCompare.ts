@@ -1,13 +1,13 @@
-/** Session compare basket (sessionStorage). Survives navigation, not the browser. */
+/** Compare basket persisted to localStorage (Phase 9: key `compareIds`, max 8). */
 
-const KEY = "compare-selection";
+const KEY = "compareIds";
 const MAX = 8;
 
 export function getCompareSelection(): string[] {
   try {
-    const raw = sessionStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string").slice(0, MAX) : [];
   } catch {
     return [];
   }
@@ -15,19 +15,18 @@ export function getCompareSelection(): string[] {
 
 export function toggleCompareSelection(id: string): string[] {
   const cur = getCompareSelection();
-  const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-  const capped = next.slice(0, MAX);
+  const next = (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]).slice(0, MAX);
   try {
-    sessionStorage.setItem(KEY, JSON.stringify(capped));
+    localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
     /* storage unavailable — in-memory only */
   }
-  return capped;
+  return next;
 }
 
 export function clearCompareSelection(): void {
   try {
-    sessionStorage.removeItem(KEY);
+    localStorage.removeItem(KEY);
   } catch {
     /* ignore */
   }

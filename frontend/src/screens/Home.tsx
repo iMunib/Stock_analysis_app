@@ -109,6 +109,8 @@ export default function Home() {
         <TopTable title="Top 10 — CAD" rows={rankCad?.items ?? []} />
       </div>
 
+      <TopTableAll />
+
       <section aria-label="Add a ticker" className="space-y-3 rounded-md border border-line bg-panel p-5">
         <h2 className="font-display text-lg">Add a ticker to the database</h2>
         <p className="text-sm text-fog">
@@ -183,5 +185,42 @@ function Stat({ label, value }: { label: string; value: number }) {
       <p className="font-mono text-[10px] uppercase tracking-widest text-dim">{label}</p>
       <p className="mt-1 font-mono text-2xl tabular-nums text-paper">{value}</p>
     </div>
+  );
+}
+
+function TopTableAll() {
+  const [rows, setRows] = useState<RankingsOut | null>(null);
+  useEffect(() => {
+    // Score-only top 10 across the whole seed (unitless composite — no money columns).
+    fetch("/api/v1/rankings?scope=seed&limit=10")
+      .then((r) => r.json())
+      .then(setRows)
+      .catch(() => setRows(null));
+  }, []);
+  return (
+    <section aria-label="Top 10 All (score only)" className="space-y-3">
+      <h2 className="font-display text-xl">
+        Top 10 — All <span className="font-mono text-xs text-dim">(score only, both currencies, no money columns)</span>
+      </h2>
+      {!rows || rows.items.length === 0 ? (
+        <p className="text-sm text-fog">No scored names yet.</p>
+      ) : (
+        <ul className="divide-y divide-line rounded-md border border-line bg-panel">
+          {rows.items.map((r) => (
+            <li key={r.company_id} className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <div>
+                <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink>
+                <span className="ml-2 font-mono text-[10px] text-dim">#{r.rank}</span>
+                <span className="ml-2 font-mono text-[10px] text-info">{(r as unknown as { currency?: string }).currency ?? ""}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Score value={r.composite} />
+                <SignalBadge signal={r.signal} small />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

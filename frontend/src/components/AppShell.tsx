@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
 import type { SearchOut } from "../api/types";
 import { navItems } from "../lib/nav";
+import { getCompareSelection } from "../lib/sessionCompare";
 import { Score, SignalBadge, useDebounced } from "./ui";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -12,12 +13,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [results, setResults] = useState<SearchOut | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [compareCount, setCompareCount] = useState(0);
   const nav = useNavigate();
   const loc = useLocation();
 
   useEffect(() => {
     api.jobs().then(() => setHasJobs(true)).catch(() => setHasJobs(false));
   }, []);
+
+  useEffect(() => {
+    setCompareCount(getCompareSelection().length);
+  }, [loc]);
 
   useEffect(() => {
     const q = debounced.trim();
@@ -61,10 +67,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `rounded px-3 py-1.5 ${isActive ? "bg-panel2 text-gold" : "text-fog hover:text-paper"}`
+                  `rounded px-3 py-1.5 transition-colors ${
+                    isActive ? "bg-panel2 text-gold" : "text-fog hover:text-paper"
+                  }`
                 }
               >
                 {item.label}
+                {item.to === "/compare" && compareCount > 0 && (
+                  <span
+                    className="ml-1.5 rounded bg-gold/20 px-1.5 py-0.5 font-mono text-[10px] text-gold"
+                    aria-label={`${compareCount} companies in the compare basket`}
+                  >
+                    {compareCount}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
