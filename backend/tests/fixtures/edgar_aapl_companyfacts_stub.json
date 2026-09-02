@@ -1,0 +1,93 @@
+{
+  "cik": 320193,
+  "entityName": "Apple Inc.",
+  "facts": {
+    "dei": {},
+    "us-gaap": {
+      "Revenues": {
+        "label": "Revenues",
+        "units": {
+          "USD": [
+            {"form": "10-K", "fp": "FY", "frame": "CY2020", "start": "2019-09-29", "end": "2020-09-26", "val": 274515000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2021", "start": "2020-09-27", "end": "2021-09-25", "val": 365817000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2022", "start": "2021-09-26", "end": "2022-09-24", "val": 394328000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2023", "start": "2022-09-25", "end": "2023-09-30", "val": 383285000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2024", "start": "2023-10-01", "end": "2024-09-28", "val": 391035000000}
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "label": "Net Income",
+        "units": {
+          "USD": [
+            {"form": "10-K", "fp": "FY", "frame": "CY2020", "start": "2019-09-29", "end": "2020-09-26", "val": 57411000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2021", "start": "2020-09-27", "end": "2021-09-25", "val": 94680000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2022", "start": "2021-09-26", "end": "2022-09-24", "val": 99803000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2023", "start": "2022-09-25", "end": "2023-09-30", "val": 96995000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2024", "start": "2023-10-01", "end": "2024-09-28", "val": 93736000000}
+          ]
+        }
+      },
+      "EarningsPerShareDiluted": {
+        "label": "Diluted EPS",
+        "units": {
+          "USD/shares": [
+            {"form": "10-K", "fp": "FY", "frame": "CY2020", "start": "2019-09-29", "end": "2020-09-26", "val": 3.28},
+            {"form": "10-K", "fp": "FY", "frame": "CY2021", "start": "2020-09-27", "end": "2021-09-25", "val": 5.61},
+            {"form": "10-K", "fp": "FY", "frame": "CY2022", "start": "2021-09-26", "end": "2022-09-24", "val": 6.11},
+            {"form": "10-K", "fp": "FY", "frame": "CY2023", "start": "2022-09-25", "end": "2023-09-30", "val": 6.13},
+            {"form": "10-K", "fp": "FY", "frame": "CY2024", "start": "2023-10-01", "end": "2024-09-28", "val": 6.08}
+          ]
+        }
+      },
+      "Assets": {
+        "label": "Assets",
+        "units": {
+          "USD": [
+            {"form": "10-K", "fp": "FY", "end": "2020-09-26", "val": 323888000000},
+            {"form": "10-K", "fp": "FY", "end": "2021-09-25", "val": 351002000000},
+            {"form": "10-K", "fp": "FY", "end": "2022-09-24", "val": 352755000000},
+            {"form": "10-K", "fp": "FY", "end": "2023-09-30", "val": 352583000000},
+            {"form": "10-K", "fp": "FY", "end": "2024-09-28", "val": 364980000000}
+          ]
+        }
+      },
+      "StockholdersEquity": {
+        "label": "Stockholders Equity",
+        "units": {
+          "USD": [
+            {"form": "10-K", "fp": "FY", "end": "2020-09-26", "val": 65339000000},
+            {"form": "10-K", "fp": "FY", "end": "2021-09-25", "val": 63090000000},
+            {"form": "10-K", "fp": "FY", "end": "2022-09-24", "val": 50672000000},
+            {"form": "10-K", "fp": "FY", "end": "2023-09-30", "val": 62146000000},
+            {"form": "10-K", "fp": "FY", "end": "2024-09-28", "val": 56950000000}
+          ]
+        }
+      },
+      "PaymentsToAcquirePropertyPlantAndEquipment": {
+        "label": "Capex",
+        "units": {
+          "USD": [
+            {"form": "10-K", "fp": "FY", "frame": "CY2020", "start": "2019-09-29", "end": "2020-09-26", "val": -7309000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2021", "start": "2020-09-27", "end": "2021-09-25", "val": -11085000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2022", "start": "2021-09-26", "end": "2022-09-24", "val": -10708000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2023", "start": "2022-09-25", "end": "2023-09-30", "val": -10959000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2024", "start": "2023-10-01", "end": "2024-09-28", "val": -9447000000}
+          ]
+        }
+      },
+      "NetCashProvidedByUsedInOperatingActivities": {
+        "label": "Operating Cash Flow",
+        "units": {
+          "USD": [
+            {"form": "10-K", "fp": "FY", "frame": "CY2020", "start": "2019-09-29", "end": "2020-09-26", "val": 80674000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2021", "start": "2020-09-27", "end": "2021-09-25", "val": 104038000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2022", "start": "2021-09-26", "end": "2022-09-24", "val": 122151000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2023", "start": "2022-09-25", "end": "2023-09-30", "val": 110543000000},
+            {"form": "10-K", "fp": "FY", "frame": "CY2024", "start": "2023-10-01", "end": "2024-09-28", "val": 118254000000}
+          ]
+        }
+      }
+    }
+  }
+}

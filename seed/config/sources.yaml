@@ -1,0 +1,31 @@
+# Data source settings: endpoints, limits, retries, caching
+edgar:
+  user_agent: "OpenClaw Research contact@openclaw.local"
+  cik_lookup: "https://www.sec.gov/files/company_tickers.json"
+  companyfacts: "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
+  submissions: "https://data.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=10-K&output=atom"
+  sleep_s: 0.2            # politeness delay between requests
+  retries: 3
+  timeout_s: 60
+  prefer_html: true        # prefer earnings HTML / exhibit .htm over huge PDFs
+sedar:
+  base: "https://www.sedarplus.ca"
+  # SEDAR+ has no anonymous programmatic access; use only as a URL citation, never fake a login
+  note: "no fake login; cite issuer URL only"
+issuer_ir:
+  # learned URL patterns (CA banks quarterly results)
+  td_quarterly: "https://www.td.com/content/dam/tdcom/canada/about-td/pdf/quarterly-results/{fy}/{q}/{fy}-{q}-financial-supppack-en.pdf"
+  bns_quarterly: "https://www.scotiabank.com/content/dam/scotiabank/corporate/quarterly-reports/{fy}/{q}/Q{q}{fy2}_Quarterly_Press_Release-EN.pdf"
+download:
+  max_bytes: 8388608       # 8 MB cap — never send a larger file to a vision model
+  retries: 3               # per-URL retries before N/A + URL + reason
+  cache_dir: "raw/docs"
+  checksum_skip: true      # re-use cached file if present unless --force
+yfinance:
+  enabled: true            # Medium fallback only
+  # Canadian names: IR annual statement first, yfinance only as fallback
+  note: "CA: IR/SEDAR first; yfinance = Medium fallback (label Yahoo_Fallback)"
+logging:
+  dir: "logs"
+  http_log: "logs/http_status.csv"
+  parse_log: "logs/parse_misses.csv"

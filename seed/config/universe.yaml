@@ -1,0 +1,30 @@
+# Universe construction rules (index membership)
+# Read/refresh at runtime by scripts/build_universe.py and scripts/refresh.py --mode universe
+as_of: "2026-08-21"              # override with --as-of
+indexes:
+  us:
+    name: "S&P 500"
+    source: "Wikipedia 'List of S&P 500 companies'"
+    seed_file: "raw/sp500_wikipedia.csv"
+    fallback_seed: "SPY Holdings.xlsx (user-provided)"
+  ca:
+    name: "TSX Composite"
+    source: "Wikipedia 'S&P/TSX Composite Index' constituents"
+    seed_file: "raw/tsx_composite_wikipedia.csv"
+    fallback_seed: "TSX60"
+share_classes:
+  # consolidation: map secondary listings to a single primary ticker (never drop)
+  GOOG: "GOOGL"
+  BRK_B: "BRK-B"
+  RCI: "RCI-B"     # Rogers: non-voting RCI-B is the liquid line
+  MFC_CA: "MFC"
+  NA: "NA"         # National Bank — never treated as NaN (keep_default_na=False)
+  BAM: "BN"        # Brookfield (explicit; review each refresh)
+dedup_rules:
+  - "prefer primary listing exchange (US NYSE/Nasdaq over OTC)"
+  - "prefer higher liquidity share class"
+  - "never silently drop a ticker named NA / NaN / None"
+currency:
+  us: "USD"
+  ca: "CAD"
+  fx_config: "config/fx.yaml"

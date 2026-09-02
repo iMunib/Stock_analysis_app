@@ -1,0 +1,8 @@
+# FX: USD/CAD. Fill at runtime by refresh.py (or manually here with source).
+# Native currency is preserved per ticker in Core_Financials; FX is used only
+# for cross-listing comparisons and is never used to rank raw millions.
+usd_cad:
+  rate: null              # set to a number when sourced, e.g. 1.36
+  as_of: null             # date the rate was observed
+  source: "runtime fetch (e.g. Bank of Canada daily noon rate) or manual"
+  note: "Never rank CAD vs USD on raw millions; convert only for explicit comparisons."

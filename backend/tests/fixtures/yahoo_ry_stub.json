@@ -1,0 +1,21 @@
+{
+  "symbol": "RY.TO",
+  "company_id": "CA:RY:TSX",
+  "currency": "CAD",
+  "financials": {
+    "2022-10-31": {"Total Revenue": 48994000000, "Net Income": 15828000000, "Diluted EPS": 11.27},
+    "2023-10-31": {"Total Revenue": 50511000000, "Net Income": 14841000000, "Diluted EPS": 10.47},
+    "2024-10-31": {"Total Revenue": 57444000000, "Net Income": 16291000000, "Diluted EPS": 11.35}
+  },
+  "balance_sheet": {
+    "2022-10-31": {"Total Assets": 1946850000000, "Stockholders Equity": 102308000000, "Total Debt": 229600000000},
+    "2023-10-31": {"Total Assets": 2052991000000, "Stockholders Equity": 110364000000, "Total Debt": 264100000000},
+    "2024-10-31": {"Total Assets": 2174707000000, "Stockholders Equity": 112732000000, "Total Debt": 283700000000}
+  },
+  "cashflow": {
+    "2022-10-31": {"Operating Cash Flow": 18900000000, "Capital Expenditure": -3500000000},
+    "2023-10-31": {"Operating Cash Flow": 19100000000, "Capital Expenditure": -3200000000},
+    "2024-10-31": {"Operating Cash Flow": 21400000000, "Capital Expenditure": -3100000000}
+  },
+  "price": {"price": 172.35, "currency": "CAD", "as_of": "2026-09-01"}
+}

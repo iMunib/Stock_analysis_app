@@ -17,7 +17,10 @@ Phase map:
 |-------|-------|--------|
 | 1 | Workbook import + read-only API + docs | done |
 | 2 | History + on-demand ingest (SEC EDGAR + Yahoo, cache in SQLite) | done |
-| 3 | Scoring 0–10 + research signal + halal flag per `docs/SCORING_SPEC.md` | not started |
+| 3 | Scoring 0–10 + research signal + halal flag per `docs/SCORING_SPEC.md` | done |
+| 4 | Research API: search, dossier, compare, similar, sector snapshot | done |
+| 5 | Local React UI (search / dossier / compare / sector) | done |
+| 6 | LLM research summaries (OpenRouter) | not started |
 
 ## Run with Docker (Windows PowerShell)
 
@@ -36,11 +39,11 @@ curl http://localhost:8000/api/v1/stats
   modified and `refresh.py` is never executed (copies live in `legacy/` for
   reference only).
 
-Optional frontend placeholder (profile `frontend`):
+Optional frontend (profile `frontend`) — the real research UI since Phase 5:
 
 ```powershell
 docker compose --profile frontend up --build -d
-# then open http://localhost:5173
+# then open http://localhost:5173  (nginx on container port 80; /api proxied to the api container)
 ```
 
 Stop:
@@ -70,4 +73,3 @@ than faking coverage.
 - Banks/insurers keep their intentional blanks (Total_Debt, Gross_Profit, FCF_Calc...).
 - Halal is a flag (AAOIFI-style), never a filter. LLM outputs never overwrite fundamentals.
 - Secrets only in `.env` (gitignored). No paid APIs in v1.
-"# Stock_analysis_app" 
