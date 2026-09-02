@@ -11,6 +11,7 @@ export function navItems(hasJobs: boolean): NavItem[] {
   const items: NavItem[] = [
     { label: "Desk", to: "/" },
     { label: "Screen", to: "/screen" },
+    { label: "Forensic", to: "/screener" },
     { label: "Sectors", to: "/sectors" },
     { label: "Compare", to: "/compare" },
     { label: "Jobs", to: "/jobs" },

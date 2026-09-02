@@ -164,11 +164,13 @@ export interface DossierOut {
     in_sp500: boolean;
     in_tsx_composite: boolean;
     cik?: number | null;
+    ticker?: string | null;
     reporting_currency?: string | null;
     filing_type?: string | null;
   };
   latest_snapshot: Snapshot | null;
   history_annual: HistoryRow[];
+  history_warnings?: string[];
   score: ScorePayload | null;
   halal: HalalPayload | null;
   data_gaps: string[];

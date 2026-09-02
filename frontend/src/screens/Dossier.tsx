@@ -159,7 +159,14 @@ export default function Dossier() {
       setFetchingGap(false);
     }
   };
-  const edgarLink = data.identity.cik ? `https://www.sec.gov/edgar/browse/?CIK=${data.identity.cik}` : null;
+  // EDGAR link: precise CIK link when the refresh worker has resolved one; otherwise a
+  // ticker/name search that always works (cik is NULL until the first refresh_universe run).
+  const edgarFallback = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${encodeURIComponent(data.identity.ticker || data.identity.name || "")}&type=10-K&owner=exclude&count=10`;
+  const edgarLink = data.identity.cik
+    ? `https://www.sec.gov/edgar/browse/?CIK=${data.identity.cik}`
+    : data.identity.country === "US"
+      ? edgarFallback
+      : null;
   const filingType = data.identity.filing_type ?? "10-K";
 
   const breadcrumb = (
@@ -513,7 +520,14 @@ export default function Dossier() {
 
         {/* History: Annual & Quarterly */}
         <section aria-label="Annual history" className="lg:col-span-7">
-          <Card title="Annual history" subtitle="Audited fiscal year filings">
+          <Card title="Annual history" subtitle="Audited fiscal year filings" infoTip={data.history_warnings?.length ? data.history_warnings.join(" · ") : undefined}>
+            {data.history_warnings && data.history_warnings.length > 0 && (
+              <div role="alert" className="mb-3 rounded-card border border-warn/40 bg-warn-weak px-3 py-2 text-xs text-ink-1">
+                <span className="font-semibold">Data trust warning:</span> {data.history_warnings.length} filing
+                year{data.history_warnings.length > 1 ? "s" : ""} look mis-scaled or mis-tagged and
+                {data.history_warnings.length > 1 ? " were" : " was"} excluded from growth math. See chips below.
+              </div>
+            )}
             {history.length === 0 ? (
               <p className="text-xs text-ink-2">No annual history on file.</p>
             ) : (

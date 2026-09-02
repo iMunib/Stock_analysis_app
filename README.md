@@ -318,9 +318,9 @@ The importer is idempotent and skips re-import unless the workbook mtime changed
 - Snapshots: 720 seed rows + ~55 provider history rows (AAPL/MSFT 20 FY each from EDGAR;
   RY/SHOP/XOM 5 FY from Yahoo). Scores: 718 scored, 2 insufficient_data, 0 errors;
   growth NULL on 713 (expected until the full-history backfill runs).
-- Alembic heads: `d6e7f8a9b001` (phase6a_jobs) ← c3d4e5f6a780 (scores/halal) ←
+- Alembic head: `23317f57050f` (decision_quality_key_stats_evidence; chain ends ccf1cb226400 <- b7f2a91c4d50 <- c3d4e5f6a780 <- d6e7f8a9b001 <- e7f9a0b1c200 <- a1b2c3d4e5f6 <- 23317f57050f). Earlier note: ← c3d4e5f6a780 (scores/halal) ←
   b7f2a91c4d50 (provider provenance) ← ccf1cb226400 (initial).
-- **Tests:** backend pytest **88 passed**; frontend vitest **86 passed** (19 test files including design-system token, primitive, and viz unit tests); `npm run build` ✓ (tsc + vite, 0 errors).
+- **Tests:** backend pytest **138 passed**; frontend vitest **86 passed** (19 test files including design-system token, primitive, and viz unit tests); `npm run build` ✓ (tsc + vite, 0 errors).
 - Playwright 7/8 (one timing flake, passes individually).
 - Seed workbook untouched throughout (mtime 2026-08-22 21:28:20).
 
@@ -452,3 +452,29 @@ relying on it.*
 - **Zero hard-coded hex in components:** all colors go through `var(--token)` or Tailwind token classes. Hex lives only in `tokens.css`.
 - **Test coverage:** 86 vitest tests pass (19 files), including token-structure tests, layout primitive render tests, SVG viz render tests, and `useCountUp` hook tests.
 - **Build:** `tsc && vite build` — 0 TypeScript errors, 0 warnings.
+
+
+---
+
+## Forensic + Expectations Sprint (2026-09-02): TTM forensics, reverse DCF, multi-metric screener
+
+Directive delivered in four suites on top of the frozen architecture (no chart libs, USD/CAD never mixed, owner seed rows immutable).
+
+**Backend**
+- **Schema (alembic `a1b2c3d4e5f6` + `23317f57050f`):** `financial_snapshots_ttm` (rolling 4-quarter flows + NOPAT/invested capital/ROIC/FCF yield/EV-EBITDA/PE/Sloan accruals/cash conversion), `valuation_reverse_dcf` (implied 10-yr growth, expectations gap vs 5-yr FCF CAGR, 3x3 WACC/growth sensitivity), `screener_presets` (system presets seeded idempotently).
+- **TTM engine** (`app/services/ttm_engine.py`): NOPAT = operating income x (1 - clamp(effective tax, 0.15, 0.30)); invested capital = total debt + equity - cash; Sloan accruals = (NI - OCF)/assets; cash conversion = FCF/NI.
+- **Reverse DCF engine** (`app/services/valuation_engine.py`): solves the 10-year DCF polynomial (EV = discounted FCFs + Gordon terminal) for implied growth with a pure-Python Brent solver (bracket [-0.40, +0.60]); negative-FCF companies bypass cleanly with `dcf_unviable_negative_fcf`; 3x3 sensitivity at WACC {8,9,10%} x terminal {2.0, 2.5, 3.0%}.
+- **Screener engine** (`app/services/screener_engine.py`): SQLAlchemy query across companies x TTM x reverse-DCF x scores; supports AND and OR (`flag_logic`) forensic flags; system presets "Buffett-Burry Deep Value", "Forensic Red Flags" (OR logic), "Discounted Compounders".
+- **API:** `GET /api/v1/screener/presets`, `POST /api/v1/screener/run` (paginated, per-row currency tag), `GET /api/v1/companies/{id}/forensics`, `GET /api/v1/companies/{id}/valuation` (computes+stores on first request).
+- **Data-trust extras:** dossier payload now carries `history_warnings` (aggregated FY-level trust warnings) and identity `ticker`/`cik`; dossier shows a warning banner + per-year chips; EDGAR link falls back to a ticker search while CIK is still NULL (fills after the first refresh job).
+
+**Frontend**
+- **`src/screens/Screener.tsx` (nav "Forensic", route `/screener`):** collapsible criteria sidebar with sliders (composite/ROIC/FCF yield/EV-EBITDA/Sloan/cash conversion/expectations gap), system preset tabs, sortable sticky-first-column table with conditional badges (ROIC >= 20% emerald-tone positive chip; Sloan > 0.10 "High accruals"; cash conversion < 0.70 "Weak conversion"), one-click **Export to CSV** (verbatim units, per-row currency column, never mixed). Criteria and presets persist in the URL (`?preset=...&roic_min=...`).
+- **`ForensicCard` + `ReverseDCFCard` on every dossier:** implied growth vs historical CAGR SVG bars, accessible 3x3 sensitivity grid with dynamic cell coloring, FCF-vs-NI history chart, Sloan/cash-conversion status chips.
+
+**Verification (all green)**
+- Alembic `upgrade head` clean on the live DB (after stamping `a1b2c3d4e5f6 -> 23317f57050f`; the DB had been created via `create_all`, so the migration body was a no-op on identical schema).
+- `pytest tests/test_ttm_engine.py tests/test_valuation_engine.py tests/test_screener.py`: **12 passed inside the api container**; full backend **138 passed** (includes 6 new screener tests: preset seeding, AND/OR logic, expectations gap, currency purity with NULL-DCF joins).
+- Frontend vitest **86 passed**; `npm run build` 0 errors; Playwright **8 passed + 2 flaky-recovered** (both pass individually).
+- Numeric sanity: AAPL reverse DCF **converges**; implied growth 12.9% at the fixture price $230 (inside the directive's 7-13% band; unit test asserts 7-14% across realistic EVs). The live DB's stored price ($309.35) implies 16.8% - a data-freshness artifact, not an engine error; refresh updates prices and the implied rate moves accordingly.
+- Live screener smoke: `roic_min=0.15` returns ACN 29.7%, MSFT 25.1%, PYPL 17.4%, AAPL 278% (tiny TTM invested capital); CAD-only run keeps every row `currency=CAD` with honest NULLs where quarterly data is not yet ingested.

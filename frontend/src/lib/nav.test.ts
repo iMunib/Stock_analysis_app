@@ -33,9 +33,9 @@ describe("sector card keys are unique", () => {
 });
 
 describe("nav routes", () => {
-  it("always includes Screen and Jobs", () => {
+  it("always includes Screen, Forensic screener and Jobs", () => {
     const labels = navItems(false).map((i) => i.label);
-    expect(labels).toEqual(["Desk", "Screen", "Sectors", "Compare", "Jobs", "Learn"]);
+    expect(labels).toEqual(["Desk", "Screen", "Forensic", "Sectors", "Compare", "Jobs", "Learn"]);
   });
   it("shows Jobs when available", () => {
     expect(navItems(true).map((i) => i.label)).toContain("Jobs");

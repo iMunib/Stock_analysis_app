@@ -142,6 +142,7 @@ class DossierOut(BaseModel):
     identity: dict
     latest_snapshot: dict | None
     history_annual: list[dict]
+    history_warnings: list[str] = []
     score: dict | None
     halal: dict | None
     data_gaps: list[str]
@@ -236,10 +237,12 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
         for h in history_annual
     ])
     sanitized_years = [r["fiscal_year"] for r in sani["rows_for_growth"]]
+    history_warnings: list[str] = []
     for item, row in zip(history_annual, sani["rows_for_table"]):
         if row.get("quality_flag"):
             item["quality_flag"] = row["quality_flag"]
             item["warning"] = row["warning"]
+            history_warnings.append(f"FY{row['fiscal_year']}: {row['warning']}")
         item["used_for_growth"] = item["fiscal_year"] in sanitized_years
 
     prof = None
@@ -296,11 +299,13 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
             "in_sp500": company.in_sp500,
             "in_tsx_composite": company.in_tsx_composite,
             "cik": company.cik,
+            "ticker": company.ticker,
             "reporting_currency": company.reporting_currency,
             "filing_type": company.filing_type,
         },
         latest_snapshot=enriched,
         history_annual=history_annual,
+        history_warnings=history_warnings,
         score=score_payload,
         halal=halal_payload,
         data_gaps=_data_gaps(entry, enriched),

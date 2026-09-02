@@ -9,6 +9,7 @@ import Sector from "./screens/Sector";
 import SectorsHub from "./screens/SectorsHub";
 import Jobs from "./screens/Jobs";
 import Learn from "./screens/Learn";
+import Screener from "./screens/Screener";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/screen" element={<Screen />} />
+          <Route path="/screener" element={<Screener />} />
           <Route path="/sectors" element={<SectorsHub />} />
           <Route path="/sectors/:sheet" element={<Sector />} />
           <Route path="/c/:companyId" element={<Dossier />} />
