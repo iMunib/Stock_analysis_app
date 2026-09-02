@@ -208,3 +208,21 @@ class Job(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class LlmCache(Base):
+    """Cached LLM narration. Keyed so a recompute invalidates old text."""
+
+    __tablename__ = "llm_cache"
+    __table_args__ = (
+        UniqueConstraint("kind", "subject_id", "method_version", "score_computed_at", "model", name="uq_llm_cache"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # company | sector
+    subject_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    method_version: Mapped[str] = mapped_column(String(8), nullable=False, default="v1")
+    score_computed_at: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    narration: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

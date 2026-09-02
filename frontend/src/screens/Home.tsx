@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
-import type { RankingsOut, ResearchMetaOut } from "../api/types";
+import type { DossierOut, RankingsOut, ResearchMetaOut } from "../api/types";
 import { CompanyLink, ErrorBanner, Score, SignalBadge, Spinner } from "../components/ui";
 import { SIGNAL_ORDER, signalTone } from "../api/visuals";
 import { signalLabel } from "../api/copy";
@@ -146,9 +146,65 @@ export default function Home() {
         )}
       </section>
 
+      <section aria-label="Watchlist" className="space-y-3">
+        <h2 className="font-display text-lg">Watchlist</h2>
+        <WatchGrid />
+      </section>
+
       <section aria-label="Browse" className="flex flex-wrap gap-4 text-sm">
         <Link to="/sectors" className="text-gold hover:underline">Browse all sectors →</Link>
       </section>
+    </div>
+  );
+}
+
+function WatchGrid() {
+  const [watched] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("***");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [dossiers, setDossiers] = useState<DossierOut[]>([]);
+
+  useEffect(() => {
+    Promise.allSettled(watched.map((id) => api.dossier(id))).then((results) => {
+      setDossiers(
+        results
+          .filter((r): r is PromiseFulfilledResult<DossierOut> => r.status === "fulfilled")
+          .map((r) => r.value),
+      );
+    });
+  }, [watched]);
+
+  if (watched.length === 0) {
+    return (
+      <p className="rounded-md border border-line bg-panel p-3 text-sm text-fog">
+        Nothing watched yet — open a dossier and press ☆ Watch.
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {dossiers.map((d) => (
+        <Link
+          key={d.identity.company_id}
+          to={`/c/${enc(d.identity.company_id)}`}
+          className="rounded-md border border-line bg-panel px-3 py-2 hover:border-gold/60"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-sm text-paper">{d.identity.name ?? d.identity.company_id}</span>
+            <span className="font-mono text-sm text-gold">{d.score?.composite?.toFixed(1) ?? "—"}</span>
+          </div>
+          <div className="mt-0.5 flex items-center justify-between font-mono text-[10px] text-dim">
+            <span>{d.identity.company_id}</span>
+            <span>{d.score?.peer_rank ? `#${d.score.peer_rank}/${d.score.peer_n}` : "—"}</span>
+          </div>
+        </Link>
+      ))}
     </div>
   );
 }

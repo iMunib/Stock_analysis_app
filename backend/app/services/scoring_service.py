@@ -129,7 +129,11 @@ def recompute(db: Session, company_id: str | None = None) -> dict:
             # current snapshot from the seed row (never the reverse, owner values
             # always win) so scored companies keep full coverage.
             cur_row = enrich_with_seed(company["snapshot"], company.get("seed_snapshot"))
-            results[cid] = score_company(cur_row, company["prior"], company["history"], peer_vals)
+            # Phase 10 A: growth uses only sanitized FY years (suspect scale rows excluded).
+            from app.services.history_sanity import sanitize_history
+
+            _sani = sanitize_history(company["history"])
+            results[cid] = score_company(cur_row, company["prior"], _sani["rows_for_growth"], peer_vals)
         except Exception as exc:  # noqa: BLE001 - one bad company must not kill the run
             errors.append(f"{cid}: {exc.__class__.__name__}: {exc}")
 

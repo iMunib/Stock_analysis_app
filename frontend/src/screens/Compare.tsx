@@ -2,14 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { CompareOut, SearchOut } from "../api/types";
-import { CompanyLink, ErrorBanner, HalalBadge, Score, SignalBadge, Spinner, useDebounced } from "../components/ui";
+import { CompanyLink, ErrorBanner, HalalBadge, Score, Spinner, useDebounced } from "../components/ui";
 import { PillarMiniBars } from "../components/bars";
-import { mixedCurrencyWarning, ratio } from "../api/copy";
+import InfoTip from "../components/InfoTip";
+import { mixedCurrencyWarning } from "../api/copy";
+import { multiple, percentish } from "../lib/format";
 
 const MAX = 8;
 
 export default function Compare() {
   const [params, setParams] = useSearchParams();
+  const showHalal = params.get("halal") === "1";
   const ids = (params.get("ids") ?? "").split(",").filter(Boolean).slice(0, MAX);
   const [data, setData] = useState<CompareOut | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +40,10 @@ export default function Compare() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
+  const warning = data ? mixedCurrencyWarning(data.currencies) : null;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       <header className="space-y-2">
         <h1 className="font-display text-3xl tracking-tight">Compare companies</h1>
         <p className="text-sm text-fog">
@@ -61,16 +66,17 @@ export default function Compare() {
 
       {data && !loading && (
         <>
-          {data.currency_warning && (
+          {warning && (
             <div role="alert" className="rounded-md border border-warn/60 bg-warn/10 px-4 py-3 text-sm text-paper">
-              {mixedCurrencyWarning(data.currencies)}
+              {warning}
             </div>
           )}
           <div className="overflow-x-auto rounded-md border border-line">
-            <CompareTable data={data} />
+            <CompareTable data={data} showHalal={showHalal} />
           </div>
           <p className="text-xs text-dim">
-            Highlighted cells mark the best value in each comparable column. “—” means the field is not on file.
+            Best value per column is highlighted (min PE/PB/EV-EBITDA, max ROE/composite). “—” means the field is
+            not on file.
           </p>
         </>
       )}
@@ -78,73 +84,101 @@ export default function Compare() {
   );
 }
 
-function CompareTable({ data }: { data: CompareOut }) {
+function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolean }) {
   const num = (v: number | null) => (v === null || v === undefined ? null : v);
-  const bestOf = (key: keyof (typeof data.rows)[number]): number | null => {
-    const vals = data.rows.filter((r) => r.found).map((r) => num(r[key] as number | null)).filter((v): v is number => v !== null);
+
+  const bestOf = (key: keyof (typeof data.rows)[number], dir: "high" | "low"): number | null => {
+    const vals = data.rows
+      .filter((r) => r.found)
+      .map((r) => num(r[key] as number | null))
+      .filter((v): v is number => v !== null && (dir === "high" || v > 0));
     if (!vals.length) return null;
-    return Math.max(...vals); // higher composite/pillar = best; ratios are positive-scaled
-  };
-  const bestRatioOf = (key: keyof (typeof data.rows)[number]): number | null => {
-    const vals = data.rows.filter((r) => r.found).map((r) => num(r[key] as number | null)).filter((v): v is number => v !== null && v > 0);
-    if (!vals.length) return null;
-    return Math.min(...vals); // cheaper multiple = best
+    return dir === "high" ? Math.max(...vals) : Math.min(...vals);
   };
 
-  const compKeys: [string, keyof (typeof data.rows)[number], "high" | "low"][] = [
-    ["Composite", "composite", "high"],
-    ["Quality", "quality", "high"],
-    ["Value", "value", "high"],
-    ["Growth", "growth", "high"],
-    ["Risk", "risk", "high"],
-    ["PE", "pe_calc", "low"],
-    ["PB", "pb_calc", "low"],
-    ["EV/EBITDA", "ev_to_ebitda_calc", "low"],
-    ["ROE", "roe_calc", "high"],
-    ["ROA", "roa_calc", "high"],
-    ["FCF margin", "fcfmargin_calc", "high"],
+  const bestComposite = bestOf("composite", "high");
+  const bestRoe = bestOf("roe_calc", "high");
+  const bestPe = bestOf("pe_calc", "low");
+  const bestPb = bestOf("pb_calc", "low");
+  const bestEv = bestOf("ev_to_ebitda_calc", "low");
+  const bestFcf = bestOf("fcfmargin_calc", "high");
+
+  const compKeys: [string, keyof (typeof data.rows)[number], "high" | "low", (v: number) => string][] = [
+    ["Composite", "composite", "high", (v) => v.toFixed(1)],
+    ["PE", "pe_calc", "low", (v) => multiple(v)],
+    ["PB", "pb_calc", "low", (v) => multiple(v)],
+    ["EV/EBITDA", "ev_to_ebitda_calc", "low", (v) => multiple(v)],
+    ["ROE", "roe_calc", "high", (v) => percentish(v)],
+    ["ROA", "roa_calc", "high", (v) => percentish(v)],
+    ["FCF margin", "fcfmargin_calc", "high", (v) => percentish(v)],
   ];
 
   return (
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-line bg-panel text-left font-mono text-[10px] uppercase tracking-widest text-dim">
-          <th scope="col" className="px-4 py-3">Company</th>
-          <th scope="col" className="px-4 py-3" aria-label="Pillar bars">Q·V·G·R</th>
-          {data.rows[0]?.money?.currency !== undefined && <th scope="col" className="px-4 py-3">Cur</th>}
+          <th scope="col" className="sticky left-0 z-10 bg-panel px-4 py-3">Company</th>
+          <th scope="col" className="px-3 py-3" aria-label="Pillar bars">Q·V·G·R</th>
+          <th scope="col" className="px-3 py-3">Cur</th>
           {compKeys.map(([label]) => (
-            <th key={label} scope="col" className="px-4 py-3 text-right">{label}</th>
+            <th key={label} scope="col" className="px-3 py-3 text-right">
+              {label}
+              {["Composite", "PE", "PB", "ROE", "EV/EBITDA"].includes(label) && <InfoTip term={label === "EV/EBITDA" ? "EV/EBITDA" : label} />}
+            </th>
           ))}
-          <th scope="col" className="px-4 py-3 text-right">Peer rank</th>
-          <th scope="col" className="px-4 py-3">Signal</th>
-          <th scope="col" className="px-4 py-3">Halal</th>
+          <th scope="col" className="px-3 py-3 text-right">Peer rank</th>
+          {showHalal && <th scope="col" className="px-3 py-3">Halal</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-line">
         {data.rows.map((r) => (
           <tr key={r.company_id} className={r.found ? "" : "opacity-40"}>
-            <td className="px-4 py-3">
+            <td className="sticky left-0 z-10 bg-panel px-4 py-3">
               {r.found ? <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink> : <span className="text-dim">{r.company_id} (not found)</span>}
             </td>
-            <td className="px-4 py-3">
+            <td className="px-3 py-3">
               <PillarMiniBars p={{ quality: r.quality, value: r.value, growth: r.growth, risk: r.risk }} />
             </td>
-            <td className="px-4 py-3 font-mono text-xs text-info">{r.currency ?? "—"}</td>
-            {compKeys.map(([label, key, dir]) => {
+            <td className="px-3 py-3 font-mono text-xs text-info">{r.currency ?? "—"}</td>
+            {compKeys.map(([label, key, , fmt]) => {
               const v = num(r[key] as number | null);
-              const best = dir === "high" ? bestOf(key) : bestRatioOf(key);
+              const best = { composite: bestComposite, pe_calc: bestPe, pb_calc: bestPb, ev_to_ebitda_calc: bestEv, roe_calc: bestRoe, roa_calc: null, fcfmargin_calc: bestFcf }[
+                key as "composite" | "pe_calc" | "pb_calc" | "ev_to_ebitda_calc" | "roe_calc" | "fcfmargin_calc"
+              ];
               const isBest = v !== null && best !== null && v === best;
               return (
-                <td key={label} className={`px-4 py-3 text-right font-mono tabular-nums ${isBest ? "rounded bg-gold/15 font-semibold text-gold" : "text-fog"}`}>
-                  {v === null ? "—" : key === "pe_calc" || key === "pb_calc" || key === "ev_to_ebitda_calc" ? ratio(v, 1) : v.toFixed(1)}
+                <td
+                  key={label}
+                  className={`px-3 py-3 text-right font-mono tabular-nums ${isBest ? "rounded bg-gold/15 font-semibold text-gold" : "text-fog"}`}
+                >
+                  {v === null ? "—" : fmt(v)}
                 </td>
               );
             })}
-            <td className="px-4 py-3 text-right font-mono tabular-nums text-fog">{r.peer_rank ?? "—"}</td>
-            <td className="px-4 py-3"><SignalBadge signal={r.signal} small /></td>
-            <td className="px-4 py-3"><HalalBadge status={r.halal_status} /></td>
+            <td className="px-3 py-3 text-right font-mono tabular-nums text-fog">{r.peer_rank ?? "—"}</td>
+            {showHalal && (
+              <td className="px-3 py-3">
+                <HalalBadge status={r.halal_status} />
+              </td>
+            )}
           </tr>
         ))}
+        {/* highlight legend row */}
+        <tr className="border-t border-line bg-panel/60 font-mono text-[9px] uppercase tracking-widest text-dim">
+          <td className="sticky left-0 bg-panel px-4 py-1.5">best</td>
+          <td />
+          <td />
+          {compKeys.map(([label, key, dir]) => {
+            const best = dir === "high" ? bestOf(key, "high") : bestOf(key, "low");
+            const bestName =
+              best === null
+                ? "—"
+                : (data.rows.find((r) => num(r[key] as number | null) === best)?.name ?? "—");
+            return <td key={label} className="px-3 py-1.5 text-right normal-case tracking-normal">{bestName}</td>;
+          })}
+          <td />
+          {showHalal && <td />}
+        </tr>
       </tbody>
     </table>
   );

@@ -7,11 +7,17 @@ Progress is updated per ticker during backfills.
 from __future__ import annotations
 
 import threading
+import time
 import traceback
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from sqlalchemy import select
+
+from app.config import REFRESH_ENABLED, REFRESH_INTERVAL_HOURS
 from app.db import SessionLocal
 from app.jobs.backfill import ingest_ticker
+from app.models import Job
 from app.services import jobs as jobsvc
 from app.providers.edgar import bucket_state
 
@@ -23,6 +29,7 @@ class JobWorker(threading.Thread):
         super().__init__(name="job-worker", daemon=True)
         self.poll_seconds = poll_seconds
         self._stop = threading.Event()
+        self._next_refresh_check = 0.0  # monotonic ts for the periodic refresh probe
 
     def stop(self) -> None:
         self._stop.set()
@@ -32,10 +39,36 @@ class JobWorker(threading.Thread):
             processed = False
             try:
                 processed = self.process_one()
+                self._maybe_enqueue_periodic_refresh()
             except Exception:  # absolutely never die
                 traceback.print_exc()
             if not processed:
                 self._stop.wait(self.poll_seconds)
+
+    def _maybe_enqueue_periodic_refresh(self) -> None:
+        """Stage C: optional timer (REFRESH_ENABLED=1). Enqueues a sample refresh if no
+        job finished within REFRESH_INTERVAL_HOURS (default 168 = weekly). Off by default."""
+        if not REFRESH_ENABLED:
+            return
+        now = time.monotonic()
+        if now < self._next_refresh_check:
+            return
+        self._next_refresh_check = now + 3600.0  # probe hourly
+        db = SessionLocal()
+        try:
+            last_finished = db.execute(
+                select(Job.finished_at).order_by(Job.finished_at.desc()).limit(1)
+            ).scalar_one_or_none()
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=REFRESH_INTERVAL_HOURS)
+            recent = last_finished is not None and last_finished >= cutoff
+            active = jobsvc.has_active(db, "refresh_universe")
+            if not recent and not active:
+                jobsvc.enqueue(db, "refresh_universe", {"mode": "sample", "limit": 5, "recompute": True})
+                print("[worker] periodic refresh_universe enqueued", flush=True)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+        finally:
+            db.close()
 
     def process_one(self) -> bool:
         """Claim and run at most one queued job. Returns True if one was run."""
@@ -59,6 +92,12 @@ class JobWorker(threading.Thread):
     def _run_job(self, db, job_id: str, kind: str, payload: dict[str, Any]) -> None:
         if kind == "backfill":
             self._run_backfill(db, job_id, payload)
+        elif kind == "refresh_universe":
+            # Phase 10C: backfill sample/limit tickers, then recompute the seed universe.
+            self._run_backfill(db, job_id, payload)
+            from app.services.scoring_service import recompute
+
+            recompute(db)
         elif kind == "recompute":
             from app.services.scoring_service import recompute
 

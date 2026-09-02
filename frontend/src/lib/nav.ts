@@ -6,12 +6,16 @@ export interface NavItem {
 }
 
 export function navItems(hasJobs: boolean): NavItem[] {
+  // Stage C: Jobs is always in the nav if the route exists (the page itself shows a
+  // setup hint if the API is unreachable). hasJobs keeps back-compat for older callers.
   const items: NavItem[] = [
     { label: "Desk", to: "/" },
     { label: "Sectors", to: "/sectors" },
     { label: "Compare", to: "/compare" },
+    { label: "Jobs", to: "/jobs" },
+    { label: "Learn", to: "/learn" },
   ];
-  if (hasJobs) items.push({ label: "Jobs", to: "/jobs" });
+  void hasJobs;
   return items;
 }
 

@@ -18,3 +18,12 @@ dist/
 .pytest_cache/
 .ruff_cache/
 *.log
+
+.env.local
+.env.*
+!.env.example
+playwright-report/
+test-results/
+.cluster/
+.audit*.py
+.debug*.py

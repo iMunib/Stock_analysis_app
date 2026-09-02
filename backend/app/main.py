@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.api.companies import router as companies_router
 from app.api.jobs import router as jobs_router
+from app.api.phase10 import router as phase10_router
 from app.api.phase2 import router as phase2_router
 from app.api.phase3 import router as phase3_router
 from app.api.phase4 import router as phase4_router
@@ -64,6 +65,7 @@ app.include_router(phase2_router)
 app.include_router(phase3_router)
 app.include_router(phase4_router)
 app.include_router(jobs_router)
+app.include_router(phase10_router)
 
 
 @app.get("/health", tags=["meta"])

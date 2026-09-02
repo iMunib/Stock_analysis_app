@@ -7,6 +7,9 @@ import { SIGNAL_ORDER, signalTone } from "../api/visuals";
 import { signalLabel } from "../api/copy";
 import { toggleCompareId } from "../lib/compare";
 import { composeAll } from "../lib/allCurrency";
+import { sectorBlurb } from "../api/sectorCopy";
+import InfoTip from "../components/InfoTip";
+import NarrationPanel from "../components/NarrationPanel";
 
 const VIEWS: CurrencyView[] = ["ALL", "USD", "CAD"];
 
@@ -74,6 +77,7 @@ export default function Sector() {
 
       <header className="space-y-3">
         <h1 className="font-display text-3xl tracking-tight">{sheet.replace(/^GICS_/, "").replace(/_/g, " ")}</h1>
+        <p className="max-w-2xl text-sm leading-relaxed text-fog">{sectorBlurb(sheet)}</p>
         <div className="flex items-center gap-2" role="group" aria-label="Currency view (required)">
           <span className="font-mono text-[10px] uppercase tracking-widest text-dim">View</span>
           {VIEWS.map((v) => (
@@ -111,6 +115,14 @@ export default function Sector() {
             <MoneyPanel label="USD money medians" panel={composed.money_by_currency.USD} />
             <MoneyPanel label="CAD money medians" panel={composed.money_by_currency.CAD} />
           </div>
+          <div className="flex flex-wrap gap-2" aria-label="Constructive vs avoid counts">
+            <span className="rounded border border-good/50 px-2 py-0.5 font-mono text-xs text-good">
+              Constructive+: {countSignals(composed.signal_histogram, ["strong_candidate", "constructive"])}
+            </span>
+            <span className="rounded border border-bad/50 px-2 py-0.5 font-mono text-xs text-bad">
+              Weak+Avoid: {countSignals(composed.signal_histogram, ["weak", "avoid"])}
+            </span>
+          </div>
           <SignalHistogram histogram={composed.signal_histogram} total={composed.companies} />
         </section>
       )}
@@ -120,8 +132,8 @@ export default function Sector() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <Stat label="Companies" value={snapshot.companies} />
             <Stat label="Scored" value={snapshot.scored} />
-            <Stat label="Median score" value={snapshot.median_composite?.toFixed(1) ?? "—"} />
             <Stat label="Median PE" value={snapshot.median_pe?.toFixed(1) ?? "—"} />
+            <Stat label="Median PB" value={snapshot.median_pb?.toFixed(1) ?? "—"} />
             <Stat label="Median ROE" value={snapshot.median_roe != null ? `${(snapshot.median_roe * 100).toFixed(1)}%` : "—"} />
           </div>
           <SignalHistogram histogram={snapshot.signal_histogram} total={snapshot.companies} />
@@ -132,7 +144,12 @@ export default function Sector() {
         <section aria-label="Ranked companies" className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <h2 className="font-display text-xl">
-              Ranked companies {view === "ALL" && <span className="font-mono text-xs text-dim">(score-only, both currencies)</span>}
+              Ranked companies
+              <InfoTip term="Composite" />
+              <InfoTip term="PE" />
+              <InfoTip term="PB" />
+              <InfoTip term="ROE" />
+              {view === "ALL" && <span className="ml-2 font-mono text-xs text-dim">(score-only, both currencies)</span>}
             </h2>
             <button
               onClick={goCompare}
@@ -201,8 +218,17 @@ export default function Sector() {
           )}
         </section>
       )}
+
+      <NarrationPanel
+        endpoint={`/api/v1/sectors/${enc(sheet)}/narrate?currency=${view}`}
+        label="What this sector looks like"
+      />
     </div>
   );
+}
+
+function countSignals(histogram: Record<string, number>, signals: string[]): number {
+  return signals.reduce((acc, s) => acc + (histogram[s] ?? 0), 0);
 }
 
 function MoneyPanel({ label, panel }: { label: string; panel: { median_pe: number | null; median_pb: number | null; median_roe: number | null; companies: number } | null }) {

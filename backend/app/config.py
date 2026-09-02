@@ -15,6 +15,11 @@ _DEFAULT_DB = "sqlite:///./data/app.db"
 DATABASE_URL: str = os.environ.get("DATABASE_URL", _DEFAULT_DB)
 SEC_USER_AGENT: str = os.environ.get("SEC_USER_AGENT", "InvestmentResearchApp contact@localhost")
 OPENROUTER_API_KEY: str | None = os.environ.get("OPENROUTER_API_KEY") or None
+OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+OPENROUTER_MODEL_FALLBACK: str = os.environ.get("OPENROUTER_MODEL_FALLBACK", "minimax/minimax-m3:free")
+OPENROUTER_BASE_URL: str = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+REFRESH_ENABLED: bool = os.environ.get("REFRESH_ENABLED", "0") == "1"
+REFRESH_INTERVAL_HOURS: int = int(os.environ.get("REFRESH_INTERVAL_HOURS", "168"))
 
 APP_NAME = "Investment Research API"
 APP_VERSION = "0.1.0-phase1"

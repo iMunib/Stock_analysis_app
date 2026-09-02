@@ -1,4 +1,4 @@
-"""EDGAR provider: SEC companyfacts JSON -> canonical annual rows.
+﻿"""EDGAR provider: SEC companyfacts JSON -> canonical annual rows.
 
 Free, one call per CIK (https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json).
 User-Agent from SEC_USER_AGENT. Token bucket 8 req/s; back off on 403/429.
@@ -144,25 +144,56 @@ def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
                 fp = it.get("fp")
                 frame = it.get("frame")
                 end = it.get("end")
+                start = it.get("start")
                 if not end or len(end) < 4 or not end[:4].isdigit():
                     continue
+
+                # Duration gate (Phase 10 A): income-statement annual facts must span
+                # ~360-370 days. Quarterly facts (frame "CY2017Q1", 90-day spans) were
+                # slipping through the frame check and stealing FY years (MSFT $23-31B).
+                days = None
+                if start:
+                    try:
+                        days = (date.fromisoformat(end) - date.fromisoformat(start)).days
+                    except ValueError:
+                        days = None
+                if days is not None and not (300 <= days <= 400):
+                    continue  # quarterly / stub period: never a FY row
+                if frame and "Q" in frame:
+                    continue  # explicit quarterly frame (belt and braces)
+
                 year = None
-                if frame and frame.startswith("CY") and frame[2:6].isdigit():
+                is_annual = False
+                if frame and len(frame) >= 6 and frame.startswith("CY") and frame[2:6].isdigit():
+                    # exact annual frame CY{year} (no Q suffix survived the gate above)
                     year = int(frame[2:6])
+                    is_annual = True
                 elif "start" not in it:
                     # instant fact (balance sheet): use the period-end year
                     year = int(end[:4])
-                elif fp == "FY" and end[5:7] == "12":
-                    year = int(end[:4])
-                if year is None:
+                    is_annual = True
+                elif days is not None and 300 <= days <= 400:
+                    # annual duration fact without a frame: require fp=FY December end
+                    if fp == "FY" and end[5:7] == "12":
+                        year = int(end[:4])
+                        is_annual = True
+                if year is None or not is_annual:
                     continue
                 val = it.get("val")
                 if val is None:
                     continue
+
                 bucket = out.setdefault(year, {})
-                # First (most canonical) tag wins per field/year.
-                if field_name not in bucket:
+                existing = bucket.get(field_name)
+                if existing is None:
                     bucket[field_name] = float(val)
+                    bucket.setdefault("_pref", {})[field_name] = days
+                else:
+                    # prefer the fact closest to a full year (365d) on duplicates
+                    prev_days = bucket.get("_pref", {}).get(field_name)
+                    if prev_days is None or (days is not None and abs(days - 365) < abs(prev_days - 365)):
+                        bucket[field_name] = float(val)
+                        bucket.setdefault("_pref", {})[field_name] = days
                 if year not in ends or end > ends[year]:
                     ends[year] = end
 
@@ -187,3 +218,4 @@ def identity_from_companyfacts(data: dict) -> dict | None:
     if not name:
         return None
     return {"name": name}
+

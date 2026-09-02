@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Job
 
-VALID_KINDS = {"backfill", "ingest", "recompute"}
+VALID_KINDS = {"backfill", "ingest", "recompute", "refresh_universe"}
 ACTIVE_STATUSES = {"queued", "running"}
 
 

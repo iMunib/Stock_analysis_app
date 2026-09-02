@@ -65,6 +65,9 @@ export interface HistoryRow {
   fcf_calc?: number | null;
   diluted_eps?: number | null;
   source?: string | null;
+  quality_flag?: string | null;
+  warning?: string | null;
+  used_for_growth?: boolean;
 }
 
 export interface ScorePillars {

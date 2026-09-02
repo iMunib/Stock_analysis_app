@@ -7,6 +7,7 @@ import Compare from "./screens/Compare";
 import Sector from "./screens/Sector";
 import SectorsHub from "./screens/SectorsHub";
 import Jobs from "./screens/Jobs";
+import Learn from "./screens/Learn";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/c/:companyId" element={<Dossier />} />
           <Route path="/compare" element={<Compare />} />
           <Route path="/jobs" element={<Jobs />} />
+          <Route path="/learn" element={<Learn />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </AppShell>

@@ -222,6 +222,21 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
             "source": h.get("source"),
         })
 
+    # Phase 10 A: sanitize on the read path — suspect years stay visible but chipped,
+    # and the API also exposes which years growth actually used.
+    from app.services.history_sanity import sanitize_history
+
+    sani = sanitize_history([
+        {"fiscal_year": h["fiscal_year"], **{k: h.get(k) for k in ("revenue", "net_income", "diluted_eps", "fcf_calc")}}
+        for h in history_annual
+    ])
+    sanitized_years = [r["fiscal_year"] for r in sani["rows_for_growth"]]
+    for item, row in zip(history_annual, sani["rows_for_table"]):
+        if row.get("quality_flag"):
+            item["quality_flag"] = row["quality_flag"]
+            item["warning"] = row["warning"]
+        item["used_for_growth"] = item["fiscal_year"] in sanitized_years
+
     return DossierOut(
         identity={
             "company_id": company.company_id,

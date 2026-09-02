@@ -1,4 +1,4 @@
-/** Compare basket persisted to localStorage (Phase 9: key `compareIds`, max 8). */
+﻿/** Compare basket persisted to localStorage (Phase 9: key `compareIds`, max 8). */
 
 const KEY = "compareIds";
 const MAX = 8;
@@ -19,7 +19,7 @@ export function toggleCompareSelection(id: string): string[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
-    /* storage unavailable — in-memory only */
+    /* storage unavailable â€” in-memory only */
   }
   return next;
 }
@@ -31,3 +31,5 @@ export function clearCompareSelection(): void {
     /* ignore */
   }
 }
+
+
