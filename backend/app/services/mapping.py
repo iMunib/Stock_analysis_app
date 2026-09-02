@@ -103,6 +103,10 @@ def resolve(query: str) -> ResolveResult:
         raise MappingError("empty query")
     by_id, by_primary = _universe_rows()
 
+    # Early check for ambiguous or unsupported foreign exchange listings (e.g. 9988.HK)
+    if q.upper().endswith(".HK") or re.search(r"^\d{4}(\.HK)?$", q):
+        raise MappingError("LISTING_AMBIGUOUS: Multiple listings. Pick US ADR or HK/TSX (show choices).")
+
     cid = normalize_company_id(q)
     if cid and ":" in q:
         rec = by_id.get(cid)
@@ -110,7 +114,9 @@ def resolve(query: str) -> ResolveResult:
             return ResolveResult(cid, rec["ticker"], rec["country"], rec["currency"], rec["yahoo"], rec["cik"], True, rec["name"])
         parts = q.split(":")
         ticker, country = parts[1].upper(), parts[0].upper()
-        return ResolveResult(cid, ticker, country, "USD" if country == "US" else "CAD", yahoo_symbol_for(ticker, country), None, False)
+        sec_info = cik_for_unknown_us(ticker) if country == "US" else (None, None)
+        cik, name = (sec_info[0], sec_info[1]) if isinstance(sec_info, tuple) else (sec_info, None)
+        return ResolveResult(cid, ticker, country, "USD" if country == "US" else "CAD", yahoo_symbol_for(ticker, country), cik, False, name)
 
     m = _PATTERNS[1].match(q)
     if m:
@@ -120,7 +126,9 @@ def resolve(query: str) -> ResolveResult:
             rec = by_id.get(cid) or by_primary.get(raw_ticker)
             if rec:
                 return ResolveResult(rec["company_id"], rec["ticker"], "US", rec["currency"], rec["yahoo"], rec["cik"], True, rec["name"])
-            return ResolveResult(cid, raw_ticker, "US", "USD", raw_ticker, None, False)
+            sec_info = cik_for_unknown_us(raw_ticker)
+            cik, name = (sec_info[0], sec_info[1]) if isinstance(sec_info, tuple) else (sec_info, None)
+            return ResolveResult(cid, raw_ticker, "US", "USD", raw_ticker, cik, False, name)
         # .TO / .TSX -> CA
         ticker = raw_ticker.replace("-", ".")
         cid = f"CA:{ticker}:TSX"
@@ -131,14 +139,19 @@ def resolve(query: str) -> ResolveResult:
 
     # plain ticker
     t = q.upper()
+    if not re.match(r"^[A-Z0-9.\-^]{1,12}$", t):
+        raise MappingError("SYMBOL_NOT_FOUND: We could not find that ticker. Try AMD, BABA, SHOP.TO, or KITS.TO.")
     rec = by_primary.get(t)
     if rec:
         return ResolveResult(rec["company_id"], rec["ticker"], rec["country"], rec["currency"], rec["yahoo"], rec["cik"], True, rec["name"])
     if t.endswith(".TO"):
         return resolve(t)  # unreachable, kept for safety
+
     # Unknown plain ticker: default US (conservative default, logged by callers)
     cid = f"US:{t}:US"
-    return ResolveResult(cid, t, "US", "USD", t, None, False)
+    sec_info = cik_for_unknown_us(t)
+    cik, name = (sec_info[0], sec_info[1]) if isinstance(sec_info, tuple) else (sec_info, None)
+    return ResolveResult(cid, t, "US", "USD", t, cik, False, name)
 
 
 # ---- SEC ticker -> CIK fallback for unknown US tickers ----
@@ -158,10 +171,11 @@ def _sec_tickers() -> dict:
             return _SEC_CACHE
     import os
     from urllib import request as urlrequest
+    from app.config import SEC_USER_AGENT
 
     req = urlrequest.Request(
         "https://www.sec.gov/files/company_tickers.json",
-        headers={"User-Agent": os.environ.get("SEC_USER_AGENT", "InvestmentResearchApp contact@localhost")},
+        headers={"User-Agent": os.environ.get("SEC_USER_AGENT", SEC_USER_AGENT)},
     )
     with urlrequest.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read().decode("utf-8"))
@@ -172,24 +186,26 @@ def _sec_tickers() -> dict:
     return _SEC_CACHE
 
 
-def cik_for_unknown_us(ticker: str) -> int | None:
+def cik_for_unknown_us(ticker: str) -> tuple[int | None, str | None]:
     """SEC company_tickers.json lookup for tickers outside the 720 universe."""
     try:
         data = _sec_tickers()
     except Exception:
-        return None
+        return None, None
     t = ticker.upper()
     for entry in data.values():
         if str(entry.get("ticker", "")).upper() == t:
             cik = entry.get("cik_str")
-            return int(cik) if cik is not None else None
-    return None
+            name = entry.get("title")
+            return (int(cik) if cik is not None else None, str(name) if name else None)
+    return None, None
 
 
 def build_ref(result: ResolveResult) -> CompanyRef:
     cik = result.cik
     if cik is None and result.country == "US":
-        cik = cik_for_unknown_us(result.ticker)
+        cik_val, _ = cik_for_unknown_us(result.ticker)
+        cik = cik_val
     return CompanyRef(
         company_id=result.company_id,
         ticker=result.ticker,

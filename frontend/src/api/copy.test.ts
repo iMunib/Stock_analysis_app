@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { enc } from "./client";
-import { coveragePenaltyCopy, growthCopy, halalCopy, mixedCurrencyWarning, money, signalCopy, signalLabel, whyBullets } from "./copy";
+import { coveragePenaltyCopy, errorCatalogCopy, ERROR_CATALOG, growthCopy, halalCopy, mixedCurrencyWarning, money, signalCopy, signalLabel, whyBullets } from "./copy";
 import type { DossierOut } from "./types";
 import { signalTone } from "./visuals";
 
@@ -82,5 +82,30 @@ describe("mixed-currency warning", () => {
     expect(mixedCurrencyWarning(["USD", "CAD"])).toContain("never converted");
     expect(mixedCurrencyWarning(["USD"])).toBeNull();
     expect(mixedCurrencyWarning([])).toBeNull();
+  });
+});
+
+describe("error catalog copy", () => {
+  it("maps SYMBOL_NOT_FOUND to friendly English copy", () => {
+    expect(ERROR_CATALOG.SYMBOL_NOT_FOUND).toBe("We could not find that ticker. Try AMD, BABA, SHOP.TO, or KITS.TO.");
+    expect(errorCatalogCopy("SYMBOL_NOT_FOUND")).toContain("We could not find that ticker. Try AMD, BABA, SHOP.TO, or KITS.TO.");
+  });
+
+  it("handles unknown or null error codes gracefully", () => {
+    expect(errorCatalogCopy(null)).toBe("Something broke on our side. Retry.");
+    expect(errorCatalogCopy("UNKNOWN_FOO")).toBe("Something broke on our side. Retry.");
+  });
+});
+
+describe("currency labeling (BABA-class / CNY)", () => {
+  it("does not prefix CNY statements with $", () => {
+    const formatted = money(996_000_000_000, "CNY");
+    expect(formatted).not.toContain("$");
+    expect(formatted).toContain("CNY 996.00B");
+  });
+
+  it("prefixes USD statements with $", () => {
+    const formatted = money(996_000_000_000, "USD");
+    expect(formatted).toContain("$996.00B USD");
   });
 });

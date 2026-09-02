@@ -150,15 +150,143 @@ def fetch_price(symbol: str):
     price = float(last["Close"])
     idx = hist.index[-1]
     as_of = idx.date() if hasattr(idx, "date") else None
-    info_cur = None
+    trading_cur = "USD"
+    fin_cur = None
+    shares = None
+    market_cap = None
+    sector = None
+    industry = None
     try:
-        info_cur = tk.info.get("financialCurrency") or tk.info.get("currency")
+        info = tk.info or {}
+        trading_cur = info.get("currency") or "USD"
+        fin_cur = info.get("financialCurrency") or trading_cur
+        sh = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+        if sh is not None:
+            shares = float(sh)
+        mc = info.get("marketCap")
+        if mc is not None:
+            market_cap = float(mc)
+        sector = info.get("sector")
+        industry = info.get("industry")
     except Exception:
-        info_cur = None
+        pass
+
     return PriceQuote(
         price=price,
-        currency=info_cur or "USD",
+        currency=trading_cur,
         as_of=as_of,
         source="yfinance",
         fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        shares=shares,
+        market_cap=market_cap,
+        financial_currency=fin_cur,
+        sector=sector,
+        industry=industry,
     )
+
+
+def fetch_profile_and_quarterly(symbol: str) -> dict:
+    """Fetch company summary, dividend metrics, next earnings date, and quarterly income statement."""
+    yf = _import_yf()
+    _polite_wait()
+    try:
+        tk = yf.Ticker(symbol)
+    except Exception:
+        return {"summary": None, "dividend_yield": None, "dividend_rate": None, "next_earnings_date": None, "quarterly": None}
+
+    summary = None
+    dividend_yield = None
+    dividend_rate = None
+    next_earnings = None
+
+    try:
+        info = tk.info or {}
+        raw_sum = info.get("longBusinessSummary")
+        if raw_sum and isinstance(raw_sum, str) and raw_sum.strip():
+            summary = raw_sum.strip()[:280]
+
+        dy = info.get("dividendYield")
+        if dy is not None:
+            try:
+                dividend_yield = float(dy)
+            except (ValueError, TypeError):
+                dividend_yield = None
+
+        dr = info.get("dividendRate")
+        if dr is not None:
+            try:
+                dividend_rate = float(dr)
+            except (ValueError, TypeError):
+                dividend_rate = None
+
+        et = info.get("earningsTimestamp")
+        if et is not None:
+            try:
+                next_earnings = datetime.fromtimestamp(float(et), tz=timezone.utc).strftime("%Y-%m-%d")
+            except (ValueError, TypeError, OSError):
+                next_earnings = None
+
+        if not next_earnings:
+            try:
+                cal = getattr(tk, "calendar", None)
+                if cal and isinstance(cal, dict):
+                    e_dates = cal.get("Earnings Date")
+                    if e_dates and isinstance(e_dates, (list, tuple)) and len(e_dates) > 0:
+                        first = e_dates[0]
+                        if hasattr(first, "strftime"):
+                            next_earnings = first.strftime("%Y-%m-%d")
+                        elif isinstance(first, str):
+                            next_earnings = first[:10]
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Quarterly income statement: last 4 quarters
+    quarterly: list[dict] | None = None
+    try:
+        q_frame = getattr(tk, "quarterly_income_stmt", None)
+        if q_frame is None or getattr(q_frame, "empty", True):
+            q_frame = getattr(tk, "quarterly_financials", None)
+
+        if q_frame is not None and not getattr(q_frame, "empty", True):
+            quarters = []
+            for col in list(q_frame.columns)[:4]:
+                d = _col_to_date(col)
+                date_str = d.isoformat() if d else str(col)[:10]
+                row = q_frame[col]
+
+                def _val(keys: list[str]) -> float | None:
+                    for k in keys:
+                        if k in row.index:
+                            try:
+                                v = float(row[k])
+                                if not math.isnan(v):
+                                    return v
+                            except (ValueError, TypeError):
+                                pass
+                    return None
+
+                rev = _val(["Total Revenue", "Operating Revenue", "Revenue"])
+                ni = _val(["Net Income", "Net Income Common Stockholders", "Net Income From Continuing Operation Net Minority Interest"])
+                eps = _val(["Diluted EPS", "Basic EPS"])
+
+                quarters.append({
+                    "date": date_str,
+                    "revenue": rev,
+                    "net_income": ni,
+                    "diluted_eps": eps,
+                })
+            if quarters:
+                quarterly = quarters
+    except Exception:
+        quarterly = None
+
+    return {
+        "summary": summary,
+        "dividend_yield": dividend_yield,
+        "dividend_rate": dividend_rate,
+        "next_earnings_date": next_earnings,
+        "quarterly": quarterly,
+    }
+

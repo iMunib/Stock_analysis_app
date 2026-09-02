@@ -69,6 +69,96 @@ def apply_statement_to_snapshot(snap, stmt: AnnualStatement) -> list[str]:
     stmt_fetched = getattr(stmt, "fetched_at", None)
     if stmt_fetched is not None:
         snap.fetched_at = stmt_fetched
+
+    # Extract shares if provided in statement
+    sh = stmt.fields.get("Common_Shares")
+    if sh is not None and getattr(snap, "shares_snapshot", None) is None:
+        try:
+            snap.shares_snapshot = float(sh)
+            changed.append("shares_snapshot")
+        except (ValueError, TypeError):
+            pass
+
+    return changed
+
+
+def compute_snapshot_ratios(snap, company) -> list[str]:
+    """Compute ROE, ROA, GrossMargin, FCFMargin, PE, PB, EV/EBITDA, and MarketCap.
+
+    If statement currency != price currency (e.g. BABA: CNY statements vs USD price):
+    Price-based ratios (PE, PB, EV/EBITDA) stay None (currency mismatch).
+    Non-price ratios (ROE, ROA, margins) are computed in native statement currency.
+    """
+    changed = []
+
+    # 1. Statement-only ratios (same numerator and denominator currency)
+    # ROE = Net_Income / Book_Equity
+    if snap.net_income is not None and snap.book_equity is not None and snap.book_equity > 0:
+        if snap.roe_calc is None:
+            snap.roe_calc = float(snap.net_income) / float(snap.book_equity)
+            changed.append("roe_calc")
+
+    # ROA = Net_Income / Total_Assets
+    if snap.net_income is not None and snap.total_assets is not None and snap.total_assets > 0:
+        if snap.roa_calc is None:
+            snap.roa_calc = float(snap.net_income) / float(snap.total_assets)
+            changed.append("roa_calc")
+
+    # Gross Margin = Gross_Profit / Revenue
+    if snap.gross_profit is not None and snap.revenue is not None and snap.revenue > 0:
+        if snap.grossmargin_calc is None:
+            snap.grossmargin_calc = float(snap.gross_profit) / float(snap.revenue)
+            changed.append("grossmargin_calc")
+
+    # FCF Margin = FCF_Calc / Revenue
+    if snap.fcf_calc is not None and snap.revenue is not None and snap.revenue > 0:
+        if snap.fcfmargin_calc is None:
+            snap.fcfmargin_calc = float(snap.fcf_calc) / float(snap.revenue)
+            changed.append("fcfmargin_calc")
+
+    # 2. Currency check
+    stmt_cur = (snap.currency or getattr(company, "reporting_currency", None) or "").strip().upper()
+    price_cur = (snap.price_currency or getattr(company, "currency", None) or "").strip().upper()
+    mismatch = bool(stmt_cur and price_cur and stmt_cur != price_cur)
+
+    # If currencies match, compute price-based multiples
+    if not mismatch and snap.price is not None:
+        # Market Cap = price * shares
+        if snap.market_cap is None and snap.shares_snapshot is not None:
+            snap.market_cap = float(snap.price) * float(snap.shares_snapshot)
+            changed.append("market_cap")
+
+        # PE = price / diluted_eps
+        if snap.pe_calc is None and snap.diluted_eps is not None and snap.diluted_eps != 0:
+            snap.pe_calc = float(snap.price) / float(snap.diluted_eps)
+            changed.append("pe_calc")
+
+        # PB = market_cap / book_equity
+        if snap.pb_calc is None and snap.market_cap is not None and snap.book_equity is not None and snap.book_equity > 0:
+            snap.pb_calc = float(snap.market_cap) / float(snap.book_equity)
+            changed.append("pb_calc")
+
+        # EV = market_cap + netdebt_calc
+        if snap.ev_calc is None and snap.market_cap is not None and snap.netdebt_calc is not None:
+            snap.ev_calc = float(snap.market_cap) + float(snap.netdebt_calc)
+            changed.append("ev_calc")
+
+        # EV / EBITDA
+        if snap.ev_to_ebitda_calc is None and snap.ev_calc is not None and snap.ebitda is not None and snap.ebitda > 0:
+            snap.ev_to_ebitda_calc = float(snap.ev_calc) / float(snap.ebitda)
+            changed.append("ev_to_ebitda_calc")
+    elif mismatch:
+        # Cross-border currency mismatch: Price ratios stay None!
+        if snap.pe_calc is not None:
+            snap.pe_calc = None
+            changed.append("pe_calc")
+        if snap.pb_calc is not None:
+            snap.pb_calc = None
+            changed.append("pb_calc")
+        if snap.ev_to_ebitda_calc is not None:
+            snap.ev_to_ebitda_calc = None
+            changed.append("ev_to_ebitda_calc")
+
     return changed
 
 

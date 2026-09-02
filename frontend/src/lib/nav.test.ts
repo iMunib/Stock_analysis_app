@@ -33,10 +33,11 @@ describe("sector card keys are unique", () => {
 });
 
 describe("nav routes", () => {
-  it("always includes Jobs (Stage C)", () => {
+  it("always includes Screen and Jobs", () => {
     const labels = navItems(false).map((i) => i.label);
-    expect(labels).toEqual(["Desk", "Sectors", "Compare", "Jobs", "Learn"]);
+    expect(labels).toEqual(["Desk", "Screen", "Sectors", "Compare", "Jobs", "Learn"]);
   });
   it("shows Jobs when available", () => {
     expect(navItems(true).map((i) => i.label)).toContain("Jobs");
-  });});
+  });
+});

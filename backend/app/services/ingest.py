@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Company, FinancialSnapshot
 from app.providers.base import AnnualStatement
-from app.services.fundamentals import apply_statement_to_snapshot
+from app.services.fundamentals import apply_statement_to_snapshot, compute_snapshot_ratios
 
 SEED_SOURCE = "Sector_Financials_Final_Owner.xlsx"
 
@@ -84,6 +84,11 @@ def ingest_statements(
     created, updated, filled, skipped_cached = 0, 0, 0, 0
     seed = seed_row(db, company.company_id)
 
+    if statements:
+        company.reporting_currency = statements[0].currency
+        if hasattr(statements[0], "filing_type") and getattr(statements[0], "filing_type"):
+            company.filing_type = getattr(statements[0], "filing_type")
+
     for stmt in statements:
         year = stmt.fiscal_year
         if year is None:
@@ -114,6 +119,7 @@ def ingest_statements(
             db.add(snap)
             db.flush()
             apply_statement_to_snapshot(snap, stmt)
+            compute_snapshot_ratios(snap, company)
             snap.fetched_at = now
             created += 1
         else:
@@ -131,6 +137,7 @@ def ingest_statements(
                 elif before.get(attr) is not None:
                     # owner/first-provider value: revert any overwrite attempt
                     setattr(existing, attr, before[attr])
+            compute_snapshot_ratios(existing, company)
             if existing.source == SEED_SOURCE:
                 # seed row keeps its identity; provider only filled NULLs
                 filled += touched_fill
@@ -166,6 +173,7 @@ def ingest_statements(
             if getattr(seed, attr) is None:
                 setattr(seed, attr, val)
                 filled += 1
+        compute_snapshot_ratios(seed, company)
         # never alter seed provenance
         seed.source = SEED_SOURCE
 
@@ -173,7 +181,7 @@ def ingest_statements(
 
 
 def ingest_price(db: Session, company: Company, quote) -> bool:
-    """Write price into the seed row's price columns (fills NULLs only)."""
+    """Write price, shares, and market cap into the latest snapshot (fills NULLs)."""
     if quote is None:
         return False
     snap = seed_row(db, company.company_id) or db.execute(
@@ -185,9 +193,40 @@ def ingest_price(db: Session, company: Company, quote) -> bool:
     if snap is None:
         return False
     changed = False
-    if snap.price is None and quote.price:
+    if quote.price is not None and snap.price is None:
         snap.price = float(quote.price)
         snap.price_currency = quote.currency
         snap.price_asof = quote.as_of.isoformat() if quote.as_of else None
         changed = True
+    elif quote.price is not None and snap.price is not None:
+        snap.price = float(quote.price)
+        snap.price_currency = quote.currency
+        if quote.as_of:
+            snap.price_asof = quote.as_of.isoformat()
+        changed = True
+
+    # Shares extraction
+    if getattr(quote, "shares", None) is not None and snap.shares_snapshot is None:
+        snap.shares_snapshot = float(quote.shares)
+        changed = True
+    elif snap.shares_snapshot is None and snap.diluted_eps and snap.net_income and snap.diluted_eps > 0 and snap.net_income > 0:
+        # Fallback implied shares from statements
+        snap.shares_snapshot = float(snap.net_income) / float(snap.diluted_eps)
+        changed = True
+
+    # Market cap extraction
+    if getattr(quote, "market_cap", None) is not None and snap.market_cap is None:
+        snap.market_cap = float(quote.market_cap)
+        changed = True
+    elif snap.shares_snapshot is not None and snap.price is not None and snap.market_cap is None:
+        snap.market_cap = float(snap.price) * float(snap.shares_snapshot)
+        changed = True
+
+    # Enrich company metadata from quote if empty
+    if getattr(quote, "sector", None) and not company.gics_sector:
+        company.gics_sector = quote.sector
+    if getattr(quote, "industry", None) and not company.custom_industry_sheet:
+        company.custom_industry_sheet = quote.industry
+
+    compute_snapshot_ratios(snap, company)
     return changed

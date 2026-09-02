@@ -23,13 +23,22 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def enqueue(db: Session, kind: str, payload: dict[str, Any] | None = None, progress_total: int = 0) -> Job:
+def enqueue(
+    db: Session,
+    kind: str,
+    payload: dict[str, Any] | None = None,
+    progress_total: int = 0,
+    company_id: str | None = None,
+) -> Job:
     if kind not in VALID_KINDS:
         raise ValueError(f"unsupported job kind: {kind}")
     job = Job(
         id=uuid.uuid4().hex,
         kind=kind,
         status="queued",
+        step="queued",
+        message="Job queued",
+        company_id=company_id,
         payload_json=json.dumps(payload or {}),
         progress_total=max(0, int(progress_total)),
         created_at=_utcnow(),
@@ -75,6 +84,49 @@ def claim_oldest_queued(db: Session) -> Job | None:
     return db.get(Job, job_id)
 
 
+def set_step(
+    db: Session,
+    job_id: str,
+    step: str,
+    message: str | None = None,
+    company_id: str | None = None,
+    error_code: str | None = None,
+) -> None:
+    job = db.get(Job, job_id)
+    if job is None:
+        return
+    job.step = step
+    if message is not None:
+        job.message = message
+    if company_id is not None:
+        job.company_id = company_id
+    if error_code is not None:
+        job.error_code = error_code
+    db.commit()
+
+
+def fail_job(
+    db: Session,
+    job_id: str,
+    error_code: str,
+    message: str,
+    step: str = "failed",
+    company_id: str | None = None,
+) -> None:
+    job = db.get(Job, job_id)
+    if job is None:
+        return
+    job.status = "failed"
+    job.step = step
+    job.error_code = error_code
+    job.message = message
+    job.error = f"{error_code}: {message}"
+    if company_id is not None:
+        job.company_id = company_id
+    job.finished_at = _utcnow()
+    db.commit()
+
+
 def set_progress(db: Session, job_id: str, done: int, total: int | None = None) -> None:
     job = db.get(Job, job_id)
     if job is None:
@@ -85,11 +137,27 @@ def set_progress(db: Session, job_id: str, done: int, total: int | None = None) 
     db.commit()
 
 
-def finish(db: Session, job_id: str, ok: bool, error: str | None = None, provider_stats: dict | None = None) -> None:
+def finish(
+    db: Session,
+    job_id: str,
+    ok: bool,
+    error: str | None = None,
+    provider_stats: dict | None = None,
+    message: str | None = None,
+    error_code: str | None = None,
+) -> None:
     job = db.get(Job, job_id)
     if job is None:
         return
     job.status = "succeeded" if ok else "failed"
+    if ok and job.step != "failed":
+        job.step = "done"
+    elif not ok:
+        job.step = "failed"
+    if message is not None:
+        job.message = message
+    if error_code is not None:
+        job.error_code = error_code
     job.error = error
     if provider_stats is not None:
         job.provider_stats_json = json.dumps(provider_stats)
@@ -116,6 +184,10 @@ def job_to_dict(job: Job) -> dict[str, Any]:
         "id": job.id,
         "kind": job.kind,
         "status": job.status,
+        "step": job.step,
+        "message": job.message,
+        "company_id": job.company_id,
+        "error_code": job.error_code,
         "payload": payload_of(job),
         "progress_done": job.progress_done,
         "progress_total": job.progress_total,

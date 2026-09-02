@@ -1,4 +1,4 @@
-﻿"""Phase 3 scoring service: load rows, compute, persist (idempotent).
+"""Phase 3 scoring service: load rows, compute, persist (idempotent).
 
 Two passes: (1) compute score results for every company, (2) rank inside peer
 sets by composite (NULL composites excluded from ranking, rank 1 = best).
@@ -111,13 +111,22 @@ def enrich_with_seed(cur: dict, seed: dict | None) -> dict:
 
 
 def recompute(db: Session, company_id: str | None = None) -> dict:
-    universe = load_universe(db, company_id=company_id)
-    members, meta = build_peer_sets(universe)
+    full_universe = load_universe(db)
+    members, meta = build_peer_sets(full_universe)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    target_universe = [c for c in full_universe if c["company_id"] == company_id] if company_id else full_universe
 
     results: dict[str, dict] = {}
     errors: list[str] = []
-    for company in universe:
+
+    # Also load existing scores for fast peer rank calculation if running single company
+    existing_scores: dict[str, float | None] = {}
+    if company_id:
+        for r_cid, r_comp in db.execute(select(Score.company_id, Score.composite)).all():
+            existing_scores[r_cid] = r_comp
+
+    for company in target_universe:
         cid = company["company_id"]
         try:
             # Peer value lists EXCLUDE the company itself: percentile of the
@@ -147,18 +156,18 @@ def recompute(db: Session, company_id: str | None = None) -> dict:
         better = 0
         for p in peers:
             pid = p["company_id"]
-            pc = results.get(pid, {}).get("composite")
+            pc = results.get(pid, {}).get("composite") if not company_id else existing_scores.get(pid)
             if pc is not None and pc > result["composite"]:
                 better += 1
         ranks[cid] = better + 1
 
     scored = insufficient = 0
-    for company in universe:
+    for company in target_universe:
         cid = company["company_id"]
         result = results.get(cid)
         if result is None:
             continue
-        ptype, pn = meta.get(cid, ("gics_currency", 1))
+        ptype, pn = meta.get(cid, ("broad_peer_set", 1))
 
         row = db.get(Score, cid)
         if row is None:
@@ -204,7 +213,7 @@ def recompute(db: Session, company_id: str | None = None) -> dict:
 
     db.commit()
     return {
-        "companies_processed": len(universe),
+        "companies_processed": len(target_universe),
         "scored": scored,
         "insufficient_data": insufficient,
         "errors": errors[:20],

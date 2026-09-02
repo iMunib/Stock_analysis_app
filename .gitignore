@@ -18,6 +18,8 @@ dist/
 .pytest_cache/
 .ruff_cache/
 *.log
+backend/data/
+*sec_tickers_cache.json
 
 .env.local
 .env.*

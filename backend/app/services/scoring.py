@@ -97,10 +97,19 @@ def build_peer_sets(companies: list[dict]) -> tuple[dict[str, list[dict]], dict[
             members[cid], meta[cid] = custom, ("custom_industry_currency", len(custom))
         elif gics and len(gics) >= 2:
             members[cid], meta[cid] = gics, ("gics_currency", len(gics))
-        elif custom:
+        elif custom and len(custom) >= 2:
             members[cid], meta[cid] = custom, ("custom_industry_currency", len(custom))
         else:
-            members[cid], meta[cid] = [c], ("gics_currency", 1)
+            # Widen to full currency universe — never award a fake "#1 of 1" trophy
+            full_cur = [x for x in companies if (x.get("currency") or "").strip().upper() == cur]
+            if len(full_cur) >= 2:
+                members[cid], meta[cid] = full_cur, ("broad_peer_set", len(full_cur))
+            elif gics:
+                members[cid], meta[cid] = gics, ("gics_currency", len(gics))
+            elif custom:
+                members[cid], meta[cid] = custom, ("custom_industry_currency", len(custom))
+            else:
+                members[cid], meta[cid] = [c], ("broad_peer_set", 1)
     return members, meta
 
 

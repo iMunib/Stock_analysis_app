@@ -33,6 +33,17 @@ def company_narrate(company_id: str, db: Session = Depends(get_session)):
     return out
 
 
+@router.post("/companies/{company_id}/research", description="Draft SWOT and moat analysis from factual JSON numbers. Free model only.")
+def company_research(company_id: str, db: Session = Depends(get_session)):
+    out = narrsvc.research_company(db, company_id)
+    if out.get("error") == "unknown_company":
+        raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
+    if out.get("research_unavailable"):
+        raise HTTPException(status_code=503, detail=out)
+    return out
+
+
+
 @router.post("/sectors/{sheet}/narrate")
 def sector_narrate(
     sheet: str,

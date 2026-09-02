@@ -5,9 +5,9 @@ test.describe("Phase 10 sprint — layout + data trust", () => {
     await page.goto(`/c/${encodeURIComponent("US:MSFT:US")}`);
     // snapshot tiles grid exists
     await expect(page.getByText("Latest snapshot")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Total debt")).toBeVisible();
-    await expect(page.getByText("Cash + ST inv.")).toBeVisible();
-    await expect(page.getByText("Net debt")).toBeVisible();
+    await expect(page.getByText("Total debt", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Cash + ST inv.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Net debt", { exact: true }).first()).toBeVisible();
     // math provenance visible
     await expect(page.getByText(/Score is math \(v1\), not AI/i)).toBeVisible();
     // watch toggle works (localStorage)
@@ -52,5 +52,65 @@ test.describe("Phase 10 sprint — layout + data trust", () => {
   test("junk id → friendly 404", async ({ page }) => {
     await page.goto(`/c/${encodeURIComponent("US:JUNKZZ:US")}`);
     await expect(page.getByText(/Company not found/i)).toBeVisible();
+  });
+
+  test("ingest state machine: mocked job progress pills and navigation", async ({ page }) => {
+    await page.route("**/api/v1/tickers/ingest", async (route) => {
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          job_id: "test-e2e-job",
+          status: "queued",
+          step: "queued",
+          message: "Job queued",
+          company_id: "US:AMD:US",
+        }),
+      });
+    });
+
+    let polled = 0;
+    await page.route("**/api/v1/jobs/test-e2e-job", async (route) => {
+      polled++;
+      if (polled === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "test-e2e-job",
+            kind: "ingest",
+            status: "running",
+            step: "filings",
+            message: "Pulling annual filings for AMD...",
+            company_id: "US:AMD:US",
+            error_code: null,
+            error: null,
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "test-e2e-job",
+            kind: "ingest",
+            status: "done",
+            step: "done",
+            message: "Scored AMD successfully",
+            company_id: "US:AMD:US",
+            error_code: null,
+            error: null,
+          }),
+        });
+      }
+    });
+
+    await page.goto("/");
+    const amdChip = page.getByRole("button", { name: "AMD", exact: true });
+    await expect(amdChip).toBeVisible({ timeout: 15_000 });
+    await amdChip.click();
+
+    await expect(page.getByText(/Pulling annual filings/i)).toBeVisible();
+    await expect(page.getByText("Filings", { exact: true })).toBeVisible();
   });
 });

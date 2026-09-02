@@ -1,4 +1,4 @@
-﻿"""EDGAR provider: SEC companyfacts JSON -> canonical annual rows.
+"""EDGAR provider: SEC companyfacts JSON -> canonical annual rows.
 
 Free, one call per CIK (https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json).
 User-Agent from SEC_USER_AGENT. Token bucket 8 req/s; back off on 403/429.
@@ -86,43 +86,51 @@ class EdgarClient:
         return self._http_get_json(url)
 
 
-# --- XBRL tag preferences (US-GAAP), first match wins per concept ---
+# --- XBRL tag preferences (US-GAAP and IFRS), first match wins per concept ---
 _TAG_PREFS: dict[str, list[str]] = {
-    "Revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"],
-    "Net_Income": ["NetIncomeLoss"],
-    "Diluted_EPS": ["EarningsPerShareDiluted"],
+    "Revenue": [
+        "Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet",
+        "Revenue", "GrossRevenue"
+    ],
+    "Net_Income": ["NetIncomeLoss", "ProfitLoss"],
+    "Diluted_EPS": ["EarningsPerShareDiluted", "DilutedEarningsLossPerShare"],
     "Gross_Profit": ["GrossProfit"],
-    "Operating_Cash_Flow": ["NetCashProvidedByUsedInOperatingActivities"],
-    "Capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
-    "EBIT": ["OperatingIncomeLoss"],
-    "Interest_Expense": ["InterestExpense", "InterestExpenseNonoperating"],
-    "Cash_ST_Investments": ["CashAndCashEquivalentsAtCarryingValue"],
-    "Book_Equity": ["StockholdersEquity"],
+    "Operating_Cash_Flow": ["NetCashProvidedByUsedInOperatingActivities", "CashFlowsFromUsedInOperatingActivities"],
+    "Capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PurchaseOfPropertyPlantAndEquipment"],
+    "EBIT": ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities"],
+    "Interest_Expense": ["InterestExpense", "InterestExpenseNonoperating", "FinanceCosts"],
+    "Cash_ST_Investments": ["CashAndCashEquivalentsAtCarryingValue", "CashAndCashEquivalents"],
+    "Book_Equity": ["StockholdersEquity", "Equity", "EquityAttributableToOwnersOfParent"],
     "Total_Assets": ["Assets"],
     "Total_Liabilities": ["Liabilities"],
+    "Common_Shares": [
+        "CommonStockSharesOutstanding", "EntityCommonStockSharesOutstanding",
+        "WeightedAverageNumberOfDilutedSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingDiluted"
+    ],
 }
 
 # Balance-sheet instant concepts (balance_sheet facts keyed by "end")
-_INSTANT = {"Cash_ST_Investments", "Book_Equity", "Total_Assets", "Total_Liabilities"}
+_INSTANT = {"Cash_ST_Investments", "Book_Equity", "Total_Assets", "Total_Liabilities", "Common_Shares"}
 
 
 def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
     """Convert a companyfacts payload into canonical AnnualStatement rows.
 
-    Network-free; pure function over the payload. Fiscal year inferred from the
-    FY frame's period end (frame='CY{year}' entries only, form 10-K).
+    Network-free; pure function over the payload. Supports US-GAAP (10-K) and
+    foreign private issuers (20-F, IFRS, CNY/other native currency).
     """
+    from collections import Counter
     from app.providers.base import AnnualStatement
 
     facts = data.get("facts", {})
-    gaap = facts.get("us-gaap", {})
+    gaap = facts.get("us-gaap") or facts.get("ifrs-full") or {}
     if not gaap:
         return []
 
-    entity_currency = (facts.get("dei", {}) or {}).get("EntityCommonStockSharesOutstanding", {})
-    # Prefer explicitly reported currency on each fact; fall back to expected.
     out: dict[int, dict] = {}  # fiscal_year -> {field: value}
     ends: dict[int, str] = {}
+    currencies_by_year: dict[int, list[str]] = {}
+    detected_forms_by_year: dict[int, list[str]] = {}
 
     for concept, entries in gaap.items():
         field_name = None
@@ -134,12 +142,12 @@ def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
             continue
         units = entries.get("units", {})
         for unit_key, items in units.items():
-            cur = unit_key.upper()
-            if cur not in ("USD", "CAD", "USD/shares", "shares", "pure"):
-                continue
+            raw_cur = unit_key.strip()
+            unit_cur = raw_cur.split("/")[0].upper() if "/" in raw_cur else raw_cur.upper()
+
             for it in items:
                 form = it.get("form")
-                if form not in ("10-K", "10-K/A"):
+                if form not in ("10-K", "10-K/A", "20-F", "20-F/A"):
                     continue
                 fp = it.get("fp")
                 frame = it.get("frame")
@@ -148,9 +156,7 @@ def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
                 if not end or len(end) < 4 or not end[:4].isdigit():
                     continue
 
-                # Duration gate (Phase 10 A): income-statement annual facts must span
-                # ~360-370 days. Quarterly facts (frame "CY2017Q1", 90-day spans) were
-                # slipping through the frame check and stealing FY years (MSFT $23-31B).
+                # Duration gate: income-statement annual facts span ~300-400 days.
                 days = None
                 if start:
                     try:
@@ -158,23 +164,22 @@ def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
                     except ValueError:
                         days = None
                 if days is not None and not (300 <= days <= 400):
-                    continue  # quarterly / stub period: never a FY row
+                    continue  # quarterly / stub period
                 if frame and "Q" in frame:
-                    continue  # explicit quarterly frame (belt and braces)
+                    continue  # explicit quarterly frame
 
                 year = None
                 is_annual = False
                 if frame and len(frame) >= 6 and frame.startswith("CY") and frame[2:6].isdigit():
-                    # exact annual frame CY{year} (no Q suffix survived the gate above)
                     year = int(frame[2:6])
                     is_annual = True
                 elif "start" not in it:
-                    # instant fact (balance sheet): use the period-end year
+                    # instant fact (balance sheet): use period-end year
                     year = int(end[:4])
                     is_annual = True
                 elif days is not None and 300 <= days <= 400:
-                    # annual duration fact without a frame: require fp=FY December end
-                    if fp == "FY" and end[5:7] == "12":
+                    # annual duration fact without a frame
+                    if fp == "FY" or end[5:7] in ("12", "03", "06", "09"):
                         year = int(end[:4])
                         is_annual = True
                 if year is None or not is_annual:
@@ -189,25 +194,37 @@ def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
                     bucket[field_name] = float(val)
                     bucket.setdefault("_pref", {})[field_name] = days
                 else:
-                    # prefer the fact closest to a full year (365d) on duplicates
                     prev_days = bucket.get("_pref", {}).get(field_name)
                     if prev_days is None or (days is not None and abs(days - 365) < abs(prev_days - 365)):
                         bucket[field_name] = float(val)
                         bucket.setdefault("_pref", {})[field_name] = days
+
+                if unit_cur not in ("SHARES", "PURE"):
+                    currencies_by_year.setdefault(year, []).append(unit_cur)
+                if form:
+                    detected_forms_by_year.setdefault(year, []).append("20-F" if "20-F" in form else "10-K")
+
                 if year not in ends or end > ends[year]:
                     ends[year] = end
 
     rows = []
     for year, bucket in out.items():
-        rows.append(
-            AnnualStatement(
-                fiscal_year=year,
-                period_end=date.fromisoformat(ends[year]) if ends.get(year) else None,
-                currency=expected_currency,
-                source="sec_companyfacts",
-                fields=bucket,
-            )
+        pref = bucket.pop("_pref", None)
+        cur_list = currencies_by_year.get(year, [])
+        cur = Counter(cur_list).most_common(1)[0][0] if cur_list else expected_currency
+        forms_list = detected_forms_by_year.get(year, [])
+        primary_form = Counter(forms_list).most_common(1)[0][0] if forms_list else "10-K"
+
+        stmt = AnnualStatement(
+            fiscal_year=year,
+            period_end=date.fromisoformat(ends[year]) if ends.get(year) else None,
+            currency=cur,
+            source="sec_companyfacts",
+            fields=bucket,
         )
+        setattr(stmt, "filing_type", primary_form)
+        rows.append(stmt)
+
     rows.sort(key=lambda r: r.fiscal_year or 0, reverse=True)
     return rows
 

@@ -13,7 +13,7 @@ _DEFAULT_DB = "sqlite:///./data/app.db"
 
 # Allow explicit env override; compose passes sqlite:////app/data/app.db
 DATABASE_URL: str = os.environ.get("DATABASE_URL", _DEFAULT_DB)
-SEC_USER_AGENT: str = os.environ.get("SEC_USER_AGENT", "InvestmentResearchApp contact@localhost")
+SEC_USER_AGENT: str = os.environ.get("SEC_USER_AGENT", "InvestmentResearchApp research@invest.org")
 OPENROUTER_API_KEY: str | None = os.environ.get("OPENROUTER_API_KEY") or None
 OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 OPENROUTER_MODEL_FALLBACK: str = os.environ.get("OPENROUTER_MODEL_FALLBACK", "minimax/minimax-m3:free")

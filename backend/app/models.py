@@ -34,6 +34,9 @@ class Company(Base):
     extraction_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     source_primary: Mapped[str | None] = mapped_column(String(64), nullable=True)
     imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cik: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reporting_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    filing_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     snapshots: Mapped[list["FinancialSnapshot"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     flags: Mapped[list["DataQualityFlag"]] = relationship(back_populates="company", cascade="all, delete-orphan")
@@ -200,6 +203,10 @@ class Job(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # uuid4
     kind: Mapped[str] = mapped_column(String(16), nullable=False)  # backfill | ingest | recompute
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="queued", index=True)  # queued|running|succeeded|failed|cancelled
+    step: Mapped[str | None] = mapped_column(String(32), nullable=True)  # resolve | filings | prices_shares | sector_peers | score | done | failed
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     progress_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -219,10 +226,25 @@ class LlmCache(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # company | sector
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # company | sector | swot
     subject_id: Mapped[str] = mapped_column(String(64), nullable=False)
     method_version: Mapped[str] = mapped_column(String(8), nullable=False, default="v1")
     score_computed_at: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     narration: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CompanyProfile(Base):
+    """Company research pack: Yahoo business summary, dividends, next earnings, quarterly."""
+
+    __tablename__ = "company_profiles"
+
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), primary_key=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # truncated 280 chars
+    dividend_yield: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dividend_rate: Mapped[float | None] = mapped_column(Float, nullable=True)  # DPS
+    next_earnings_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    quarterly_json: Mapped[list | None] = mapped_column(JSON, nullable=True)  # last 4 quarters
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+

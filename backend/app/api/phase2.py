@@ -10,6 +10,7 @@ from app.db import get_session
 from app.models import Company, FinancialSnapshot
 from app.providers.registry import ProviderRegistry
 from app.schemas import SnapshotOut
+from app.services import jobs as jobsvc
 from app.services.ingest import get_or_create_company, ingest_price, ingest_statements
 from app.services.mapping import MappingError, build_ref, resolve
 
@@ -76,33 +77,34 @@ def tickers_resolve(q: str = Query(min_length=1, max_length=64)):
     }
 
 
-@router.post("/tickers/ingest")
+@router.post("/tickers/ingest", status_code=202, description="Enqueue an ingest job (async 202 + poll).")
 def tickers_ingest(body: IngestBody, db: Session = Depends(get_session)):
+    q = body.ticker.strip()
+    company_id = None
     try:
-        result = resolve(body.ticker)
-        ref = build_ref(result)
+        res = resolve(q)
+        company_id = res.company_id
     except MappingError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    company = get_or_create_company(db, ref.company_id, ref.ticker, ref.country, ref.currency, name=result.name)
-    statements = _registry.fetch_annual_statements(ref)
-    counts = ingest_statements(db, company, statements, refresh=body.refresh)
-    quote = _registry.fetch_price(ref)
-    price_ok = ingest_price(db, company, quote)
-    db.commit()
-    years = sorted(
-        (y for (y,) in db.execute(
-            select(FinancialSnapshot.fiscal_year)
-            .where(FinancialSnapshot.company_id == ref.company_id, FinancialSnapshot.fiscal_year.isnot(None))
-        ).all() if y is not None),
-        reverse=True,
+        msg = str(exc)
+        if "LISTING_AMBIGUOUS" in msg:
+            raise HTTPException(status_code=400, detail="Multiple listings. Pick US ADR or HK/TSX (show choices).")
+    except Exception:
+        pass
+
+    job = jobsvc.enqueue(
+        db,
+        "ingest",
+        payload={"ticker": body.ticker, "refresh": body.refresh},
+        company_id=company_id,
     )
     return {
-        "company_id": ref.company_id,
-        "in_universe": result.in_universe,
-        "year_count": len(years),
-        "fiscal_years": years,
-        "counts": counts,
-        "price_filled": price_ok,
+        "job_id": job.id,
+        "status": job.status,
+        "kind": job.kind,
+        "step": job.step,
+        "message": job.message,
+        "company_id": job.company_id,
+        "error_code": job.error_code,
     }
 
 

@@ -27,6 +27,9 @@ class CompanyOut(BaseModel):
     indexes: Any = None
     in_sp500: bool = False
     in_tsx_composite: bool = False
+    cik: int | None = None
+    reporting_currency: str | None = None
+    filing_type: str | None = None
 
 
 class CompanyListOut(BaseModel):

@@ -1,5 +1,7 @@
 import type {
+  JobOut,
   JobsListOut,
+  NarrationResult,
   RankingsOut,
   SectorsOut,
   SectorRankingsOut,
@@ -15,15 +17,15 @@ export class ApiError extends Error {
 
 const TIMEOUT_MS = 15_000;
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let resp: Response;
   try {
     resp = await fetch(path, { ...init, signal: ctrl.signal, headers: { Accept: "application/json", ...(init?.headers ?? {}) } });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
-      throw new ApiError(0, `Request timed out after ${TIMEOUT_MS / 1000}s. Is the api container running?`);
+      throw new ApiError(0, `Request timed out after ${timeoutMs / 1000}s. Is the api container running?`);
     }
     throw new ApiError(0, "Cannot reach the research API. Is the api container running on port 8000?");
   } finally {
@@ -32,13 +34,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await resp.text().catch(() => "");
   if (!resp.ok) {
     let detail = `${resp.status}`;
-    try {
-      const body = text ? JSON.parse(text) : {};
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
-    } catch {
-      detail = `HTTP ${resp.status}`;
+    if (text.trim().startsWith("<")) {
+      if (resp.status === 504) {
+        detail = "Request timed out on the proxy/gateway (504). Please retry.";
+      } else if (resp.status === 502 || resp.status === 503) {
+        detail = "Research API is temporarily unavailable (502/503).";
+      } else {
+        detail = `HTTP ${resp.status}`;
+      }
+    } else {
+      try {
+        const body = text ? JSON.parse(text) : {};
+        detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
+      } catch {
+        detail = `HTTP ${resp.status}`;
+      }
     }
     throw new ApiError(resp.status, detail);
+  }
+  if (text.trim().startsWith("<")) {
+    throw new ApiError(resp.status, "Received HTML instead of JSON from server.");
   }
   try {
     return JSON.parse(text) as T;
@@ -47,9 +62,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-const get = <T>(path: string) => request<T>(path);
-const post = <T>(path: string, body: unknown) =>
-  request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const get = <T>(path: string, timeoutMs?: number) => request<T>(path, undefined, timeoutMs);
+const post = <T>(path: string, body?: unknown, timeoutMs?: number) =>
+  request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined }, timeoutMs);
 
 export const enc = encodeURIComponent;
 
@@ -66,8 +81,22 @@ export const api = {
   sectorRankings: (sheet: string, currency: "ALL" | "USD" | "CAD", limit = 500) =>
     get<SectorRankingsOut>(`/api/v1/sectors/${enc(sheet)}/rankings?currency=${currency}&limit=${limit}`),
   jobs: () => get<JobsListOut>(`/api/v1/jobs?limit=20`),
+  job: (id: string) => get<JobOut>(`/api/v1/jobs/${enc(id)}`),
   researchMeta: () => get<import("./types").ResearchMetaOut>(`/api/v1/research/meta`),
-  ingest: (ticker: string) => post<import("./types").IngestOut>("/api/v1/tickers/ingest", { ticker }),
+  ingest: (ticker: string, refresh = false) => post<import("./types").IngestOut>("/api/v1/tickers/ingest", { ticker, refresh }),
   recomputeCompany: (companyId: string) =>
     post<{ scored: number }>("/api/v1/scores/recompute", { universe: "company_id", company_id: companyId }),
+  narrate: (endpoint: string) => post<NarrationResult>(endpoint, undefined, 180_000),
+  swotResearch: (companyId: string) => post<import("./types").SwotOut>(`/api/v1/companies/${enc(companyId)}/research`, undefined, 180_000),
+  screen: (params?: Record<string, string | number | boolean | null | undefined>) => {
+    const q = new URLSearchParams();
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") {
+          q.set(k, String(v));
+        }
+      }
+    }
+    return get<import("./types").ScreenOut>(`/api/v1/screen?${q.toString()}`);
+  },
 };

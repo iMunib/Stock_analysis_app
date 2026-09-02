@@ -10,6 +10,7 @@ export function navItems(hasJobs: boolean): NavItem[] {
   // setup hint if the API is unreachable). hasJobs keeps back-compat for older callers.
   const items: NavItem[] = [
     { label: "Desk", to: "/" },
+    { label: "Screen", to: "/screen" },
     { label: "Sectors", to: "/sectors" },
     { label: "Compare", to: "/compare" },
     { label: "Jobs", to: "/jobs" },

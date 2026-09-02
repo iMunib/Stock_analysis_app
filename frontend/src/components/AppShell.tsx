@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
 import type { SearchOut } from "../api/types";
@@ -16,6 +16,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [compareCount, setCompareCount] = useState(0);
   const nav = useNavigate();
   const loc = useLocation();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const isInput = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA");
+      if (e.key === "/" && !isInput) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        setOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     api.jobs().then(() => setHasJobs(true)).catch(() => setHasJobs(false));
@@ -87,6 +102,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="relative ml-auto w-full max-w-md">
             <input
+              ref={searchRef}
               type="search"
               value={query}
               onChange={(e) => {
@@ -94,7 +110,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 setOpen(true);
               }}
               onFocus={() => setOpen(true)}
-              placeholder="Search name, ticker, or ID…"
+              placeholder="Search name, ticker, or ID… (Press /)"
               aria-label="Search companies"
               className="w-full rounded-md border border-line bg-ink px-3 py-2 text-sm placeholder:text-dim"
             />
@@ -103,7 +119,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {searchError ? (
                   <p className="px-4 py-3 text-sm text-bad">{searchError}</p>
                 ) : results && results.items.length === 0 ? (
-                  <p className="px-4 py-3 text-sm text-fog">No matches.</p>
+                  <div className="p-3 text-center">
+                    <p className="text-xs text-fog mb-2">Not in 720 library.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const q = query.trim();
+                        setOpen(false);
+                        setQuery("");
+                        nav(`/?ingest=${enc(q)}`);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded border border-gold/60 bg-gold/10 px-3 py-1.5 text-xs font-medium text-gold hover:bg-gold/20 transition-colors"
+                    >
+                      Not in library — fetch {query.trim().toUpperCase()}?
+                    </button>
+                  </div>
                 ) : (
                   <ul className="divide-y divide-line max-h-96 overflow-auto">
                     {results?.items.map((it) => (

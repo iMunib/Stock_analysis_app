@@ -1,18 +1,9 @@
 import { useState } from "react";
-import { ApiError } from "../api/client";
+import { api, ApiError } from "../api/client";
+import type { NarrationResult } from "../api/types";
+import { Spinner } from "./ui";
 
-interface NarrationResult {
-  narration?: string;
-  model?: string;
-  cached?: boolean;
-  narration_unavailable?: boolean;
-  reason?: string;
-  facts?: unknown;
-  banner?: string;
-  disclaimer?: string;
-}
-
-/** "Generate explanation" panel. 503 → honest unavailable, facts stay on screen. */
+/** "Generate explanation" panel. 503/504 -> honest unavailable, facts stay on screen. */
 export default function NarrationPanel({
   endpoint,
   label,
@@ -26,18 +17,22 @@ export default function NarrationPanel({
   const generate = async () => {
     setState("loading");
     try {
-      const resp = await fetch(endpoint, { method: "POST", headers: { Accept: "application/json" } });
-      const body = (await resp.json()) as NarrationResult & { detail?: unknown };
-      if (resp.status === 503 || body.narration_unavailable) {
-        const detail = (body.detail ?? body) as NarrationResult;
-        setResult(detail);
+      const body = await api.narrate(endpoint);
+      if (body.narration_unavailable) {
+        setResult(body);
         setState("unavailable");
         return;
       }
       setResult(body);
       setState("done");
     } catch (e) {
-      setResult({ narration_unavailable: true, reason: e instanceof ApiError ? e.message : String(e) });
+      const message =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "provider did not respond";
+      setResult({ narration_unavailable: true, reason: message });
       setState("unavailable");
     }
   };
@@ -53,13 +48,21 @@ export default function NarrationPanel({
           </p>
         </div>
         <button
+          type="button"
           onClick={generate}
           disabled={state === "loading"}
-          className="rounded-md border border-gold/60 bg-gold/10 px-4 py-2 text-sm text-gold hover:bg-gold/20 disabled:opacity-40"
+          className="rounded-md border border-gold/60 bg-gold/10 px-4 py-2 text-sm text-gold hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {state === "loading" ? "Generating…" : "Generate explanation"}
+          {state === "loading" ? "Writing explanation…" : "Generate explanation"}
         </button>
       </div>
+
+      {state === "loading" && (
+        <div className="mt-4 flex items-center gap-3 rounded border border-line2 bg-ink/50 p-3 text-sm text-paper">
+          <Spinner label="Writing explanation… 30–90s on free models." />
+        </div>
+      )}
+
       {state === "done" && result?.narration && (
         <div className="mt-3 rounded border border-line2 bg-ink p-3 text-sm leading-relaxed text-paper">
           {result.narration}
@@ -69,6 +72,7 @@ export default function NarrationPanel({
           </p>
         </div>
       )}
+
       {state === "unavailable" && (
         <div role="alert" className="mt-3 rounded border border-warn/60 bg-warn/10 p-3 text-sm text-paper">
           Narration unavailable — {result?.reason ?? "provider did not respond"}. The facts on this page are still

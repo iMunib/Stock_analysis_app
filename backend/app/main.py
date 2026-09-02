@@ -13,6 +13,7 @@ from app.api.phase10 import router as phase10_router
 from app.api.phase2 import router as phase2_router
 from app.api.phase3 import router as phase3_router
 from app.api.phase4 import router as phase4_router
+from app.api.screen import router as screen_router
 from app.api.sectors import router as sectors_router
 from app.api.stats import router as stats_router
 from app.config import APP_NAME, APP_VERSION, DISCLAIMER
@@ -54,11 +55,12 @@ app.add_middleware(
         "http://127.0.0.1:5173",
     ],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
 app.include_router(companies_router)
+app.include_router(screen_router)
 app.include_router(sectors_router)
 app.include_router(stats_router)
 app.include_router(phase2_router)

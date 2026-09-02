@@ -39,6 +39,11 @@ class PriceQuote:
     as_of: date | None
     source: str                                # yfinance
     fetched_at: datetime | None = None
+    shares: float | None = None
+    market_cap: float | None = None
+    financial_currency: str | None = None
+    sector: str | None = None
+    industry: str | None = None
 
 
 class FundamentalProvider(Protocol):

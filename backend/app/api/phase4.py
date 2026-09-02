@@ -12,8 +12,10 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timezone
+
 from app.db import get_session
-from app.models import Company, HalalFlag, Score
+from app.models import Company, CompanyProfile, HalalFlag, Score
 from app.services.scoring import DISCLAIMER, METHOD_VERSION
 from app.services.scoring_service import enrich_with_seed, load_universe
 
@@ -142,6 +144,8 @@ class DossierOut(BaseModel):
     score: dict | None
     halal: dict | None
     data_gaps: list[str]
+    profile: dict | None = None
+    quarterly: list[dict] | None = None
     method_version: str
     disclaimer: str
 
@@ -237,6 +241,47 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
             item["warning"] = row["warning"]
         item["used_for_growth"] = item["fiscal_year"] in sanitized_years
 
+    prof = None
+    try:
+        prof = db.get(CompanyProfile, company_id)
+    except Exception:
+        try:
+            from app.db import Base, engine
+            Base.metadata.create_all(bind=engine, tables=[CompanyProfile.__table__])
+            db.rollback()
+            prof = db.get(CompanyProfile, company_id)
+        except Exception:
+            prof = None
+
+    if prof is None and company.ticker:
+        try:
+            from app.providers.yahoo import fetch_profile_and_quarterly
+            symbol = company.ticker + (".TO" if company.country == "CA" else "")
+            p_data = fetch_profile_and_quarterly(symbol)
+            if p_data.get("summary") or p_data.get("dividend_yield") is not None or p_data.get("quarterly"):
+                prof = CompanyProfile(
+                    company_id=company_id,
+                    summary=p_data.get("summary"),
+                    dividend_yield=p_data.get("dividend_yield"),
+                    dividend_rate=p_data.get("dividend_rate"),
+                    next_earnings_date=p_data.get("next_earnings_date"),
+                    quarterly_json=p_data.get("quarterly"),
+                    fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                )
+                db.add(prof)
+                db.commit()
+        except Exception:
+            db.rollback()
+            prof = None
+
+    profile_payload = {
+        "summary": prof.summary if prof else None,
+        "dividend_yield": prof.dividend_yield if prof else None,
+        "dividend_rate": prof.dividend_rate if prof else None,
+        "next_earnings_date": prof.next_earnings_date if prof else None,
+    }
+    quarterly_payload = prof.quarterly_json if prof else None
+
     return DossierOut(
         identity={
             "company_id": company.company_id,
@@ -249,12 +294,17 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
             "indexes": company.indexes,
             "in_sp500": company.in_sp500,
             "in_tsx_composite": company.in_tsx_composite,
+            "cik": company.cik,
+            "reporting_currency": company.reporting_currency,
+            "filing_type": company.filing_type,
         },
         latest_snapshot=enriched,
         history_annual=history_annual,
         score=score_payload,
         halal=halal_payload,
         data_gaps=_data_gaps(entry, enriched),
+        profile=profile_payload,
+        quarterly=quarterly_payload,
         method_version=METHOD_VERSION,
         disclaimer=DISCLAIMER,
     )

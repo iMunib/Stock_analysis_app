@@ -62,3 +62,24 @@ table {
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  header, nav, footer, button, [role="status"], .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .bg-panel, .bg-panel2, .bg-ink {
+    background-color: transparent !important;
+    color: #111 !important;
+  }
+  .border-line, .border-line2 {
+    border-color: #ddd !important;
+  }
+  .text-paper, .text-fog, .text-dim, .text-gold {
+    color: #000 !important;
+  }
+}
+

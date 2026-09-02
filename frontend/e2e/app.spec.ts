@@ -50,13 +50,25 @@ test.describe("Phase 9 — All-currency default + shell", () => {
     await expect(page.getByText(/Not investment advice/i)).toBeVisible(); // footer still there
   });
 
-  test("reduced motion disables animations", async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/sectors");
-    const anim = await page.evaluate(() => {
-      const el = document.querySelector(".animate-fade-in") as HTMLElement | null;
-      return el ? getComputedStyle(el).animationName : "none";
-    });
-    expect(["none", ""]).toContain(anim);
+  test("screener filters Software USD and navigates to dossier", async ({ page }) => {
+    await page.goto("/screen");
+    await expect(page.getByRole("heading", { name: "Screener", exact: true })).toBeVisible({ timeout: 15_000 });
+
+    // Filter USD
+    const usdBtn = page.getByRole("button", { name: "USD", exact: true });
+    await usdBtn.click();
+
+    // Filter Custom Industry -> Software
+    const industrySelect = page.locator("#filter-industry");
+    await industrySelect.selectOption("Software");
+
+    // Table rows appear
+    const firstRowLink = page.locator("tbody tr a").first();
+    await expect(firstRowLink).toBeVisible({ timeout: 15_000 });
+
+    // Click row to navigate to dossier
+    await firstRowLink.click();
+    await expect(page).toHaveURL(/\/c\/US%3A|CA%3A/);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
   });
 });

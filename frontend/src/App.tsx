@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Home from "./screens/Home";
+import Screen from "./screens/Screen";
 import Dossier from "./screens/Dossier";
 import Compare from "./screens/Compare";
 import Sector from "./screens/Sector";
@@ -15,6 +16,7 @@ export default function App() {
       <AppShell>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/screen" element={<Screen />} />
           <Route path="/sectors" element={<SectorsHub />} />
           <Route path="/sectors/:sheet" element={<Sector />} />
           <Route path="/c/:companyId" element={<Dossier />} />

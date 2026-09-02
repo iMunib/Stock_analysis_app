@@ -1,4 +1,4 @@
-﻿/** Watchlist (Phase 10 E): localStorage key `watchIds`, Company_ID[], max 50. */
+/** Watchlist (Phase 10 E): localStorage key `watchIds`, Company_ID[], max 50. */
 
 const KEY = "watchIds";
 const MAX = 50;
@@ -27,4 +27,21 @@ export function toggleWatch(id: string): string[] {
 export function isWatched(id: string): boolean {
   return getWatchlist().includes(id);
 }
+
+export function recordOpened(id: string): void {
+  try {
+    localStorage.setItem(`opened:${id}`, new Date().toISOString());
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function getOpenedAt(id: string): string | null {
+  try {
+    return localStorage.getItem(`opened:${id}`);
+  } catch {
+    return null;
+  }
+}
+
 

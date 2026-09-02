@@ -78,25 +78,33 @@ export default function Sector() {
       <header className="space-y-3">
         <h1 className="font-display text-3xl tracking-tight">{sheet.replace(/^GICS_/, "").replace(/_/g, " ")}</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-fog">{sectorBlurb(sheet)}</p>
-        <div className="flex items-center gap-2" role="group" aria-label="Currency view (required)">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-dim">View</span>
-          {VIEWS.map((v) => (
-            <button
-              key={v}
-              onClick={() => setParams({ currency: v })}
-              aria-pressed={view === v}
-              className={`rounded border px-3 py-1 font-mono text-xs transition-colors ${
-                view === v ? "border-gold bg-gold/15 text-gold" : "border-line text-fog hover:border-line2 hover:text-paper"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-          {view === "ALL" && (
-            <span className="ml-2 text-xs text-dim">
-              scores + ratios only (per-row currency) — money panels below stay split
-            </span>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2" role="group" aria-label="Currency view (required)">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-dim">View</span>
+            {VIEWS.map((v) => (
+              <button
+                key={v}
+                onClick={() => setParams({ currency: v })}
+                aria-pressed={view === v}
+                className={`rounded border px-3 py-1 font-mono text-xs transition-colors ${
+                  view === v ? "border-gold bg-gold/15 text-gold" : "border-line text-fog hover:border-line2 hover:text-paper"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+            {view === "ALL" && (
+              <span className="ml-2 text-xs text-dim">
+                scores + ratios only (per-row currency) — money panels below stay split
+              </span>
+            )}
+          </div>
+          <Link
+            to={`/screen?${sheet.startsWith("GICS_") ? `sector=${enc(sheet.replace(/^GICS_/, "").replace(/_/g, " "))}` : `industry=${enc(sheet)}`}`}
+            className="text-xs text-gold hover:underline flex items-center gap-1 font-medium"
+          >
+            Screen this sector →
+          </Link>
         </div>
       </header>
 
@@ -145,10 +153,6 @@ export default function Sector() {
           <div className="flex items-center justify-between gap-4">
             <h2 className="font-display text-xl">
               Ranked companies
-              <InfoTip term="Composite" />
-              <InfoTip term="PE" />
-              <InfoTip term="PB" />
-              <InfoTip term="ROE" />
               {view === "ALL" && <span className="ml-2 font-mono text-xs text-dim">(score-only, both currencies)</span>}
             </h2>
             <button
@@ -170,13 +174,34 @@ export default function Sector() {
                   <th scope="col" className="px-3 py-2 w-8"></th>
                   <th scope="col" className="px-3 py-2 w-12 text-right">#</th>
                   <th scope="col" className="px-3 py-2">Company</th>
-                  <th scope="col" className="px-3 py-2">Cur</th>
-                  <th scope="col" className="px-3 py-2 text-right">Score</th>
-                  <th scope="col" className="px-3 py-2">Signal</th>
-                  <th scope="col" className="px-3 py-2 text-right">PE</th>
-                  <th scope="col" className="px-3 py-2 text-right">PB</th>
-                  <th scope="col" className="px-3 py-2 text-right">ROE</th>
-                  <th scope="col" className="px-3 py-2 text-right">Peer rank</th>
+                  <th scope="col" className="px-3 py-2 whitespace-nowrap">
+                    <span>Cur</span>
+                    <InfoTip term="Cur" />
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right whitespace-nowrap">
+                    <span>Score</span>
+                    <InfoTip term="Composite" />
+                  </th>
+                  <th scope="col" className="px-3 py-2 whitespace-nowrap">
+                    <span>Signal</span>
+                    <InfoTip term="Signal" />
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right whitespace-nowrap">
+                    <span>PE</span>
+                    <InfoTip term="PE" />
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right whitespace-nowrap">
+                    <span>PB</span>
+                    <InfoTip term="PB" />
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right whitespace-nowrap">
+                    <span>ROE</span>
+                    <InfoTip term="ROE" />
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right whitespace-nowrap">
+                    <span>Peer rank</span>
+                    <InfoTip term="Peer rank" />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">

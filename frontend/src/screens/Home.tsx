@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
 import type { DossierOut, RankingsOut, ResearchMetaOut } from "../api/types";
 import { CompanyLink, ErrorBanner, Score, SignalBadge, Spinner } from "../components/ui";
 import { SIGNAL_ORDER, signalTone } from "../api/visuals";
-import { signalLabel } from "../api/copy";
+import { errorCatalogCopy, signalLabel } from "../api/copy";
+import { getOpenedAt, getWatchlist } from "../lib/watchlist";
 
 const LEGEND =
   "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers — average companies land mid-pack, not at 8.";
+
+const INGEST_STEPS: { key: string; label: string }[] = [
+  { key: "resolve", label: "Resolve" },
+  { key: "filings", label: "Filings" },
+  { key: "prices_shares", label: "Price & Shares" },
+  { key: "sector_peers", label: "Sector & Peers" },
+  { key: "score", label: "Score" },
+  { key: "done", label: "Done" },
+];
 
 export default function Home() {
   const [meta, setMeta] = useState<ResearchMetaOut | null>(null);
@@ -16,8 +26,12 @@ export default function Home() {
   const [rankCad, setRankCad] = useState<RankingsOut | null>(null);
   const [ticker, setTicker] = useState("");
   const [ingesting, setIngesting] = useState(false);
+  const [activeStep, setActiveStep] = useState<string | null>(null);
+  const [stepMessage, setStepMessage] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [ingestMsg, setIngestMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const loadMeta = useCallback(() => {
     api.researchMeta().then(setMeta).catch((e: ApiError) => setMetaError(e.message));
@@ -32,22 +46,86 @@ export default function Home() {
     loadRanks();
   }, [loadMeta, loadRanks]);
 
-  const addTicker = useCallback(async () => {
-    const t = ticker.trim();
-    if (!t) return;
-    setIngesting(true);
-    setIngestMsg(null);
-    try {
-      const out = await api.ingest(t);
-      await api.recomputeCompany(out.company_id);
-      setIngestMsg({ ok: true, text: `${out.company_id} added and scored (${out.year_count} years on file). Opening…` });
-      setTimeout(() => nav(`/c/${enc(out.company_id)}`), 900);
-    } catch (e) {
-      setIngestMsg({ ok: false, text: e instanceof ApiError ? e.message : String(e) });
-    } finally {
-      setIngesting(false);
+  const addTicker = useCallback(
+    async (customTicker?: string) => {
+      const t = (customTicker ?? ticker).trim();
+      if (!t) return;
+      setIngesting(true);
+      setIngestMsg(null);
+      setErrorCode(null);
+      setActiveStep("resolve");
+      setStepMessage(`Starting ingest for ${t.toUpperCase()}…`);
+
+      try {
+        const init = await api.ingest(t);
+        if (init.job_id) {
+          let attempts = 0;
+          const interval = setInterval(async () => {
+            attempts++;
+            try {
+              const j = await api.job(init.job_id);
+              if (j.step) setActiveStep(j.step);
+              if (j.message) setStepMessage(j.message);
+
+              if (j.status === "succeeded" || j.step === "done") {
+                clearInterval(interval);
+                setIngesting(false);
+                if (j.error_code === "SCORE_PARTIAL") {
+                  setErrorCode("SCORE_PARTIAL");
+                  setIngestMsg({
+                    ok: true,
+                    text: errorCatalogCopy("SCORE_PARTIAL", j.message),
+                  });
+                  setTimeout(() => nav(`/c/${enc(j.company_id || t)}`), 1200);
+                } else {
+                  setIngestMsg({
+                    ok: true,
+                    text: j.message || `${j.company_id || t} added and scored. Opening dossier…`,
+                  });
+                  setTimeout(() => nav(`/c/${enc(j.company_id || t)}`), 800);
+                }
+              } else if (j.status === "failed" || j.step === "failed") {
+                clearInterval(interval);
+                setIngesting(false);
+                const errTxt = errorCatalogCopy(j.error_code, j.message || j.error || "Ingest failed.");
+                setErrorCode(j.error_code || "INTERNAL");
+                setIngestMsg({ ok: false, text: errTxt });
+              } else if (attempts >= 90) {
+                clearInterval(interval);
+                setIngesting(false);
+                setIngestMsg({ ok: false, text: errorCatalogCopy("PROVIDER_TIMEOUT") });
+              }
+            } catch (err) {
+              clearInterval(interval);
+              setIngesting(false);
+              setIngestMsg({ ok: false, text: err instanceof ApiError ? err.message : String(err) });
+            }
+          }, 1000);
+        } else {
+          setIngesting(false);
+          setIngestMsg({ ok: true, text: "Ingest completed. Opening…" });
+          setTimeout(() => nav(`/c/${enc(init.company_id || t)}`), 800);
+        }
+      } catch (e) {
+        setIngesting(false);
+        const msg = e instanceof ApiError ? e.message : String(e);
+        let code = "INTERNAL";
+        if (msg.includes("LISTING_AMBIGUOUS")) code = "LISTING_AMBIGUOUS";
+        else if (msg.includes("SYMBOL_NOT_FOUND")) code = "SYMBOL_NOT_FOUND";
+        setErrorCode(code);
+        setIngestMsg({ ok: false, text: errorCatalogCopy(code, msg) });
+      }
+    },
+    [ticker, nav]
+  );
+
+  useEffect(() => {
+    const q = searchParams.get("ingest");
+    if (q && !ingesting) {
+      setTicker(q);
+      addTicker(q);
     }
-  }, [ticker, nav]);
+  }, [searchParams]);
 
   return (
     <div className="space-y-10">
@@ -117,6 +195,23 @@ export default function Home() {
           Pull annual history for any US or Canadian ticker (e.g. <code className="font-mono text-goldsoft">AAPL</code> or{" "}
           <code className="font-mono text-goldsoft">RY.TO</code>), then score it. Free public sources only.
         </p>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-fog">
+          <span>Quick try:</span>
+          {["AMD", "BABA", "SHOP.TO", "KITS.TO"].map((sample) => (
+            <button
+              key={sample}
+              type="button"
+              disabled={ingesting}
+              onClick={() => {
+                setTicker(sample);
+                addTicker(sample);
+              }}
+              className="rounded border border-line bg-ink px-2.5 py-1 font-mono text-xs text-paper hover:border-gold/60 hover:text-gold disabled:opacity-40"
+            >
+              {sample}
+            </button>
+          ))}
+        </div>
         <form
           className="flex gap-3"
           onSubmit={(e) => {
@@ -127,7 +222,7 @@ export default function Home() {
           <input
             value={ticker}
             onChange={(e) => setTicker(e.target.value)}
-            placeholder="AAPL or RY.TO"
+            placeholder="e.g. AMD, BABA, KITS.TO"
             aria-label="Ticker to add"
             className="w-64 rounded-md border border-line bg-ink px-3 py-2 font-mono text-sm placeholder:text-dim"
           />
@@ -139,8 +234,44 @@ export default function Home() {
             {ingesting ? "Fetching…" : "Add & score"}
           </button>
         </form>
+
+        {ingesting && (
+          <div className="space-y-3 rounded-md border border-line bg-panel2 p-3 text-xs">
+            <div className="flex items-center gap-2 font-mono text-gold">
+              <span className="inline-block h-2 w-2 rounded-full bg-gold animate-ping" />
+              <span>{stepMessage || "Processing ingest job…"}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {INGEST_STEPS.map((s) => {
+                const isCurrent = activeStep === s.key;
+                return (
+                  <span
+                    key={s.key}
+                    className={`rounded px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                      isCurrent
+                        ? "border border-gold bg-gold/20 text-gold font-bold animate-pulse"
+                        : "border border-line bg-ink/40 text-dim"
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {ingestMsg && (
-          <p role="status" className={ingestMsg.ok ? "text-sm text-good" : "text-sm text-bad"}>
+          <p
+            role="status"
+            className={`rounded border px-3 py-2 text-xs font-mono ${
+              ingestMsg.ok
+                ? errorCode === "SCORE_PARTIAL"
+                  ? "border-warn/50 bg-warn/10 text-warn"
+                  : "border-good/50 bg-good/10 text-good"
+                : "border-bad/50 bg-bad/10 text-bad"
+            }`}
+          >
             {ingestMsg.text}
           </p>
         )}
@@ -159,18 +290,11 @@ export default function Home() {
 }
 
 function WatchGrid() {
-  const [watched] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem("***");
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [watched] = useState<string[]>(() => getWatchlist());
   const [dossiers, setDossiers] = useState<DossierOut[]>([]);
 
   useEffect(() => {
+    if (watched.length === 0) return;
     Promise.allSettled(watched.map((id) => api.dossier(id))).then((results) => {
       setDossiers(
         results
@@ -189,22 +313,31 @@ function WatchGrid() {
   }
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {dossiers.map((d) => (
-        <Link
-          key={d.identity.company_id}
-          to={`/c/${enc(d.identity.company_id)}`}
-          className="rounded-md border border-line bg-panel px-3 py-2 hover:border-gold/60"
-        >
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-sm text-paper">{d.identity.name ?? d.identity.company_id}</span>
-            <span className="font-mono text-sm text-gold">{d.score?.composite?.toFixed(1) ?? "—"}</span>
-          </div>
-          <div className="mt-0.5 flex items-center justify-between font-mono text-[10px] text-dim">
-            <span>{d.identity.company_id}</span>
-            <span>{d.score?.peer_rank ? `#${d.score.peer_rank}/${d.score.peer_n}` : "—"}</span>
-          </div>
-        </Link>
-      ))}
+      {dossiers.map((d) => {
+        const openedAt = getOpenedAt(d.identity.company_id);
+        const openedStr = openedAt
+          ? new Date(openedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+          : null;
+        return (
+          <Link
+            key={d.identity.company_id}
+            to={`/c/${enc(d.identity.company_id)}`}
+            className="rounded-md border border-line bg-panel px-3.5 py-2.5 hover:border-gold/60 transition-colors"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-medium text-paper truncate">{d.identity.name ?? d.identity.company_id}</span>
+              <span className="font-mono text-sm text-gold font-semibold">{d.score?.composite?.toFixed(1) ?? "—"}</span>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] text-dim">
+              <div className="flex items-center gap-1.5">
+                <SignalBadge signal={d.score?.signal} small />
+                <span>{d.identity.currency}</span>
+              </div>
+              <span>{openedStr ? `Opened ${openedStr}` : d.identity.company_id}</span>
+            </div>
+          </Link>
+        );
+      })}
     </div>
   );
 }

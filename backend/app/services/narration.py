@@ -225,3 +225,67 @@ def _narrate_cached(db: Session, kind: str, subject_id: str, stamp: str, facts: 
         "banner": "Narration (not the score)",
         "disclaimer": "personal research software, not investment advice",
     }
+
+
+def research_company(db: Session, company_id: str) -> dict:
+    """Draft Moat / SWOT from facts JSON. Refuses if model not :free. Caches result."""
+    facts = company_facts(db, company_id)
+    if facts is None:
+        return {"error": "unknown_company"}
+    score = db.get(Score, company_id)
+    stamp = (score.computed_at.isoformat() if score and score.computed_at else "") or ""
+
+    status = llm.llm_status(OPENROUTER_MODEL, OPENROUTER_MODEL_FALLBACK)
+    if not status["configured"]:
+        return {
+            "research_unavailable": True,
+            "reason": "OPENROUTER_API_KEY missing or model is not a :free id",
+            "facts": facts,
+            "label": "LLM draft from our facts. Not a 10-K.",
+            "disclaimer": "personal research software, not investment advice",
+        }
+
+    if not llm.free_latch(OPENROUTER_MODEL):
+        return {
+            "research_unavailable": True,
+            "reason": f"Refusing non-free model: {OPENROUTER_MODEL}",
+            "facts": facts,
+            "label": "LLM draft from our facts. Not a 10-K.",
+            "disclaimer": "personal research software, not investment advice",
+        }
+
+    cached = cache_get(db, "swot", company_id, stamp, OPENROUTER_MODEL)
+    if cached:
+        return {
+            "company_id": company_id,
+            "swot": cached,
+            "model": OPENROUTER_MODEL,
+            "cached": True,
+            "facts": facts,
+            "label": "LLM draft from our facts. Not a 10-K.",
+            "disclaimer": "personal research software, not investment advice",
+        }
+
+    try:
+        out = llm.draft_swot(facts, OPENROUTER_MODEL, OPENROUTER_MODEL_FALLBACK)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "research_unavailable": True,
+            "reason": str(exc)[:300],
+            "facts": facts,
+            "label": "LLM draft from our facts. Not a 10-K.",
+            "disclaimer": "personal research software, not investment advice",
+        }
+
+    cache_put(db, "swot", company_id, stamp, out["model"], out["swot"])
+    return {
+        "company_id": company_id,
+        "swot": out["swot"],
+        "model": out["model"],
+        "cached": False,
+        "elapsed_ms": out.get("elapsed_ms"),
+        "facts": facts,
+        "label": "LLM draft from our facts. Not a 10-K.",
+        "disclaimer": "personal research software, not investment advice",
+    }
+

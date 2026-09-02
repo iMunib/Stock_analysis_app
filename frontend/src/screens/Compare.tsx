@@ -118,15 +118,24 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
       <thead>
         <tr className="border-b border-line bg-panel text-left font-mono text-[10px] uppercase tracking-widest text-dim">
           <th scope="col" className="sticky left-0 z-10 bg-panel px-4 py-3">Company</th>
-          <th scope="col" className="px-3 py-3" aria-label="Pillar bars">Q·V·G·R</th>
-          <th scope="col" className="px-3 py-3">Cur</th>
+          <th scope="col" className="px-3 py-3 whitespace-nowrap" aria-label="Pillar bars">
+            <span>Q·V·G·R</span>
+            <InfoTip term="Q·V·G·R" />
+          </th>
+          <th scope="col" className="px-3 py-3 whitespace-nowrap">
+            <span>Cur</span>
+            <InfoTip term="Cur" />
+          </th>
           {compKeys.map(([label]) => (
-            <th key={label} scope="col" className="px-3 py-3 text-right">
-              {label}
-              {["Composite", "PE", "PB", "ROE", "EV/EBITDA"].includes(label) && <InfoTip term={label === "EV/EBITDA" ? "EV/EBITDA" : label} />}
+            <th key={label} scope="col" className="px-3 py-3 text-right whitespace-nowrap">
+              <span>{label}</span>
+              <InfoTip term={label} />
             </th>
           ))}
-          <th scope="col" className="px-3 py-3 text-right">Peer rank</th>
+          <th scope="col" className="px-3 py-3 text-right whitespace-nowrap">
+            <span>Peer rank</span>
+            <InfoTip term="Peer rank" />
+          </th>
           {showHalal && <th scope="col" className="px-3 py-3">Halal</th>}
         </tr>
       </thead>

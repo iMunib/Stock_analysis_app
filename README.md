@@ -1,4 +1,4 @@
-﻿# Investment Stock Application â€” Master README
+# Investment Stock Application â€” Master README
 
 **A personal, local equity-research desk for the S&P 500 + S&P/TSX Composite (720 companies).**
 Personal research software. **Not investment advice.** Not a product, not a broker, not a subscription service.
@@ -339,3 +339,44 @@ relying on it.*
 - **Compare research board:** sticky company column, percent/multiple formatting, per-row SVG pillar bars primary, best-value highlight row under headers, Halal column only with `?halal=1`.
 - **Watchlist:** localStorage `watchIds` (max 50), star on dossier, Desk watchlist grid.
 - Phase 6A-era bug fixed: compare basket key was a placeholder; now the contracted `compareIds`.
+
+---
+
+## Master Sprint (2026-09-02): Dynamic Ingest State Machine, ADR Pipeline, Narration Resilience & UX Redesign
+
+- **Narration Stability & UI Proxy:** `proxy_read_timeout 180s` in `frontend/nginx.conf`. API client safely detects HTML error pages (502/504) from gateways to prevent `SyntaxError: Unexpected token '<'`. UI renders loading spinner *"Writing explanation… 30–90s on free models"* and disables flight buttons. OpenRouter models strictly require `:free`.
+- **Hover Help & Accessible Glossary:** Full Grade-10 glossary `{ short, why, how_to_read }` added in `frontend/src/api/glossary.ts`. Interactive and accessible `InfoTip` buttons wired to Compare headers, Dossier snapshot tiles, score pillar cards, and Sector headers. Fully keyboard accessible (Tab + Enter/Space) and mobile tap enabled with `aria-describedby`.
+- **Async Ingest State Machine (202 Protocol):** `POST /api/v1/tickers/ingest` returns 202 `{job_id}` immediately without blocking HTTP requests. Worker transitions through 6 deterministic steps: `resolve` → `filings` → `prices_shares` → `sector_peers` → `score` → `done` | `failed`. Frontend polls `/api/v1/jobs/{id}` every 1s with live step progress pills. Comprehensive error catalog maps codes (`SYMBOL_NOT_FOUND`, `LISTING_AMBIGUOUS`, `SCORE_PARTIAL`, etc.) to human guidance.
+- **Foreign ADR & Native Currency Pipeline (BABA-Class):** EDGAR parser supports foreign private issuer forms `20-F` and `20-F/A` under `ifrs-full` and `us-gaap`. Native filing currencies (e.g., `CNY`) are preserved on `Company.reporting_currency`. Cross-border currency mismatches suppress price multiples (`PE`, `PB`) with reason `currency_mismatch` to prevent fake ratios. CIK lookup attaches direct SEC filing links to EDGAR. Dual currency display renders transparently: *"Revenue CNY 996.00B · trading USD"*.
+- **Peer Set Widening (Eliminating Fake Trophies):** In `build_peer_sets`, solo stocks without sufficient category peers are widened to the full same-currency universe labeled `"broad peer set (n=N)"`. Misleading "#1 of 1" trophies are eliminated. Single-company scoring updates target scores against full universe distributions.
+- **Dossier Status Ribbon & Actionable Missing Blocks:** 12-column status ribbon displays Source, As-of date, Reporting vs Trading Currency, Coverage, and Peer Set size. Actionable 1-click buttons *"Fetch shares from Yahoo"* and *"Retry EDGAR filings"* appear under "What is missing" to resolve data gaps.
+- **100-Persona Battery & 3-Click Journey Audit:** Comprehensive `docs/PERSONAS.md` documents 100 user jobs across Retail Investors, Value Investors, Shariah/Halal Investors, Cross-Border Traders, Sector Specialists, and Executives, with all 100 passing a strict 3-click workflow audit.
+- **Automated Test Suites:** 112 Backend Pytest tests passing 100% green; 49 Frontend Vitest tests across 11 test files passing 100% green.
+
+---
+
+## Research-Desk Upgrade Sprint (2026-09-02): Repeatable 7-Step Equity-Research Loop
+
+- **Screening Engine (`GET /api/v1/screen` & `/screen`):**
+  - Full-universe filtering by currency (`ALL`, `USD`, `CAD`), GICS sector, custom industry sheet, signal (`undervalued`, `fair_value`, `overvalued`, `speculative`, `insufficient_data`), min composite (0–10), max PE (excluding blanks when set), min ROE %, min FCF margin %, min coverage pillars (1–4), growth history flag, and bank exclusion.
+  - Multi-currency safety: In `ALL` currency view, native money figures are masked to prevent cross-border distortion, displaying only unitless ratios and composite scores.
+  - Sortable table columns with multi-select comparison: "Compare Selected (N) →" transfers IDs directly to `/compare?ids=...`.
+  - Responsive empty state: *"No names match — loosen PE or coverage."*
+- **Company Research Pack on Dossier:**
+  - **Business in one line:** 280-character snapshot extracted from Yahoo Finance (`longBusinessSummary`).
+  - **Dividend & Earnings:** Yield %, DPS ($), and next upcoming earnings date.
+  - **Quarterly Financials:** Displays last 4 quarters (revenue, net income, diluted EPS) under annual history when available.
+  - **Moat / SWOT Card (`POST /api/v1/companies/{id}/research`):** Deterministic facts JSON fed to an OpenRouter `:free` model, cached in `LlmCache` (`kind="swot"`). Emits Strengths, Weaknesses, Opportunities, Threats, and Competitive Advantage (1 line). Labeled *"LLM draft from our facts. Not a 10-K."* Fundamentals are never overwritten.
+  - **Thesis Notepad:** Local `localStorage` scratchpad (`thesis:{company_id}`) capped at 1000 characters with auto-saved timestamps. *"Your notes stay on this browser."*
+  - **Toy DCF Calculator Card:** Local DCF calculator (FCF, growth rate %, discount rate/WACC %, years). Not stored as ground truth. Intentionally disabled for financial institutions (banks/insurers) without auto-filling fake FCF.
+  - **Print / Save PDF:** Clean `@media print` styling removes navbar, action buttons, and dark background colors for 1-page paper or PDF output.
+- **Watchlist & Local Alerts:**
+  - Fixed Desk Watchlist key to `watchIds` (`getWatchlist()`), displaying ticker, latest composite score, signal badge, and last-opened timestamp.
+  - Local alerts (`localStorage stockAlerts` `{id, pe_above, composite_below}`) evaluated locally on screen/dossier load, displaying warning banner when thresholds trigger.
+- **UX & Flow Shortcuts:**
+  - Keyboard `/` shortcut instantly focuses search from anywhere in the app.
+  - Sector page header includes direct link to `"Screen this sector →"` with pre-populated sector filters.
+  - 404 company page features a 1-click `"Fetch {ticker} from SEC / Yahoo"` chip to pull missing names into the universe.
+- **Documentation:**
+  - See `docs/RESEARCH_LOOP.md` for a comprehensive mapping of the 7-step equity-research loop to application screens.
+

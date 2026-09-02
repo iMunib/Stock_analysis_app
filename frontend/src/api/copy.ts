@@ -117,11 +117,14 @@ export function money(v: number | null | undefined, currency: string | null | un
   if (v === null || v === undefined) return "—";
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
-  const suffix = currency ? ` ${currency}` : "";
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T${suffix}`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B${suffix}`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M${suffix}`;
-  return `${sign}$${abs.toLocaleString()}${suffix}`;
+  const cur = (currency ?? "").trim().toUpperCase();
+  const isDollar = !cur || cur === "USD" || cur === "CAD";
+  const sym = isDollar ? "$" : `${cur} `;
+  const suffix = isDollar && cur ? ` ${cur}` : "";
+  if (abs >= 1e12) return `${sign}${sym}${(abs / 1e12).toFixed(2)}T${suffix}`;
+  if (abs >= 1e9) return `${sign}${sym}${(abs / 1e9).toFixed(2)}B${suffix}`;
+  if (abs >= 1e6) return `${sign}${sym}${(abs / 1e6).toFixed(1)}M${suffix}`;
+  return `${sign}${sym}${abs.toLocaleString()}${suffix}`;
 }
 
 export function ratio(v: number | null | undefined, digits = 1): string {
@@ -145,4 +148,20 @@ export function gapLabel(gap: string): string {
     fcf: "no free cash flow (typical for lenders)",
   };
   return map[gap] ?? gap.replace(/_/g, " ");
+}
+
+export const ERROR_CATALOG: Record<string, string> = {
+  SYMBOL_NOT_FOUND: "We could not find that ticker. Try AMD, BABA, SHOP.TO, or KITS.TO.",
+  LISTING_AMBIGUOUS: "Multiple listings. Pick US ADR or HK/TSX (show choices).",
+  PROVIDER_TIMEOUT: "Data source timed out. Retry.",
+  RATE_LIMIT: "Source is busy. Wait a minute and retry.",
+  NO_STATEMENTS: "Listed, but no annual statements. We stored the price only.",
+  CURRENCY_UNCLEAR: "Statements exist but currency is unclear. We did not label CNY as USD.",
+  SCORE_PARTIAL: "Saved, but some pillars missing (shares/price). See “What is missing”.",
+  INTERNAL: "Something broke on our side. Retry.",
+};
+
+export function errorCatalogCopy(code: string | null | undefined, fallback?: string | null): string {
+  if (code && ERROR_CATALOG[code]) return ERROR_CATALOG[code];
+  return fallback ?? ERROR_CATALOG.INTERNAL;
 }

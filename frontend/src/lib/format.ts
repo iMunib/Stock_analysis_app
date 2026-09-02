@@ -14,16 +14,19 @@ export function multiple(v: number | null | undefined, digits = 1): string {
   return v.toFixed(digits);
 }
 
-/** Money with currency suffix; null → "—". */
+/** Money with currency suffix; null → "—". Does not prefix non-dollar currencies (e.g. CNY) with $. */
 export function money(v: number | null | undefined, currency: string | null | undefined): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
-  const suffix = currency ? ` ${currency}` : "";
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T${suffix}`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B${suffix}`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M${suffix}`;
-  return `${sign}$${abs.toLocaleString()}${suffix}`;
+  const cur = (currency ?? "").trim().toUpperCase();
+  const isDollar = !cur || cur === "USD" || cur === "CAD";
+  const sym = isDollar ? "$" : `${cur} `;
+  const suffix = isDollar && cur ? ` ${cur}` : "";
+  if (abs >= 1e12) return `${sign}${sym}${(abs / 1e12).toFixed(2)}T${suffix}`;
+  if (abs >= 1e9) return `${sign}${sym}${(abs / 1e9).toFixed(2)}B${suffix}`;
+  if (abs >= 1e6) return `${sign}${sym}${(abs / 1e6).toFixed(1)}M${suffix}`;
+  return `${sign}${sym}${abs.toLocaleString()}${suffix}`;
 }
 
 /** Composite/pillars: one decimal. */

@@ -97,6 +97,60 @@ export interface HalalPayload {
   failed_tests: { test: string; basis?: unknown; ratio?: unknown }[];
 }
 
+export interface CompanyProfile {
+  summary?: string | null;
+  dividend_yield?: number | null;
+  dividend_rate?: number | null;
+  next_earnings_date?: string | null;
+}
+
+export interface QuarterlyRow {
+  date: string;
+  revenue?: number | null;
+  net_income?: number | null;
+  diluted_eps?: number | null;
+}
+
+export interface SwotOut {
+  company_id: string;
+  swot: string;
+  model: string;
+  cached: boolean;
+  label: string;
+  disclaimer: string;
+  elapsed_ms?: number;
+}
+
+export interface ScreenItem {
+  company_id: string;
+  name: string | null;
+  ticker: string | null;
+  currency: string | null;
+  gics_sector: string | null;
+  custom_industry_sheet: string | null;
+  composite: number | null;
+  signal: string | null;
+  pe_calc: number | null;
+  roe_calc: number | null;
+  fcfmargin_calc: number | null;
+  peer_rank: number | null;
+  peer_n: number | null;
+  coverage: number | null;
+  has_growth_history: boolean;
+  is_bank: boolean;
+  halal_status: string | null;
+  money?: Record<string, number | null> | null;
+}
+
+export interface ScreenOut {
+  total: number;
+  count: number;
+  currency_view: string;
+  items: ScreenItem[];
+  method_version: string;
+  disclaimer: string;
+}
+
 export interface DossierOut {
   identity: {
     company_id: string;
@@ -109,12 +163,17 @@ export interface DossierOut {
     indexes: string[] | null;
     in_sp500: boolean;
     in_tsx_composite: boolean;
+    cik?: number | null;
+    reporting_currency?: string | null;
+    filing_type?: string | null;
   };
   latest_snapshot: Snapshot | null;
   history_annual: HistoryRow[];
   score: ScorePayload | null;
   halal: HalalPayload | null;
   data_gaps: string[];
+  profile?: CompanyProfile | null;
+  quarterly?: QuarterlyRow[] | null;
   method_version: string;
   disclaimer: string;
 }
@@ -197,12 +256,13 @@ export interface ResearchMetaOut {
 }
 
 export interface IngestOut {
-  company_id: string;
-  in_universe: boolean;
-  year_count: number;
-  fiscal_years: number[];
-  counts: Record<string, number>;
-  price_filled: boolean;
+  job_id: string;
+  status: string;
+  kind?: string;
+  step?: string | null;
+  message?: string | null;
+  company_id?: string | null;
+  error_code?: string | null;
 }
 
 export interface RankingsItem {
@@ -269,6 +329,10 @@ export interface JobOut {
   id: string;
   kind: string;
   status: string;
+  step?: string | null;
+  message?: string | null;
+  company_id?: string | null;
+  error_code?: string | null;
   payload: Record<string, unknown>;
   progress_done: number;
   progress_total: number;
@@ -277,6 +341,17 @@ export interface JobOut {
   created_at: string | null;
   started_at: string | null;
   finished_at: string | null;
+}
+
+export interface NarrationResult {
+  narration?: string;
+  model?: string;
+  cached?: boolean;
+  narration_unavailable?: boolean;
+  reason?: string;
+  facts?: unknown;
+  banner?: string;
+  disclaimer?: string;
 }
 
 export interface JobsListOut {
