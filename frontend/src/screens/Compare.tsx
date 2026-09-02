@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { CompareOut, SearchOut } from "../api/types";
 import { CompanyLink, ErrorBanner, HalalBadge, Score, SignalBadge, Spinner, useDebounced } from "../components/ui";
-import { ratio } from "../api/copy";
+import { PillarMiniBars } from "../components/bars";
+import { mixedCurrencyWarning, ratio } from "../api/copy";
 
 const MAX = 8;
 
@@ -62,8 +63,7 @@ export default function Compare() {
         <>
           {data.currency_warning && (
             <div role="alert" className="rounded-md border border-warn/60 bg-warn/10 px-4 py-3 text-sm text-paper">
-              Mixed currencies: <span className="font-mono">{data.currencies.join(" vs ")}</span>. Scores and
-              ratios stay comparable, but money amounts are in each company's own currency — never converted.
+              {mixedCurrencyWarning(data.currencies)}
             </div>
           )}
           <div className="overflow-x-auto rounded-md border border-line">
@@ -110,6 +110,7 @@ function CompareTable({ data }: { data: CompareOut }) {
       <thead>
         <tr className="border-b border-line bg-panel text-left font-mono text-[10px] uppercase tracking-widest text-dim">
           <th scope="col" className="px-4 py-3">Company</th>
+          <th scope="col" className="px-4 py-3" aria-label="Pillar bars">Q·V·G·R</th>
           {data.rows[0]?.money?.currency !== undefined && <th scope="col" className="px-4 py-3">Cur</th>}
           {compKeys.map(([label]) => (
             <th key={label} scope="col" className="px-4 py-3 text-right">{label}</th>
@@ -124,6 +125,9 @@ function CompareTable({ data }: { data: CompareOut }) {
           <tr key={r.company_id} className={r.found ? "" : "opacity-40"}>
             <td className="px-4 py-3">
               {r.found ? <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink> : <span className="text-dim">{r.company_id} (not found)</span>}
+            </td>
+            <td className="px-4 py-3">
+              <PillarMiniBars p={{ quality: r.quality, value: r.value, growth: r.growth, risk: r.risk }} />
             </td>
             <td className="px-4 py-3 font-mono text-xs text-info">{r.currency ?? "—"}</td>
             {compKeys.map(([label, key, dir]) => {

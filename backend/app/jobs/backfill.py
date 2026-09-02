@@ -1,4 +1,8 @@
-"""Backfill job: sample or all-company ingest. CLI: python -m app.jobs.backfill"""
+"""Backfill job CLI + shared runner. CLI: python -m app.jobs.backfill
+
+Note: since Phase 6A the HTTP endpoint enqueues async jobs (see app/api/jobs.py);
+this module keeps the direct runners used by the worker and the CLI.
+"""
 from __future__ import annotations
 
 import argparse

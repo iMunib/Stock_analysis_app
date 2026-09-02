@@ -14,6 +14,8 @@ TEST_DB = BACKEND_DIR / ".pytest_app.db"
 if TEST_DB.exists():
     TEST_DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB.as_posix()}"
+# Phase 6A: disable the lifespan job worker in tests; drive process_one() manually.
+os.environ["JOBS_WORKER_DISABLED"] = "1"
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
 import app.models  # noqa: F401,E402

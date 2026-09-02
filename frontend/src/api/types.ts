@@ -201,3 +201,79 @@ export interface IngestOut {
   counts: Record<string, number>;
   price_filled: boolean;
 }
+
+export interface RankingsItem {
+  rank: number;
+  company_id: string;
+  name: string | null;
+  country: string | null;
+  currency: string | null;
+  gics_sector: string | null;
+  custom_industry_sheet: string | null;
+  composite: number | null;
+  signal: string | null;
+  method_version: string;
+}
+
+export interface RankingsOut {
+  scope: string;
+  total: number;
+  limit: number;
+  offset: number;
+  items: RankingsItem[];
+  disclaimer: string;
+}
+
+export interface SectorCount {
+  name: string;
+  count: number;
+  usd: number;
+  cad: number;
+}
+
+export interface SectorsOut {
+  custom_industries: SectorCount[];
+  gics_sectors: SectorCount[];
+}
+
+export interface SectorRankingItem {
+  rank: number;
+  company_id: string;
+  name: string | null;
+  composite: number | null;
+  signal: string | null;
+  peer_set_type: string | null;
+  peer_rank: number | null;
+  halal_status: string | null;
+  method_version: string;
+}
+
+export interface SectorRankingsOut {
+  sheet: string;
+  currency: string;
+  count: number;
+  items: SectorRankingItem[];
+  disclaimer: string;
+  note?: string;
+}
+
+export interface JobOut {
+  id: string;
+  kind: string;
+  status: string;
+  payload: Record<string, unknown>;
+  progress_done: number;
+  progress_total: number;
+  error: string | null;
+  provider_stats: Record<string, unknown>;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface JobsListOut {
+  count: number;
+  items: JobOut[];
+  method_version: string;
+  disclaimer: string;
+}

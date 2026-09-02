@@ -15,6 +15,9 @@ from app.services.mapping import MappingError, build_ref, resolve
 
 router = APIRouter(prefix="/api/v1", tags=["phase2"])
 
+# NOTE: POST /api/v1/jobs/backfill is owned by app.api.jobs (Phase 6A: async, 202+poll).
+# This module deliberately does NOT define that path, so there is no route shadowing.
+
 _registry = ProviderRegistry()
 
 
@@ -103,15 +106,7 @@ def tickers_ingest(body: IngestBody, db: Session = Depends(get_session)):
     }
 
 
-@router.post("/jobs/backfill")
-def jobs_backfill(body: BackfillBody):
-    # Run inline by design (personal local app); 'all' is rate-limited by providers.
-    from app.jobs.backfill import run_backfill
-
-    if body.mode == "all" and body.limit > 750:
-        raise HTTPException(status_code=400, detail="limit too large for inline backfill")
-    results = run_backfill(mode=body.mode, limit=body.limit, refresh=body.refresh)
-    return {"mode": body.mode, "processed": len(results), "results": results}
+from app.jobs.backfill import run_backfill  # noqa: F401  (CLI + worker share these runners)
 
 
 @router.get("/coverage")

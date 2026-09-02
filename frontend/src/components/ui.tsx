@@ -2,15 +2,22 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { signalLabel } from "../api/copy";
 
-export function ErrorBanner({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
+export function ErrorBanner({ message, onDismiss, onRetry }: { message: string; onDismiss?: () => void; onRetry?: () => void }) {
   return (
     <div role="alert" className="rounded-md border border-bad/50 bg-bad/10 px-4 py-3 text-sm text-paper flex items-start justify-between gap-4">
       <span>{message}</span>
-      {onDismiss && (
-        <button onClick={onDismiss} className="text-dim hover:text-paper" aria-label="Dismiss error">
-          ✕
-        </button>
-      )}
+      <span className="flex gap-2 shrink-0">
+        {onRetry && (
+          <button onClick={onRetry} className="text-gold hover:underline" aria-label="Retry">
+            Retry
+          </button>
+        )}
+        {onDismiss && (
+          <button onClick={onDismiss} className="text-dim hover:text-paper" aria-label="Dismiss error">
+            ✕
+          </button>
+        )}
+      </span>
     </div>
   );
 }

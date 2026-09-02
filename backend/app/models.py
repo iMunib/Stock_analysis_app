@@ -190,3 +190,21 @@ class HalalFlag(Base):
     tests_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # per-test explanation
     method: Mapped[str] = mapped_column(String(24), nullable=False, default="aaoifi_style_v1")
     computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Job(Base):
+    """Async job row (Phase 6A). Worker thread claims oldest queued, one at a time."""
+
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)  # uuid4
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # backfill | ingest | recompute
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="queued", index=True)  # queued|running|succeeded|failed|cancelled
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_stats_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

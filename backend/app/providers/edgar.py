@@ -16,21 +16,40 @@ from app.config import SEC_USER_AGENT
 
 BASE = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 
+
+def _mark_rate_limited() -> None:
+    global _rate_limited
+    with _lock:
+        _rate_limited += 1
+
 # --- rate limiting (token bucket, 8/s, process-wide) ---
 _lock = threading.Lock()
 _tokens = 8.0
 _last = time.monotonic()
+_last_wait_ms = 0.0
+_rate_limited = 0
 RATE = 8.0
 
 
+def bucket_state() -> dict:
+    """Expose limiter state for job provider_stats (8/s cap unchanged)."""
+    with _lock:
+        return {
+            "tokens_remaining": round(_tokens, 3),
+            "last_token_wait_ms": int(_last_wait_ms),
+            "rate_limited": _rate_limited,
+        }
+
+
 def _throttle() -> None:
-    global _tokens, _last
+    global _tokens, _last, _last_wait_ms
     with _lock:
         now = time.monotonic()
         _tokens = min(RATE, _tokens + (now - _last) * RATE)
         _last = now
         if _tokens < 1:
             sleep = (1 - _tokens) / RATE
+            _last_wait_ms = sleep * 1000.0
             time.sleep(sleep)
             _tokens = 0.0
         else:
@@ -49,10 +68,12 @@ class EdgarClient:
         try:
             with request.urlopen(req, timeout=30) as resp:
                 if resp.status in (403, 429):
+                    _mark_rate_limited()
                     raise RuntimeError(f"SEC back-off: HTTP {resp.status}")
                 return json.loads(resp.read().decode("utf-8"))
         except error.HTTPError as exc:
             if exc.code in (403, 429):
+                _mark_rate_limited()
                 # conservative fixed back-off; caller decides whether to retry once
                 time.sleep(2.0)
             raise
