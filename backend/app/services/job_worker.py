@@ -17,7 +17,7 @@ from sqlalchemy import select
 from app.config import REFRESH_ENABLED, REFRESH_INTERVAL_HOURS
 from app.db import SessionLocal
 from app.jobs.backfill import ingest_ticker
-from app.models import Job
+from app.models import Company, Job
 from app.services import jobs as jobsvc
 from app.providers.edgar import bucket_state
 
@@ -215,7 +215,20 @@ class JobWorker(threading.Thread):
         refresh = bool(payload.get("refresh"))
         registry = ProviderRegistry()
 
-        if mode == "sample":
+        if mode == "company":
+            # Trust sprint C: refresh a single company's price + statements, then
+            # recompute TTM/reverse-DCF provenance locally. No re-ingest of the seed.
+            cid = str(payload.get("company_id") or "").strip()
+            if not cid:
+                jobsvc.fail_job(db, job_id, error_code="BAD_REQUEST", message="company_id required for mode=company")
+                return
+            company = db.get(Company, cid)
+            if company is None:
+                jobsvc.fail_job(db, job_id, error_code="COMPANY_NOT_FOUND", message=f"unknown company_id: {cid}")
+                return
+            ticker = company.ticker or cid.split(":")[1]
+            targets = [ticker + (".TO" if (company.country or "") == "CA" else "")]
+        elif mode == "sample":
             targets = ["AAPL", "MSFT", "RY.TO"]
             if limit > 3:
                 targets += ["XOM", "SHOP.TO"][: limit - 3]

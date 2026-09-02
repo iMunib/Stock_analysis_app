@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,34 @@ from app.schemas import DisclaimerOut
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Trust sprint A2: refuse to serve from a DB whose migration stamp is missing,
+    # diverged, or behind head. Alembic is the only schema authority; we never
+    # create_all or auto-stamp here. Recovery is always manual (see README).
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import text as _text
+
+    from app.db import engine
+
+    cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+    with engine.connect() as conn:
+        try:
+            rows = conn.execute(_text("SELECT version_num FROM alembic_version")).scalars().all()
+        except Exception:
+            rows = []
+    live = rows[0] if len(rows) == 1 else None
+    if len(rows) != 1 or live != head:
+        raise RuntimeError(
+            "Database migration stamp does not match alembic head."
+            f" expected={head!r} found={rows!r}."
+            " Recover manually with: cd backend && set DATABASE_URL=sqlite:///../data/app.db"
+            " && python -m alembic stamp head  (ONLY if the schema was already created by a"
+            " previous create_all boot) or python -m alembic upgrade head."
+            " Never let the app stamp or migrate automatically."
+        )
+
     # Phase 6A: one daemon worker thread for async jobs (backfill/ingest/recompute).
     # Tests set JOBS_WORKER_DISABLED=1 to drive JobWorker.process_one() manually.
     import os

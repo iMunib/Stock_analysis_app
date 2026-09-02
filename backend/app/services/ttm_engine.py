@@ -99,9 +99,49 @@ def compute_and_store_ttm(db: Session, company_id: str) -> FinancialSnapshotTTM:
     tax_rate = 0.21
     nopat = op_inc * (1.0 - tax_rate)
 
+    # Trust sprint B: financials (banks/insurers/credit) use capital-structure
+    # metrics where corporate ROIC is not meaningful.
+    custom = (company.custom_industry_sheet or "").strip().lower()
+    is_financial = (company.gics_sector or "").strip().lower() == "financials" or custom in {
+        "banks",
+        "insurance",
+        "credit services",
+        "capital markets",
+    }
+
     # Invested Capital = Total Debt + Book Equity - Cash
     invested_capital = (total_debt + book_equity - cash) if (total_debt or book_equity) else None
-    roic = (nopat / invested_capital) if (invested_capital and invested_capital > 0) else None
+    ic_to_assets = (invested_capital / total_assets) if (invested_capital and total_assets and total_assets > 0) else None
+    roic = None
+    roic_interpretation = None
+    roic_confidence = None
+    roic_warning_reason = None
+    if is_financial:
+        roic_interpretation = "not_meaningful"
+        roic_warning_reason = "bank_excluded"
+        roic_confidence = "low"
+    elif invested_capital is not None and invested_capital <= 0:
+        roic_interpretation = "negative_capital"
+        roic_warning_reason = "nonpositive_invested_capital"
+        roic_confidence = "low"
+    else:
+        roic = (nopat / invested_capital) if invested_capital else None
+        if roic is not None:
+            if ic_to_assets is not None and ic_to_assets < 0.05:
+                roic_confidence = "low"
+                roic_interpretation = "distorted_low_denominator"
+                roic_warning_reason = "small_invested_capital_denominator"
+            elif roic > 1.0:
+                roic_confidence = "low"
+                roic_interpretation = "distorted_low_denominator"
+                roic_warning_reason = "small_invested_capital_denominator"
+            else:
+                roic_confidence = "high"
+                roic_interpretation = "normal"
+        else:
+            roic_confidence = "low"
+            roic_interpretation = "not_meaningful"
+            roic_warning_reason = "missing_inputs"
 
     # Sloan Accrual Ratio = (Net Income - Operating Cash Flow) / Total Assets
     sloan_accrual = None
@@ -141,7 +181,11 @@ def compute_and_store_ttm(db: Session, company_id: str) -> FinancialSnapshotTTM:
     row.fcf = fcf
     row.nopat = nopat
     row.invested_capital = invested_capital
+    row.invested_capital_to_assets = round(ic_to_assets, 4) if ic_to_assets is not None else None
     row.roic = round(roic, 4) if roic is not None else None
+    row.roic_interpretation = roic_interpretation
+    row.roic_confidence = roic_confidence
+    row.roic_warning_reason = roic_warning_reason
     row.fcf_yield = round(fcf_yield, 4) if fcf_yield is not None else None
     row.ev_ebitda = round(ev_ebitda, 2) if ev_ebitda is not None else None
     row.pe_ratio = round(pe_ratio, 2) if pe_ratio is not None else None

@@ -299,12 +299,27 @@ export default function Screener() {
                           </td>
                           <td className="px-3 py-2 text-right font-mono tabular-nums">
                             {r.roic === null || r.roic === undefined ? (
-                              "—"
+                              r.roic_interpretation === "not_meaningful" ? (
+                                <span className="text-[10px] uppercase text-ink-2" title="Corporate ROIC is not meaningful for banks/insurers — use CET1/ROE instead.">n/m</span>
+                              ) : (
+                                "—"
+                              )
                             ) : (
-                              <span className={r.roic >= 0.2 ? "" : "text-ink-1"}>
+                              <span className={r.roic >= 0.2 && r.roic_confidence !== "low" ? "" : "text-ink-1"}>
                                 {percentish(r.roic)}
-                                {r.roic >= 0.2 && (
+                                {r.roic >= 0.2 && r.roic_confidence !== "low" && (
                                   <Chip tone="positive" size="sm" showIcon={false} className="ml-1.5">ROIC 20%+</Chip>
+                                )}
+                                {r.roic_confidence === "low" && (
+                                  <Chip
+                                    tone="warning"
+                                    size="sm"
+                                    showIcon={false}
+                                    className="ml-1.5"
+                                    title="ROIC distorted — denominator small/buybacks. Evaluate alongside ROE, ROA, and FCF margin."
+                                  >
+                                    distorted
+                                  </Chip>
                                 )}
                               </span>
                             )}

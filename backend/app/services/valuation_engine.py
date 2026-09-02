@@ -172,6 +172,47 @@ def compute_sensitivity_matrix(
     }
 
 
+def get_freshness_status(as_of_date, now, kind: str = "price") -> str:
+    """Trust sprint C: freshness classification for price/statement inputs.
+
+    kind="price": <=1 day green, 2-7 amber, >7 red.
+    kind="statement": <=120 days green, 121-180 amber, >180 red.
+    Returns "unknown" when the date is missing.
+    """
+    if as_of_date is None:
+        return "unknown"
+    from datetime import date as _date, datetime as _datetime
+
+    if isinstance(as_of_date, str):
+        try:
+            as_of_date = _datetime.strptime(str(as_of_date)[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return "unknown"
+    if isinstance(as_of_date, _datetime):
+        as_of_date = as_of_date.date()
+    if not isinstance(as_of_date, _date):
+        return "unknown"
+    if isinstance(now, _datetime):
+        today = now.date()
+    else:
+        today = now
+    days = (today - as_of_date).days
+    if days < 0:
+        days = 0
+    if kind == "statement":
+        if days <= 120:
+            return "green"
+        if days <= 180:
+            return "amber"
+        return "red"
+    # default: market data (price / market cap / EV)
+    if days <= 1:
+        return "green"
+    if days <= 7:
+        return "amber"
+    return "red"
+
+
 def compute_and_store_reverse_dcf(db: Session, company_id: str) -> ValuationReverseDCF:
     """Computes reverse DCF metrics and stores/updates valuation_reverse_dcf row."""
     # Find seed / latest snapshot with price & shares
@@ -263,6 +304,24 @@ def compute_and_store_reverse_dcf(db: Session, company_id: str) -> ValuationReve
     row.expectations_gap = gap
     row.sensitivity_matrix_json = matrix
     row.status = status
+    # Trust sprint C: provenance. The DB's price/market-cap as-of comes from the
+    # snapshot we actually used (seed preferred, else latest annual); the FCF
+    # basis records which statement the baseline came from.
+    price_source_snap = seed if (seed and price == seed.price) else latest_annual
+    price_as_of = getattr(price_source_snap, "as_of_date", None) if price_source_snap else None
+    row.price_as_of = price_as_of
+    row.market_cap_as_of = price_as_of
+    row.enterprise_value_as_of = price_as_of
+    if latest_annual and baseline_fcf == latest_annual.fcf_calc:
+        row.baseline_fcf_basis = "FY"
+        row.baseline_fcf_period_end = latest_annual.as_of_date
+    elif seed and baseline_fcf == seed.fcf_calc:
+        row.baseline_fcf_basis = "FY"
+        row.baseline_fcf_period_end = seed.as_of_date
+    else:
+        row.baseline_fcf_basis = None
+        row.baseline_fcf_period_end = None
+    row.valuation_computed_at = now
 
     db.flush()
     return row

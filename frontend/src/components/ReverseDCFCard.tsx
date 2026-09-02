@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { ValuationOut } from "../api/types";
 import { Card, Chip } from "./layout";
@@ -11,6 +11,26 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
   const [data, setData] = useState<ValuationOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  // Trust sprint C3: local what-if rates (client-side only; defaults from the payload)
+  const [localWacc, setLocalWacc] = useState(0.09);
+  const [localGTerm, setLocalGTerm] = useState(0.025);
+
+  // Trust sprint C: "Refresh Price & Recompute" enqueues a single-company backfill
+  // (202 + poll). The button never mutates scores directly — the worker does.
+  const refreshPrice = async () => {
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      const res = await api.refreshCompanyPrice(companyId);
+      setRefreshMsg(`Queued job ${res.job_id ?? ""} — poll Jobs page`);
+    } catch (err) {
+      setRefreshMsg(err instanceof Error ? err.message : "Could not queue refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +54,32 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
     };
   }, [companyId]);
 
+  // Client-side solve of the same 10y DCF polynomial at the user's local rates.
+  // Pure bisection on [-0.40, 0.60]; no API call, nothing persisted.
+  const localG = useMemo(() => {
+    if (!data || data.baseline_fcf === null || data.baseline_fcf === undefined || data.baseline_fcf <= 0) return null;
+    if (data.current_share_price === null || data.current_share_price === undefined || !data.diluted_shares) return null;
+    if (localWacc <= localGTerm) return null;
+    const fcf0 = data.baseline_fcf;
+    const shares = data.diluted_shares;
+    const netDebt = data.net_debt ?? 0;
+    const evTarget = data.current_share_price * shares + netDebt;
+    const f = (g: number) => {
+      let pv = 0;
+      for (let t = 1; t <= 10; t++) pv += (fcf0 * Math.pow(1 + g, t)) / Math.pow(1 + localWacc, t);
+      const fcf10 = fcf0 * Math.pow(1 + g, 10);
+      pv += (fcf10 * (1 + localGTerm)) / (localWacc - localGTerm) / Math.pow(1 + localWacc, 10);
+      return pv - evTarget;
+    };
+    let lo = -0.4, hi = 0.6;
+    const flo = f(lo), fhi = f(hi);
+    if (flo * fhi > 0) return null;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      if (f(lo) * f(mid) <= 0) hi = mid; else lo = mid;
+    }
+    return (lo + hi) / 2;
+  }, [data, localWacc, localGTerm]);
   if (loading) {
     return (
       <Card padding="md" className="animate-pulse">
@@ -52,6 +98,7 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
   const histCAGR = data.historical_5y_cagr;
   const gap = data.expectations_gap;
   const matrix = data.sensitivity_matrix;
+
 
   const cardTone = isNegativeFCF
     ? "warning"
@@ -74,6 +121,42 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
       }
       subtitle="Solves for 10-year FCF compound growth rate priced into current Enterprise Value"
     >
+      {/* Analytical sprint WS5: Opportunity cost vs index hurdle */}
+      {(() => {
+        const fcf0 = data.baseline_fcf;
+        const shares = data.diluted_shares;
+        if (fcf0 === null || fcf0 === undefined || fcf0 <= 0 || !shares) return null;
+        const marketCap = (data.current_share_price ?? 0) * shares;
+        if (!marketCap) return null;
+        const fcfYield = fcf0 / marketCap; // owner earnings yield vs the 4.5% index baseline
+        const baseline = 0.045;
+        const wacc = data.wacc || 0.09;
+        // Required growth g so that the DCF value of the firm's FCF stream matches
+        // an 8% index compounding promise on the same capital: solve the same
+        // polynomial at implied growth for EV = marketCap x (8% horizon premium).
+        // Practitioner simplification: required g = wacc x (1 + shortfall) where
+        // shortfall = max(0, baseline - fcfYield)/baseline, capped for display.
+        const shortfall = Math.max(0, baseline - fcfYield) / baseline;
+        const requiredG = wacc * (1 + Math.min(shortfall, 1.5));
+        const beats = fcfYield >= baseline;
+        return (
+          <div className="mb-3 rounded-card border border-border bg-bg-2/50 px-3 py-2 text-[11px] leading-relaxed text-ink-1">
+            <span className="font-semibold text-ink-0">Opportunity cost vs index: </span>
+            owner FCF yield {`${(fcfYield * 100).toFixed(1)}%`} vs index baseline 4.5%.{" "}
+            {beats ? (
+              <span className="text-pos">Current cash generation clears the hurdle; growth above {(requiredG * 100).toFixed(1)}% is upside.</span>
+            ) : (
+              <span className="text-warn">
+                If company growth &lt; {(requiredG * 100).toFixed(1)}% (required to cover the yield gap vs an 8% index
+                compounding), holding a low-cost index ETF provides superior risk-adjusted return.
+              </span>
+            )}
+          </div>
+        );
+      })()}      {/* Trust sprint C: method banner */}
+      <div className="mb-4 rounded-card border border-info/30 bg-bg-2/60 px-3 py-2 text-[11px] leading-relaxed text-ink-1">
+        Reverse DCF solves for market-implied growth based on the displayed share price. It is not an analyst forecast.
+      </div>
       {isNegativeFCF ? (
         <div className="p-4 rounded-card bg-warn-weak border border-warn/40 flex items-start gap-3">
           <span className="text-warn font-bold text-base" aria-hidden="true">⚠️</span>
@@ -89,6 +172,31 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
         </div>
       ) : (
         <>
+          {/* Freshness badges + stale-price warning (Trust sprint C) */}
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-[11px] font-mono">
+            <span className="rounded-chip border border-border bg-bg-2 px-2 py-0.5 text-ink-1">
+              Price {data.price_freshness ?? "unknown"}
+              {data.price_as_of ? ` · ${data.price_as_of.slice(0, 10)}` : ""}
+            </span>
+            <span className="rounded-chip border border-border bg-bg-2 px-2 py-0.5 text-ink-1">
+              FCF base {data.baseline_fcf_basis ?? "?"} · {data.fcf_freshness ?? "unknown"}
+              {data.baseline_fcf_period_end ? ` · ${data.baseline_fcf_period_end.slice(0, 10)}` : ""}
+            </span>
+            {data.price_freshness === "red" && (
+              <span role="alert" className="rounded-chip border border-warn/50 bg-warn-weak px-2 py-0.5 text-warn">
+                Valuation based on stale price ({data.price_as_of?.slice(0, 10) ?? "unknown date"}). Implied growth may not reflect current market conditions.
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={refreshPrice}
+              disabled={refreshing}
+              className="rounded-chip border border-accent/60 bg-accent-weak px-2.5 py-0.5 text-accent disabled:opacity-40"
+            >
+              {refreshing ? "Queued…" : "Refresh Price & Recompute"}
+            </button>
+            {refreshMsg && <span className="text-ink-2">{refreshMsg}</span>}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
             {/* Implied Growth */}
             <div className="p-3 bg-bg-2/50 rounded-card border border-border">
@@ -148,6 +256,55 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
                   : "Requires both implied growth and historical CAGR."}
               </p>
             </div>
+          </div>
+
+          {/* Trust sprint C3: local what-if sliders (client-side only, never stored) */}
+          <div className="mb-4 p-3 rounded-card border border-border bg-bg-2/40">
+            <div className="text-xs font-semibold text-ink-0 mb-2 flex items-center justify-between">
+              <span>What-if (local only — never stored, never changes scores)</span>
+              {localG !== null && (
+                <span className="font-mono text-[11px] text-accent">implied g @ your rates: {(localG * 100).toFixed(1)}%</span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="flex items-baseline justify-between text-[11px] text-ink-1">
+                  <span>WACC</span>
+                  <span className="font-mono text-accent">{(localWacc * 100).toFixed(1)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0.06}
+                  max={0.14}
+                  step={0.005}
+                  value={localWacc}
+                  onChange={(e) => setLocalWacc(Number(e.target.value))}
+                  className="mt-1 w-full accent-[var(--accent)]"
+                  aria-label="Discount rate (WACC)"
+                />
+              </label>
+              <label className="block">
+                <span className="flex items-baseline justify-between text-[11px] text-ink-1">
+                  <span>Terminal growth</span>
+                  <span className="font-mono text-accent">{(localGTerm * 100).toFixed(1)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0.0}
+                  max={0.045}
+                  step={0.0025}
+                  value={localGTerm}
+                  onChange={(e) => setLocalGTerm(Number(e.target.value))}
+                  className="mt-1 w-full accent-[var(--accent)]"
+                  aria-label="Terminal growth rate"
+                />
+              </label>
+            </div>
+            {localG === null && (
+              <p className="mt-1.5 text-[10px] text-warn">
+                No solution at these rates — the implied-growth bracket does not cross zero (try a higher WACC or lower terminal growth).
+              </p>
+            )}
           </div>
 
           {/* Sensitivity Matrix */}

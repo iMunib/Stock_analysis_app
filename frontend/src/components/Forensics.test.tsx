@@ -10,6 +10,9 @@ afterEach(() => {
 
 vi.mock("../api/client", () => ({
   api: {
+    schilit: vi.fn().mockResolvedValue({ eqr: 100, triggered_flags: [], flags: [] }),
+    penman: vi.fn().mockResolvedValue({ status: "ok", rnoa: 0.3, flev: 0.5, nbc: 0.05, exclusion: null, leverage_distortion: false }),
+    graham: vi.fn().mockResolvedValue({ graham_number: 100, price: 90, graham_margin_of_safety: 0.11, deep_net_net: false, proxy: true, basis_fiscal_year: 2024, currency: "USD" }),
     forensics: vi.fn().mockResolvedValue({
       company_id: "US:AAPL:US",
       currency: "USD",

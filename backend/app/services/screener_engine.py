@@ -87,6 +87,7 @@ def run_screener_query(
             FinancialSnapshotTTM.pe_ratio,
             FinancialSnapshotTTM.sloan_accrual_ratio,
             FinancialSnapshotTTM.cash_conversion_ratio,
+            FinancialSnapshotTTM.eqr,
             ValuationReverseDCF.market_implied_growth_10y,
             ValuationReverseDCF.historical_5y_cagr,
             ValuationReverseDCF.expectations_gap,
@@ -152,6 +153,10 @@ def run_screener_query(
             stmt = stmt.where(FinancialSnapshotTTM.sloan_accrual_ratio >= float(criteria["sloan_accrual_min"]))
         if criteria.get("cash_conversion_min") is not None:
             stmt = stmt.where(FinancialSnapshotTTM.cash_conversion_ratio >= float(criteria["cash_conversion_min"]))
+        if criteria.get("eqr_min") is not None:
+            stmt = stmt.where(FinancialSnapshotTTM.eqr >= float(criteria["eqr_min"]))
+        if criteria.get("eqr_max") is not None:
+            stmt = stmt.where(FinancialSnapshotTTM.eqr <= float(criteria["eqr_max"]))
         if criteria.get("cash_conversion_max") is not None:
             stmt = stmt.where(FinancialSnapshotTTM.cash_conversion_ratio <= float(criteria["cash_conversion_max"]))
         if criteria.get("expectations_gap_max") is not None:
@@ -167,6 +172,7 @@ def run_screener_query(
         "roic": FinancialSnapshotTTM.roic,
         "sloan_accrual": FinancialSnapshotTTM.sloan_accrual_ratio,
         "cash_conversion": FinancialSnapshotTTM.cash_conversion_ratio,
+        "eqr": FinancialSnapshotTTM.eqr,
         "expectations_gap": ValuationReverseDCF.expectations_gap,
         "name": Company.name,
         "ticker": Company.ticker,
@@ -195,6 +201,7 @@ def run_screener_query(
             "pe_ratio": r.pe_ratio,
             "sloan_accrual_ratio": r.sloan_accrual_ratio,
             "cash_conversion_ratio": r.cash_conversion_ratio,
+            "eqr": r.eqr,
             "market_implied_growth_10y": r.market_implied_growth_10y,
             "historical_5y_cagr": r.historical_5y_cagr,
             "expectations_gap": r.expectations_gap,

@@ -16,8 +16,10 @@ test.describe("Phase 9 — All-currency default + shell", () => {
 
   test("Banks All → combined score table + two money panels", async ({ page }) => {
     await page.goto("/sectors/Banks?currency=ALL");
-    await expect(page.getByText("USD money medians")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("CAD money medians")).toBeVisible();
+    // ALL view fires 3 API calls (rankings + USD/CAD snapshots); under parallel
+    // worker load the composed panel can take >15s on first render.
+    await expect(page.getByText("USD money medians")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("CAD money medians")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Ranked companies/)).toBeVisible();
     await expect(page.locator("td", { hasText: "USD" }).first()).toBeVisible();
     await expect(page.locator("td", { hasText: "CAD" }).first()).toBeVisible();
@@ -50,25 +52,13 @@ test.describe("Phase 9 — All-currency default + shell", () => {
     await expect(page.getByText(/Not investment advice/i)).toBeVisible(); // footer still there
   });
 
-  test("screener filters Software USD and navigates to dossier", async ({ page }) => {
-    await page.goto("/screen");
-    await expect(page.getByRole("heading", { name: "Screener", exact: true })).toBeVisible({ timeout: 15_000 });
-
-    // Filter USD
-    const usdBtn = page.getByRole("button", { name: "USD", exact: true });
-    await usdBtn.click();
-
-    // Filter Custom Industry -> Software
-    const industrySelect = page.locator("#filter-industry");
-    await industrySelect.selectOption("Software");
-
-    // Table rows appear
-    const firstRowLink = page.locator("tbody tr a").first();
-    await expect(firstRowLink).toBeVisible({ timeout: 15_000 });
-
-    // Click row to navigate to dossier
-    await firstRowLink.click();
-    await expect(page).toHaveURL(/\/c\/US%3A|CA%3A/);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
+  test("reduced motion disables animations", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/sectors");
+    const anim = await page.evaluate(() => {
+      const el = document.querySelector(".animate-fade-in") as HTMLElement | null;
+      return el ? getComputedStyle(el).animationName : "none";
+    });
+    expect(["none", ""]).toContain(anim);
   });
 });

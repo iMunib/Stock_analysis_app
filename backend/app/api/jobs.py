@@ -17,10 +17,11 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 
 
 class BackfillBody(BaseModel):
-    mode: str = Field(default="sample", pattern="^(sample|all)$")
+    mode: str = Field(default="sample", pattern="^(sample|all|company)$")
     limit: int = Field(default=5, ge=1, le=750)
     refresh: bool = False
     recompute: bool = False  # opt-in: scores recompute after a successful backfill
+    company_id: str | None = None  # Trust sprint C: single-company "Refresh Price & Recompute"
 
 
 @router.post("/backfill", status_code=202, description="Enqueue a backfill job (async, 202 + poll). Only one backfill may be queued/running at a time.")
@@ -30,7 +31,13 @@ def enqueue_backfill(body: BackfillBody, db: Session = Depends(get_session)):
     job = jobsvc.enqueue(
         db,
         "backfill",
-        payload={"mode": body.mode, "limit": body.limit, "refresh": body.refresh, "recompute": body.recompute},
+        payload={
+            "mode": body.mode,
+            "limit": body.limit,
+            "refresh": body.refresh,
+            "recompute": body.recompute,
+            "company_id": body.company_id,
+        },
     )
     return {"job_id": job.id, "status": job.status, "kind": job.kind, "method_version": METHOD_VERSION, "disclaimer": DISCLAIMER}
 

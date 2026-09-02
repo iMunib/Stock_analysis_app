@@ -24,6 +24,9 @@ import InfoTip from "../components/InfoTip";
 import NarrationPanel from "../components/NarrationPanel";
 import { ForensicCard } from "../components/ForensicCard";
 import { ReverseDCFCard } from "../components/ReverseDCFCard";
+import { PenmanCard } from "../components/PenmanCard";
+import { GrahamCard } from "../components/GrahamCard";
+import CashFlowBridge from "../components/viz/CashFlowBridge";
 import { Card, Chip, Page, StatTile } from "../components/layout";
 import { CompositeGauge, PillarRadar } from "../components/viz";
 
@@ -39,6 +42,16 @@ export default function Dossier() {
   const [watched, setWatched] = useState(getWatchlist().includes(companyId));
   const [gapActionMsg, setGapActionMsg] = useState<string | null>(null);
   const [fetchingGap, setFetchingGap] = useState(false);
+  // Trust sprint E1: data quality & provenance drawer
+  const [dq, setDq] = useState<{ price_freshness?: string; price_as_of?: string; statement_as_of?: string | null; source_count?: number; denominator_confidence?: string | null; warning_count?: number } | null>(null);
+  const [dqOpen, setDqOpen] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.dossierQuality(companyId)
+      .then((d) => { if (!cancelled) setDq(d); })
+      .catch(() => { /* drawer stays hidden on failure */ });
+    return () => { cancelled = true; };
+  }, [companyId]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -398,7 +411,64 @@ export default function Dossier() {
           </Card>
         </section>
 
+        {/* Trust sprint E1: Data Quality & Provenance drawer (lg:col-span-12) */}
+        <div className="lg:col-span-12">
+          <button
+            type="button"
+            onClick={() => setDqOpen((o) => !o)}
+            aria-expanded={dqOpen}
+            className="w-full text-left"
+          >
+            <Card
+              title={
+                <span className="flex items-center gap-2">
+                  Data Quality &amp; Provenance
+                  <span className="font-mono text-[10px] uppercase text-ink-2">{dqOpen ? "hide" : "show"}</span>
+                </span>
+              }
+              padding={dqOpen ? "md" : "sm"}
+            >
+              {dqOpen && dq && (
+                <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                  <div>
+                    <dt className="font-mono uppercase text-ink-2">Price freshness</dt>
+                    <dd className="mt-0.5 font-mono text-ink-0">
+                      {dq.price_freshness ?? "unknown"}
+                      {dq.price_as_of ? ` · ${dq.price_as_of.slice(0, 10)}` : ""}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono uppercase text-ink-2">Statement date</dt>
+                    <dd className="mt-0.5 font-mono text-ink-0">{dq.statement_as_of ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono uppercase text-ink-2">Source count</dt>
+                    <dd className="mt-0.5 font-mono text-ink-0">{dq.source_count ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono uppercase text-ink-2">History warnings</dt>
+                    <dd className="mt-0.5 font-mono text-ink-0">{dq.warning_count ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono uppercase text-ink-2">Denominator confidence</dt>
+                    <dd className="mt-0.5 font-mono text-ink-0">{dq.denominator_confidence ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono uppercase text-ink-2">Migration</dt>
+                    <dd className="mt-0.5 font-mono text-ink-0">alembic-guarded</dd>
+                  </div>
+                </dl>
+              )}
+              {dqOpen && !dq && (
+                <p className="text-xs text-ink-2">Provenance snapshot unavailable.</p>
+              )}
+            </Card>
+          </button>
+        </div>
+
         {/* Mid: Why + Flags (lg:col-span-7) | Similar (lg:col-span-5) */}
+
+{/* Mid: Why + Flags (lg:col-span-7) | Similar (lg:col-span-5) */}
         <Card title="Why this score" className="lg:col-span-7" padding="md">
           {bullets.length === 0 ? (
             <p className="text-sm text-ink-1">Not enough fields on file.</p>
@@ -653,6 +723,40 @@ export default function Dossier() {
         <section aria-label="Forensic and Valuation Suite" className="grid grid-cols-1 gap-4 lg:col-span-12">
           <ForensicCard companyId={companyId} />
           <ReverseDCFCard companyId={companyId} />
+
+        {/* Ittelson cash-flow bridge */}
+        <section aria-label="Cash Flow Bridge" className="lg:col-span-12">
+          <Card title="Cash-flow bridge (Ittelson)" subtitle="How accounting profit becomes (or fails to become) free cash">
+            {(() => {
+              const snap = (data.latest_snapshot ?? {}) as Record<string, unknown>;
+              const num = (k: string) => (typeof snap[k] === "number" ? (snap[k] as number) : null);
+              const ni = num("net_income");
+              const cfo = num("operating_cash_flow");
+              const capex = num("capex");
+              const fcf = num("fcf_calc");
+              if (ni === null || cfo === null) {
+                return <p className="text-xs text-ink-2">Bridge needs net income + operating cash flow on the latest snapshot.</p>;
+              }
+              return (
+                <CashFlowBridge
+                  inputs={{
+                    net_income: ni,
+                    cfo: cfo,
+                    capex: capex,
+                    fcf: fcf,
+                    currency: data.identity.currency,
+                  }}
+                />
+              );
+            })()}
+          </Card>
+        </section>
+
+        {/* Analytical engines: Penman decomposition + Graham floors */}
+        <section aria-label="Economic Engine and Value Floors" className="grid grid-cols-1 gap-4 lg:col-span-12 lg:grid-cols-2">
+          <PenmanCard companyId={companyId} />
+          <GrahamCard companyId={companyId} />
+        </section>
         </section>
 
         {/* Toy DCF and Alerts */}

@@ -11,6 +11,19 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
   const [data, setData] = useState<ForensicsOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [schilit, setSchilit] = useState<{ eqr: number | null; triggered_flags: string[] } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.schilit(companyId)
+      .then((d) => {
+        if (!cancelled) setSchilit(d as { eqr: number | null; triggered_flags: string[] });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +111,12 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
           <span className="text-[10px] px-2 py-0.5 rounded bg-bg-2 text-ink-1 font-mono uppercase">
             Institutional Screener
           </span>
+          {schilit && schilit.eqr !== null && (
+            <span className={`text-[10px] px-2 py-0.5 rounded font-mono uppercase ${schilit.eqr >= 75 ? "bg-pos-weak text-pos" : schilit.eqr >= 50 ? "bg-warn-weak text-warn" : "bg-neg-weak text-neg"}`}
+              title="Earnings Quality Rating: 100 base, −25 per triggered Schilit flag">
+              EQR {schilit.eqr}
+            </span>
+          )}
         </div>
       }
       subtitle="Audit-level accrual quality, cash conversion efficiency, and earnings divergence"
@@ -157,15 +176,30 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
         <div className="p-3 bg-bg-2/50 rounded-card border border-border">
           <div className="text-xs font-medium text-ink-1 mb-1 flex items-center justify-between">
             <span>TTM ROIC</span>
-            {roic !== null && roic >= 0.15 && (
+            {roic !== null && roic >= 0.15 && data.roic_confidence !== "low" && (
               <Chip tone="positive" size="sm">MOAT (≥15%)</Chip>
+            )}
+            {data.roic_confidence === "low" && (
+              <Chip
+                tone="warning"
+                size="sm"
+                title="ROIC distorted — denominator small/buybacks. High ROIC driven by low book equity from share repurchases or cash offsets; evaluate alongside ROE, ROA, and FCF margin."
+              >
+                ROIC distorted
+              </Chip>
+            )}
+            {data.roic_interpretation === "not_meaningful" && (
+              <Chip tone="neutral" size="sm" title="Corporate ROIC is not meaningful for banks/insurers — use CET1, efficiency, and ROE instead.">n/m</Chip>
             )}
           </div>
           <div className="text-lg font-bold font-mono text-ink-0">
             {roic !== null ? `${(roic * 100).toFixed(1)}%` : "—"}
           </div>
           <p className="text-[11px] text-ink-2 mt-0.5 leading-relaxed">
-            NOPAT / (Total Debt + Equity - Cash)
+            NOPAT / (Total Debt + Equity − Cash)
+            {data.roic_confidence === "low" &&
+              " High ROIC reflects low book equity (buybacks/cash offsets), not necessarily operational returns."
+            }
           </p>
         </div>
 

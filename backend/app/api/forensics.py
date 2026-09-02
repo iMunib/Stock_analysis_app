@@ -36,6 +36,8 @@ class ScreenerRunIn(BaseModel):
     cash_conversion_max: float | None = None
     expectations_gap_min: float | None = None
     expectations_gap_max: float | None = None
+    eqr_min: int | None = None
+    eqr_max: int | None = None
     flag_logic: str = "AND"
     sort_by: str = "composite"
     sort_dir: str = "desc"
@@ -57,6 +59,10 @@ class ForensicsOut(BaseModel):
     cash_conversion_ratio: float | None
     cash_conversion_signal: str  # "weak", "healthy", "insufficient_data"
     roic: float | None
+    roic_interpretation: str | None = None  # normal | distorted_low_denominator | negative_capital | not_meaningful
+    roic_confidence: str | None = None  # high | medium | low
+    roic_warning_reason: str | None = None
+    invested_capital_to_assets: float | None = None
     fcf_yield: float | None
     nopat: float | None
     invested_capital: float | None
@@ -76,6 +82,13 @@ class ValuationOut(BaseModel):
     historical_5y_cagr: float | None
     expectations_gap: float | None
     sensitivity_matrix: dict[str, Any] | None
+    # Trust sprint C: freshness provenance
+    price_as_of: str | None = None
+    price_freshness: str | None = None  # green | amber | red | unknown
+    baseline_fcf_period_end: str | None = None
+    baseline_fcf_basis: str | None = None
+    fcf_freshness: str | None = None
+    valuation_computed_at: str | None = None
 
 
 class DeleteCompanyOut(BaseModel):
@@ -141,11 +154,139 @@ def get_company_forensics(company_id: str, db: Session = Depends(get_db)):
         cash_conversion_ratio=ccer,
         cash_conversion_signal=ccer_signal,
         roic=ttm.roic,
+        roic_interpretation=getattr(ttm, "roic_interpretation", None),
+        roic_confidence=getattr(ttm, "roic_confidence", None),
+        roic_warning_reason=getattr(ttm, "roic_warning_reason", None),
+        invested_capital_to_assets=getattr(ttm, "invested_capital_to_assets", None),
         fcf_yield=ttm.fcf_yield,
         nopat=ttm.nopat,
         invested_capital=ttm.invested_capital,
         fcf_vs_ni_history=fcf_vs_ni,
     )
+
+
+@router.get("/companies/{company_id}/quality")
+def get_company_quality(company_id: str, db: Session = Depends(get_db)):
+    """Trust sprint E1: provenance + freshness + denominator confidence for the dossier drawer."""
+    cid = normalize_company_id(company_id) or company_id
+    company = db.get(Company, cid)
+    if not company:
+        raise HTTPException(status_code=404, detail=f"Company {cid} not found")
+
+    from datetime import datetime as _dt
+
+    from app.services.valuation_engine import get_freshness_status
+
+    now = _dt.utcnow()
+    seed = db.execute(
+        select(FinancialSnapshot).where(
+            FinancialSnapshot.company_id == cid,
+            FinancialSnapshot.fiscal_year.is_(None),
+        )
+    ).scalar_one_or_none()
+    latest_annual = db.execute(
+        select(FinancialSnapshot).where(
+            FinancialSnapshot.company_id == cid,
+            FinancialSnapshot.fiscal_year.is_not(None),
+            FinancialSnapshot.period_type == "FY",
+        ).order_by(FinancialSnapshot.fiscal_year.desc())
+    ).scalars().first()
+
+    price_as_of = (seed.as_of_date if seed and seed.as_of_date else (latest_annual.as_of_date if latest_annual else None))
+    price_freshness = get_freshness_status(price_as_of, now, kind="price")
+
+    sources: set[str] = set()
+    if seed and seed.source:
+        sources.add(str(seed.source).split(":")[0])
+    if latest_annual and latest_annual.source:
+        sources.add(str(latest_annual.source).split(":")[0])
+
+    ttm = db.get(FinancialSnapshotTTM, cid)
+    ttm_map = ttm if ttm is not None else compute_and_store_ttm(db, cid)
+    db.commit()
+
+    return {
+        "company_id": cid,
+        "currency": company.currency,
+        "price_freshness": price_freshness,
+        "price_as_of": price_as_of.isoformat() if price_as_of else None,
+        "statement_as_of": latest_annual.as_of_date.isoformat() if latest_annual and latest_annual.as_of_date else None,
+        "source_count": len(sources),
+        "sources": sorted(sources),
+        "denominator_confidence": ttm_map.roic_confidence,
+        "roic_interpretation": ttm_map.roic_interpretation,
+        "roic_warning_reason": ttm_map.roic_warning_reason,
+    }
+
+
+@router.get("/companies/{company_id}/penman")
+def get_company_penman(company_id: str, db: Session = Depends(get_db)):
+    """Analytical sprint WS2: Penman reformulation (RNOA vs naive ROIC, leverage)."""
+    cid = normalize_company_id(company_id) or company_id
+    company = db.get(Company, cid)
+    if not company:
+        raise HTTPException(status_code=404, detail=f"Company {cid} not found")
+
+    from app.services.penman_engine import latest_penman
+
+    row = latest_penman(db, cid)
+    db.commit()
+    if row is None:
+        return {
+            "company_id": cid,
+            "status": "insufficient_data",
+            "rnoa": None,
+            "flev": None,
+            "nbc": None,
+            "nopat": None,
+            "noa": None,
+            "nfo": None,
+            "leverage_distortion": None,
+            "exclusion": None,
+        }
+    return {
+        "company_id": cid,
+        "status": "financial_institution_excluded" if row.exclusion else "ok",
+        "fiscal_year": row.fiscal_year,
+        "rnoa": row.rnoa,
+        "flev": row.flev,
+        "nbc": row.nbc,
+        "nopat": row.nopat,
+        "noa": row.noa,
+        "nfo": row.nfo,
+        "roe_operational_spread": row.roe_operational_spread,
+        "identity_ok": row.identity_ok,
+        "leverage_distortion": row.leverage_distortion,
+        "exclusion": row.exclusion,
+    }
+
+
+@router.get("/companies/{company_id}/schilit")
+def get_company_schilit(company_id: str, db: Session = Depends(get_db)):
+    """Analytical sprint WS3: Schilit shenanigans flags + Earnings Quality Rating."""
+    cid = normalize_company_id(company_id) or company_id
+    company = db.get(Company, cid)
+    if not company:
+        raise HTTPException(status_code=404, detail=f"Company {cid} not found")
+
+    from app.services.forensic_engine import analyze_company
+
+    return analyze_company(db, cid)
+
+
+@router.get("/companies/{company_id}/graham")
+def get_company_graham(company_id: str, db: Session = Depends(get_db)):
+    """Analytical sprint WS4: Graham floors (Graham Number, NCAV, NNWC) + MoS."""
+    cid = normalize_company_id(company_id) or company_id
+    company = db.get(Company, cid)
+    if not company:
+        raise HTTPException(status_code=404, detail=f"Company {cid} not found")
+
+    from app.services.graham_engine import compute_graham
+
+    out = compute_graham(db, cid)
+    db.commit()
+    return out
 
 
 @router.get("/companies/{company_id}/valuation", response_model=ValuationOut)
@@ -161,6 +302,15 @@ def get_company_valuation(company_id: str, db: Session = Depends(get_db)):
         dcf = compute_and_store_reverse_dcf(db, cid)
         db.commit()
 
+    # Trust sprint C: freshness classification for price + FCF basis.
+    from datetime import datetime as _dt
+
+    from app.services.valuation_engine import get_freshness_status
+
+    now = _dt.utcnow()
+    price_freshness = get_freshness_status(dcf.price_as_of, now, kind="price")
+    fcf_freshness = get_freshness_status(dcf.baseline_fcf_period_end, now, kind="statement")
+
     return ValuationOut(
         company_id=cid,
         status=dcf.status,
@@ -174,6 +324,12 @@ def get_company_valuation(company_id: str, db: Session = Depends(get_db)):
         historical_5y_cagr=dcf.historical_5y_cagr,
         expectations_gap=dcf.expectations_gap,
         sensitivity_matrix=dcf.sensitivity_matrix_json,
+        price_as_of=dcf.price_as_of.isoformat() if dcf.price_as_of else None,
+        price_freshness=price_freshness,
+        baseline_fcf_period_end=dcf.baseline_fcf_period_end.isoformat() if dcf.baseline_fcf_period_end else None,
+        baseline_fcf_basis=dcf.baseline_fcf_basis,
+        fcf_freshness=fcf_freshness,
+        valuation_computed_at=dcf.valuation_computed_at.isoformat() if dcf.valuation_computed_at else None,
     )
 
 

@@ -296,6 +296,13 @@ npm run build         # tsc strict + vite → dist/
 # Playwright e2e (UI must be up; chromium via `npx playwright install chromium`)
 npx playwright test app.spec.ts
 
+# Clean-room verification (Trust sprint): prove zero -> migrate -> import -> score -> serve
+cd backend
+python -m app.jobs.verify_clean_room
+
+# Golden ticker battery (Trust sprint D): 10 deterministic trust paths
+python -m pytest tests/test_golden_tickers.py tests/test_zz_golden_tickers.py -v
+
 # Narration (LLM, optional): copy .env.example to .env, set OPENROUTER_API_KEY.
 # Free models only (ids containing :free). Cached in SQLite; "Narration (not the score)".
 # Next fiscal year: Jobs page → "Refresh sample (5 names)" (202 + poll), or set
@@ -344,6 +351,41 @@ The importer is idempotent and skips re-import unless the workbook mtime changed
 - Windows lesson: never rely on case-only overwrites (`compare.tsx` → `Compare.tsx`);
   always two-step rename through a temp name. The `.stale` leftovers have been cleaned.
 
+---
+
+
+### Startup migration guard (Trust sprint A2) — manual recovery
+
+`app.main.lifespan` compares the live DB's `alembic_version` against
+`alembic.ScriptDirectory.get_current_head()` and **refuses to boot** on
+mismatch (missing / behind / diverged). The app never stamps or migrates
+automatically. Recovery:
+
+```powershell
+cd backend
+# If the schema was created out-of-band (e.g. create_all) and matches head:
+$env:DATABASE_URL = 'sqlite:///../data/app.db'
+python -m alembic stamp head
+# If the schema genuinely lacks migrations:
+python -m alembic upgrade head
+```
+
+Then restart the container. `GET /api/v1/system/health/telemetry` shows
+`migration_revision` vs `alembic_head` and `schema_verified` at any time.
+
+### ROIC denominator caveats (Trust sprint B)
+
+`invested_capital = total_debt + book_equity - cash`. Buybacks shrink book
+equity, inflating ROIC for genuinely strong compounders (AAPL-class). Rules:
+- `invested_capital <= 0` -> ROIC NULL, `negative_capital`, confidence low.
+- `invested_capital / total_assets < 0.05` or `roic > 1.0` -> confidence low,
+  `distorted_low_denominator` ("small_invested_capital_denominator").
+- Banks / insurers / credit (GICS Financials or Banks/Insurance/Credit custom
+  sheets) -> ROIC `not_meaningful` / `bank_excluded`; use CET1 + efficiency.
+The UI suppresses the green "ROIC 20%+" / "MOAT (>=15%)" badge whenever
+confidence is low and shows an amber "ROIC distorted" chip instead; the
+ForensicCard tooltip explains the buyback mechanics. Read ROIC alongside
+ROE, ROA and FCF margin.
 ---
 
 ## 11. Roadmap
@@ -478,3 +520,41 @@ Directive delivered in four suites on top of the frozen architecture (no chart l
 - Frontend vitest **86 passed**; `npm run build` 0 errors; Playwright **8 passed + 2 flaky-recovered** (both pass individually).
 - Numeric sanity: AAPL reverse DCF **converges**; implied growth 12.9% at the fixture price $230 (inside the directive's 7-13% band; unit test asserts 7-14% across realistic EVs). The live DB's stored price ($309.35) implies 16.8% - a data-freshness artifact, not an engine error; refresh updates prices and the implied rate moves accordingly.
 - Live screener smoke: `roic_min=0.15` returns ACN 29.7%, MSFT 25.1%, PYPL 17.4%, AAPL 278% (tiny TTM invested capital); CAD-only run keeps every row `currency=CAD` with honest NULLs where quarterly data is not yet ingested.
+
+---
+
+## Analytical Engines Sprint (2026-09-02): Penman, Schilit, Graham + Ittelson bridge
+
+**Backend (`app/services/`):**
+- **`penman_engine.py` (WS2):** reformulated statements — OA/OL/NOA/NFO with the
+  equity identity check (5%-of-assets tolerance, honest `identity_ok` flag for
+  minority-interest gaps), NOPAT (tax clamped 15-30%), RNOA, FLEV, NBC, and the
+  Penman DuPont spread. Materialized in `financial_penman_analysis` (migration
+  `f4c8d9e2a603`) for 396 balance-sheet-complete rows (SEED basis) + 100
+  `financial_institution_excluded` tags. 36 companies carry
+  `leverage_distortion=true` (FLEV > 3 or equity < 10% of assets) — the AAPL-class
+  ROIC distortion is now quantified as leverage, not operations.
+- **`forensic_engine.py` (WS3):** Schilit shenanigans workup. Given the stored
+  schema, CFO-vs-NI decoupling is fully computed (2 consecutive FY years);
+  DSO/inventory/AQI are reported as `data_available: false` rather than guessed.
+  Earnings Quality Rating (EQR 0-100, -25 per triggered flag) is stored on the
+  TTM row and filterable in the screener (`eqr_min`/`eqr_max`). AMD correctly
+  triggers `RED_FLAG_CFO_EARNINGS_DECOUPLING` (EQR 75).
+- **`graham_engine.py` (WS4):** Graham Number = sqrt(22.5 x EPS x BVPS), NCAV and
+  NNWC per share (documented 35%-current-asset proxy where AR/inventory detail is
+  absent), margin-of-safety vs price, `deep_net_net` chip when price < NCAV.
+
+**API:** `GET /api/v1/companies/{id}/penman`, `/schilit`, `/graham`.
+
+**Frontend:**
+- `PenmanCard` — RNOA alongside naive ROIC, FLEV, borrowing cost, spread; amber
+  leverage notice; `financial_institution_excluded` state for banks/insurers.
+- `GrahamCard` — price-vs-floors CSS range meter (NNWC/NCAV/Graham Number ticks),
+  margin-of-safety table, green "Graham Deep Net-Net" chip when applicable.
+- `ForensicCard` — live EQR badge (pos/warn/neg tone by band).
+- `ReverseDCFCard` — "Opportunity cost vs index" panel: owner FCF yield vs the
+  4.5% index baseline and the required growth to clear an 8% compounding hurdle,
+  with the plain-language ETF takeaway.
+- `viz/CashFlowBridge.tsx` (WS5) — pure-SVG Ittelson waterfall (NI -> ±WC -> CFO
+  -> CapEx -> FCF -> debt service -> retained cash) with `role="img"` labeling
+  and a tabular fallback for screen readers. No chart libraries.

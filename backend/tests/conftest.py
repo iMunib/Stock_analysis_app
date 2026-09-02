@@ -33,7 +33,18 @@ def seed_workbook():
 
 @pytest.fixture(scope="session")
 def imported_db(seed_workbook):
+    # Workstream A: create_all is reserved for isolated, ephemeral test DBs where
+    # Alembic is explicitly bypassed. Production never calls it.
     Base.metadata.create_all(bind=engine)
+    # Tests that trigger the app lifespan require a valid migration stamp
+    # (A2 guard) — stamp the ephemeral DB to head without running migrations.
+    from alembic import command as _alembic_command
+    from alembic.config import Config as _AlembicConfig
+
+    _cfg = _AlembicConfig(str(BACKEND_DIR / "alembic.ini"))
+    _cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    _cfg.set_main_option("sqlalchemy.url", f"sqlite:///{TEST_DB.as_posix()}")
+    _alembic_command.stamp(_cfg, "head")
     run_import(force=True, seed_path=seed_workbook)
     yield SessionLocal()
     SessionLocal.close_all()

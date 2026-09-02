@@ -249,13 +249,9 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
     try:
         prof = db.get(CompanyProfile, company_id)
     except Exception:
-        try:
-            from app.db import Base, engine
-            Base.metadata.create_all(bind=engine, tables=[CompanyProfile.__table__])
-            db.rollback()
-            prof = db.get(CompanyProfile, company_id)
-        except Exception:
-            prof = None
+        # Table missing on a pre-migration DB is a deployment bug; do NOT silently
+        # create_all here (Workstream A: migrations are the only schema authority).
+        prof = None
 
     if prof is None and company.ticker:
         try:

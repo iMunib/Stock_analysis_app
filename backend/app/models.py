@@ -274,9 +274,45 @@ class FinancialSnapshotTTM(Base):
     pe_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
     sloan_accrual_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
     cash_conversion_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Trust sprint B: ROIC denominator diagnostics.
+    invested_capital_to_assets: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roic_interpretation: Mapped[str | None] = mapped_column(String(32), nullable=True)  # normal | distorted_low_denominator | negative_capital | not_meaningful
+    roic_confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)  # high | medium | low
+    roic_warning_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)  # small_invested_capital_denominator | nonpositive_invested_capital | bank_excluded
+    dso: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dso_spread: Mapped[float | None] = mapped_column(Float, nullable=True)
+    eqr: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    forensic_flags_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+
+class FinancialSnapshotTTMPrior(Base):
+    """Reserved for historical TTM snapshots (Trust sprint B placeholder)."""
+
+    __abstract__ = True
+
+
+class FinancialPenmanAnalysis(Base):
+    """Penman reformulation: operating vs financing split (Trust/Analytical sprint WS2)."""
+
+    __tablename__ = "financial_penman_analysis"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=False, index=True)
+    fiscal_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_type: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    noa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nfo: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nopat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rnoa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    flev: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nbc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roe_operational_spread: Mapped[float | None] = mapped_column(Float, nullable=True)
+    identity_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    leverage_distortion: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    exclusion: Mapped[str | None] = mapped_column(String(64), nullable=True)  # financial_institution_excluded
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 class ValuationReverseDCF(Base):
     """Deterministic reverse DCF solving for market-implied 10-year FCF growth."""
@@ -285,6 +321,13 @@ class ValuationReverseDCF(Base):
 
     company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), primary_key=True)
     computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Trust sprint C: valuation provenance / freshness.
+    price_as_of: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    market_cap_as_of: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    enterprise_value_as_of: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    baseline_fcf_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    baseline_fcf_basis: Mapped[str | None] = mapped_column(String(8), nullable=True)  # TTM | FY | MRQ
+    valuation_computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     current_share_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     diluted_shares: Mapped[float | None] = mapped_column(Float, nullable=True)
     net_debt: Mapped[float | None] = mapped_column(Float, nullable=True)

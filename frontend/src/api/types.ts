@@ -379,6 +379,10 @@ export interface ForensicsOut {
   cash_conversion_ratio: number | null;
   cash_conversion_signal: "weak" | "healthy" | "insufficient_data";
   roic: number | null;
+  roic_interpretation?: "normal" | "distorted_low_denominator" | "negative_capital" | "not_meaningful" | null;
+  roic_confidence?: "high" | "medium" | "low" | null;
+  roic_warning_reason?: string | null;
+  invested_capital_to_assets?: number | null;
   fcf_yield: number | null;
   nopat: number | null;
   invested_capital: number | null;
@@ -410,6 +414,12 @@ export interface ValuationOut {
   historical_5y_cagr: number | null;
   expectations_gap: number | null;
   sensitivity_matrix: SensitivityMatrix | null;
+  price_as_of?: string | null;
+  price_freshness?: "green" | "amber" | "red" | "unknown" | null;
+  baseline_fcf_period_end?: string | null;
+  baseline_fcf_basis?: "TTM" | "FY" | "MRQ" | null;
+  fcf_freshness?: "green" | "amber" | "red" | "unknown" | null;
+  valuation_computed_at?: string | null;
 }
 
 export interface ScreenerPreset {
@@ -429,6 +439,9 @@ export interface ScreenerRow {
   composite: number | null;
   signal: string | null;
   roic: number | null;
+  roic_interpretation?: string | null;
+  roic_confidence?: string | null;
+  eqr?: number | null;
   fcf_yield: number | null;
   ev_ebitda: number | null;
   pe_ratio: number | null;

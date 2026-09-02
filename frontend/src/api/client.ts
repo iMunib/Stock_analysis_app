@@ -89,6 +89,15 @@ export const api = {
   recomputeCompany: (companyId: string) =>
     post<{ scored: number }>("/api/v1/scores/recompute", { universe: "company_id", company_id: companyId }),
   narrate: (endpoint: string) => post<NarrationResult>(endpoint, undefined, 180_000),
+  penman: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/penman`),
+  schilit: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/schilit`),
+  graham: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/graham`),  dossierQuality: (companyId: string) => get<Record<string, unknown>>(`/api/v1/companies/${enc(companyId)}/quality`),
+  refreshCompanyPrice: (companyId: string) =>
+    post<{ job_id: string; status: string }>(`/api/v1/jobs/backfill`, {
+      mode: "company",
+      company_id: companyId,
+      refresh: true,
+    }),
   swotResearch: (companyId: string) => post<import("./types").SwotOut>(`/api/v1/companies/${enc(companyId)}/research`, undefined, 180_000),
   forensics: (companyId: string) => get<import("./types").ForensicsOut>(`/api/v1/companies/${enc(companyId)}/forensics`),
   valuation: (companyId: string) => get<import("./types").ValuationOut>(`/api/v1/companies/${enc(companyId)}/valuation`),
