@@ -28,6 +28,7 @@ class Company(Base):
     custom_industry_sheet: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     indexes: Mapped[str | None] = mapped_column(JSON, nullable=True)  # ["SP500","TSX_Composite"]
+    universe_tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)  # e.g. ["SP500", "QQQ", "SPUS"]
     in_sp500: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     in_tsx_composite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fiscal_year_end: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -182,6 +183,7 @@ class Score(Base):
     method_version: Mapped[str] = mapped_column(String(8), nullable=False, default="v1")
     computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     inputs_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # which fields were used
+    percentiles_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # sector percentiles across 8 core ratios
 
 
 class HalalFlag(Base):
@@ -398,3 +400,31 @@ class ResearchEvidence(Base):
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)  # high | medium | low
+
+
+class SectorCacheSummary(Base):
+    """Materialized sector summary cache for sub-25ms snapshot responses (Workstream 2).
+
+    Pre-computes sector counts, medians (composite, PE, PB, ROE), signal histogram,
+    and top/bottom rankings per (sector_name, currency).
+    """
+
+    __tablename__ = "sector_cache_summaries"
+    __table_args__ = (
+        UniqueConstraint("sector_name", "currency", name="uq_sector_cache_name_cur"),
+        Index("ix_sector_cache_name", "sector_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sector_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    company_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    scored_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    median_composite: Mapped[float | None] = mapped_column(Float, nullable=True)
+    median_pe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    median_pb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    median_roe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    signal_distribution_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    top_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    bottom_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

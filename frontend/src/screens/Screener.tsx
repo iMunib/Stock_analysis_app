@@ -29,6 +29,10 @@ const SLIDERS: Bounds[] = [
   { key: "sloan_accrual_max", label: "Max Sloan accruals", min: -0.1, max: 0.3, step: 0.01, fmt: percentish },
   { key: "cash_conversion_max", label: "Max cash conversion (red-flag)", min: 0, max: 2, step: 0.05, fmt: (v) => v.toFixed(2) },
   { key: "expectations_gap_max", label: "Max expectations gap", min: -0.3, max: 0.1, step: 0.01, fmt: percentish },
+  { key: "tsy_min", label: "Min Shareholder Yield (TSY)", min: 0, max: 15, step: 0.5, fmt: (v) => `${v.toFixed(1)}%` },
+  { key: "eqr_min", label: "Min Earnings Quality (EQR)", min: 0, max: 100, step: 5, fmt: (v) => `${Math.round(v)}` },
+  { key: "value_pct_min", label: "Min Value Percentile", min: 0, max: 100, step: 5, fmt: (v) => `${Math.round(v)}th` },
+  { key: "quality_pct_min", label: "Min Quality Percentile", min: 0, max: 100, step: 5, fmt: (v) => `${Math.round(v)}th` },
 ];
 
 type SortKey =
@@ -40,13 +44,15 @@ type SortKey =
   | "name"
   | "ticker";
 
-const COLUMNS: { key: SortKey | "signal" | "currency"; label: string; tip?: string }[] = [
+const COLUMNS: { key: SortKey | "signal" | "currency" | "altman" | "tsy"; label: string; tip?: string }[] = [
   { key: "ticker", label: "Ticker" },
   { key: "name", label: "Company" },
   { key: "currency", label: "Cur" },
   { key: "signal", label: "Signal" },
   { key: "composite", label: "Score" },
   { key: "roic", label: "ROIC" },
+  { key: "altman", label: "Altman Z" },
+  { key: "tsy", label: "TSY" },
   { key: "cash_conversion", label: "Cash conv." },
   { key: "sloan_accrual", label: "Sloan" },
   { key: "expectations_gap", label: "Exp. gap" },
@@ -62,19 +68,24 @@ export default function Screener() {
 
   // --- criteria persisted in the URL ---
   const activePreset = params.get("preset") ?? "";
+  const universe = (params.get("universe") ?? "ALL").toUpperCase();
   const currency = (params.get("currency") ?? "ALL").toUpperCase();
   const sortBy = (params.get("sort_by") as SortKey) || "composite";
   const sortDir = params.get("sort_dir") === "asc" ? "asc" : "desc";
 
   const criteria = useMemo(() => {
     const c: Record<string, unknown> = { sort_by: sortBy, sort_dir: sortDir };
+    if (universe !== "ALL") c.universe = universe;
     if (currency === "USD" || currency === "CAD") c.currency = currency;
+    if (params.get("altman_zone") && params.get("altman_zone") !== "ALL") {
+      c.altman_zone = params.get("altman_zone");
+    }
     for (const s of SLIDERS) {
       const raw = params.get(s.key);
       if (raw !== null && raw !== "") c[s.key] = Number(raw);
     }
     return c;
-  }, [currency, sortBy, sortDir, params]);
+  }, [universe, currency, sortBy, sortDir, params]);
 
   useEffect(() => {
     api.screenerPresets().then(setPresets).catch(() => setPresets([]));
@@ -192,6 +203,37 @@ export default function Screener() {
         {sidebarOpen && (
           <Card padding="md" className="space-y-4 self-start">
             <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Index / ETF Universe</p>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { id: "ALL", label: "ALL" },
+                  { id: "SP500", label: "S&P 500" },
+                  { id: "TSX", label: "S&P/TSX" },
+                  { id: "SPUS", label: "SPUS (Halal)" },
+                  { id: "QQQ", label: "QQQ (Nasdaq 100)" },
+                  { id: "VONV", label: "VONV (Value)" },
+                ].map((u) => {
+                  const isMatch = (universe === u.id) || (u.id === "ALL" && !params.get("universe"));
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => patch({ universe: u.id === "ALL" ? null : u.id })}
+                      aria-pressed={isMatch}
+                      className={`rounded-chip border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                        isMatch
+                          ? "border-accent text-accent bg-accent-weak font-semibold"
+                          : "border-border text-ink-1 hover:bg-bg-2"
+                      }`}
+                    >
+                      {u.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Currency</p>
               <div className="flex gap-1.5">
                 {["ALL", "USD", "CAD"].map((c) => (
@@ -205,6 +247,27 @@ export default function Screener() {
                     }`}
                   >
                     {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Altman Z Zone</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {["ALL", "Safe", "Grey", "Distress"].map((zone) => (
+                  <button
+                    key={zone}
+                    type="button"
+                    onClick={() => patch({ altman_zone: zone === "ALL" ? null : zone })}
+                    aria-pressed={(params.get("altman_zone") || "ALL") === zone}
+                    className={`rounded-chip border px-2.5 py-0.5 text-[11px] ${
+                      (params.get("altman_zone") || "ALL") === zone
+                        ? "border-accent text-accent bg-accent-weak font-semibold"
+                        : "border-border text-ink-1 hover:text-ink-0"
+                    }`}
+                  >
+                    {zone}
                   </button>
                 ))}
               </div>
@@ -325,6 +388,34 @@ export default function Screener() {
                             )}
                           </td>
                           <td className="px-3 py-2 text-right font-mono tabular-nums">
+                            {r.altman_zone ? (
+                              <span
+                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                  r.altman_zone === "Safe"
+                                    ? "bg-pos-weak text-pos"
+                                    : r.altman_zone === "Grey"
+                                      ? "bg-warn-weak text-warn"
+                                      : r.altman_zone === "Distress"
+                                        ? "bg-neg-weak text-neg"
+                                        : "bg-surface-2 text-ink-2"
+                                }`}
+                              >
+                                {r.altman_z != null ? r.altman_z.toFixed(2) : r.altman_zone}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono tabular-nums">
+                            {r.total_shareholder_yield != null ? (
+                              <span className={(r.total_shareholder_yield || 0) > 0 ? "text-pos font-medium" : "text-ink-1"}>
+                                {r.total_shareholder_yield.toFixed(1)}%
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono tabular-nums">
                             {r.cash_conversion_ratio === null || r.cash_conversion_ratio === undefined ? (
                               "—"
                             ) : (
@@ -383,7 +474,8 @@ function presetSummary(p: ScreenerPreset): string {
 export function exportCsv(rows: ScreenerResult["items"]): void {
   const header = [
     "company_id", "ticker", "name", "currency", "gics_sector", "custom_industry",
-    "composite", "signal", "roic", "fcf_yield", "ev_ebitda", "pe_ratio",
+    "composite", "signal", "roic", "penman_rnoa", "penman_flev", "altman_z", "altman_zone",
+    "total_shareholder_yield", "eqr", "fcf_yield", "ev_ebitda", "pe_ratio",
     "sloan_accrual_ratio", "cash_conversion_ratio", "market_implied_growth_10y",
     "historical_5y_cagr", "expectations_gap", "dcf_status",
   ];
@@ -395,7 +487,8 @@ export function exportCsv(rows: ScreenerResult["items"]): void {
   const body = rows.map((r) =>
     line([
       r.company_id, r.ticker, r.name, r.currency, r.gics_sector, r.custom_industry,
-      r.composite, r.signal, r.roic, r.fcf_yield, r.ev_ebitda, r.pe_ratio,
+      r.composite, r.signal, r.roic, r.rnoa, r.flev, r.altman_z, r.altman_zone,
+      r.total_shareholder_yield, r.eqr, r.fcf_yield, r.ev_ebitda, r.pe_ratio,
       r.sloan_accrual_ratio, r.cash_conversion_ratio, r.market_implied_growth_10y,
       r.historical_5y_cagr, r.expectations_gap, r.dcf_status,
     ]),

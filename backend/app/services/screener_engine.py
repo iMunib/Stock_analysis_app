@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Company, FinancialSnapshotTTM, Score, ScreenerPreset, ValuationReverseDCF
+from app.models import Company, FinancialPenmanAnalysis, FinancialSnapshotTTM, Score, ScreenerPreset, ValuationReverseDCF
 
 SYSTEM_PRESETS = [
     {
@@ -40,6 +40,41 @@ SYSTEM_PRESETS = [
             "expectations_gap_max": -0.04,
         },
     },
+    {
+        "id": "spus_halal_compounders",
+        "name": "SPUS Halal Compounders",
+        "criteria": {
+            "universe": "SPUS",
+            "composite_min": 6.5,
+            "altman_zone": "Safe",
+            "roic_min": 0.15,
+        },
+    },
+    {
+        "id": "qqq_secular_leaders",
+        "name": "QQQ Secular Leaders",
+        "criteria": {
+            "universe": "QQQ",
+            "fcf_yield_min": 0.02,
+            "roic_min": 0.18,
+        },
+    },
+    {
+        "id": "deep_value_graham",
+        "name": "Deep Value & Graham Floors",
+        "criteria": {
+            "universe": "VONV",
+            "ev_ebitda_max": 12.0,
+        },
+    },
+    {
+        "id": "forensic_clean_sheet",
+        "name": "Forensic Clean Sheet",
+        "criteria": {
+            "eqr_min": 80,
+            "sloan_accrual_max": 0.05,
+        },
+    },
 ]
 
 
@@ -56,6 +91,9 @@ def ensure_system_presets(db: Session) -> list[ScreenerPreset]:
                 is_system_preset=True,
             )
             db.add(row)
+        else:
+            row.name = p["name"]
+            row.criteria_json = p["criteria"]
         presets.append(row)
     db.commit()
     return presets
@@ -79,8 +117,10 @@ def run_screener_query(
             Company.currency,
             Company.gics_sector,
             Company.custom_industry_sheet,
+            Company.universe_tags,
             Score.composite,
             Score.signal,
+            Score.percentiles_json,
             FinancialSnapshotTTM.roic,
             FinancialSnapshotTTM.fcf_yield,
             FinancialSnapshotTTM.ev_ebitda,
@@ -92,12 +132,26 @@ def run_screener_query(
             ValuationReverseDCF.historical_5y_cagr,
             ValuationReverseDCF.expectations_gap,
             ValuationReverseDCF.status.label("dcf_status"),
+            FinancialPenmanAnalysis.rnoa,
+            FinancialPenmanAnalysis.flev,
         )
         .outerjoin(Score, Score.company_id == Company.company_id)
         .outerjoin(FinancialSnapshotTTM, FinancialSnapshotTTM.company_id == Company.company_id)
         .outerjoin(ValuationReverseDCF, ValuationReverseDCF.company_id == Company.company_id)
+        .outerjoin(FinancialPenmanAnalysis, FinancialPenmanAnalysis.company_id == Company.company_id)
         .where(Company.is_deleted == False)
     )
+
+    # Index / ETF Universe filter
+    universe = criteria.get("universe")
+    if universe and universe != "ALL":
+        u_upper = universe.upper()
+        if u_upper == "SP500":
+            stmt = stmt.where(or_(Company.in_sp500 == True, Company.universe_tags.like('%"SP500"%')))
+        elif u_upper in ("TSX", "TSX_COMPOSITE", "S&P/TSX"):
+            stmt = stmt.where(or_(Company.in_tsx_composite == True, Company.universe_tags.like('%"TSX"%'), Company.country == "CA"))
+        else:
+            stmt = stmt.where(Company.universe_tags.like(f"%{u_upper}%"))
 
     # Currency filter
     currency = criteria.get("currency")
@@ -182,10 +236,41 @@ def run_screener_query(
     stmt = stmt.order_by(order_expr)
 
     # Execute
-    results = db.execute(stmt.limit(limit).offset(offset)).all()
+    results = db.execute(stmt.limit(limit * 2).offset(offset)).all()
+
+    from app.services.distress_engine import compute_distress
 
     items = []
     for r in results:
+        pcts = r.percentiles_json or {}
+        tsy = pcts.get("total_shareholder_yield")
+        val_pcts = [pcts[k] for k in ("pe_ratio", "ev_to_ebitda", "pb_ratio") if pcts.get(k) is not None]
+        val_pct = round(sum(val_pcts) / len(val_pcts), 1) if val_pcts else None
+        qual_pcts = [pcts[k] for k in ("roe", "roic_or_rnoa", "fcf_margin") if pcts.get(k) is not None]
+        qual_pct = round(sum(qual_pcts) / len(qual_pcts), 1) if qual_pcts else None
+
+        try:
+            distress = compute_distress(db, r.company_id)
+            altman_z = distress.get("active_z")
+            altman_zone = distress.get("zone")
+        except Exception:  # noqa: BLE001
+            altman_z = None
+            altman_zone = "Unknown"
+
+        # Apply newly added screener criteria filters:
+        if criteria.get("altman_zone") and criteria["altman_zone"] != "ALL":
+            if altman_zone != criteria["altman_zone"]:
+                continue
+        if criteria.get("tsy_min") is not None:
+            if tsy is None or tsy < float(criteria["tsy_min"]):
+                continue
+        if criteria.get("value_pct_min") is not None:
+            if val_pct is None or val_pct < float(criteria["value_pct_min"]):
+                continue
+        if criteria.get("quality_pct_min") is not None:
+            if qual_pct is None or qual_pct < float(criteria["quality_pct_min"]):
+                continue
+
         items.append({
             "company_id": r.company_id,
             "ticker": r.ticker,
@@ -193,9 +278,17 @@ def run_screener_query(
             "currency": r.currency,
             "gics_sector": r.gics_sector,
             "custom_industry": r.custom_industry_sheet,
+            "universe_tags": r.universe_tags or [],
             "composite": r.composite,
             "signal": r.signal,
             "roic": r.roic,
+            "rnoa": r.rnoa,
+            "flev": r.flev,
+            "altman_z": altman_z,
+            "altman_zone": altman_zone,
+            "total_shareholder_yield": tsy,
+            "value_percentile": val_pct,
+            "quality_percentile": qual_pct,
             "fcf_yield": r.fcf_yield,
             "ev_ebitda": r.ev_ebitda,
             "pe_ratio": r.pe_ratio,
@@ -207,6 +300,8 @@ def run_screener_query(
             "expectations_gap": r.expectations_gap,
             "dcf_status": r.dcf_status,
         })
+        if len(items) >= limit:
+            break
 
     return {
         "items": items,

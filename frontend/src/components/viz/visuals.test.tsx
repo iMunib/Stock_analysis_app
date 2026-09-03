@@ -5,6 +5,8 @@ import { CompositeGauge } from "./CompositeGauge";
 import { MiniPillarBars } from "./MiniPillarBars";
 import { PillarRadar } from "./PillarRadar";
 import { Sparkline } from "./Sparkline";
+import { PercentileMatrix } from "./PercentileMatrix";
+import { AltmanZGauge } from "./AltmanZGauge";
 
 describe("SVG Visualization Primitives", () => {
   afterEach(cleanup);
@@ -68,6 +70,66 @@ describe("SVG Visualization Primitives", () => {
       expect(screen.getByText("G")).toBeDefined();
       expect(screen.getByText("R")).toBeDefined();
       expect(screen.getByRole("img", { name: /Pillars: Q 7\.0, V 8\.0, G —, R 6\.0/i })).toBeDefined();
+    });
+  });
+
+  describe("PercentileMatrix", () => {
+    it("renders percentile bars and accessible table", () => {
+      const mockPercentiles = {
+        pe_ratio: 85.0,
+        ev_to_ebitda: 72.5,
+        pb_ratio: 60.0,
+        roe: 92.0,
+        roic_or_rnoa: 88.0,
+        fcf_margin: 78.0,
+        net_debt_to_ebitda: 35.0,
+        total_shareholder_yield: 65.0,
+      };
+      render(<PercentileMatrix percentiles={mockPercentiles} sectorName="Technology" currency="USD" />);
+      expect(screen.getByText(/Sector Percentile Matrix/i)).toBeDefined();
+      expect(screen.getAllByText(/P\/E Multiple/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText(/85\.0th pct/i)).toBeDefined();
+    });
+
+    it("handles null percentiles gracefully", () => {
+      render(<PercentileMatrix percentiles={null} />);
+      expect(screen.getByText(/Sector percentile ranks not materialized/i)).toBeDefined();
+    });
+  });
+
+  describe("AltmanZGauge", () => {
+    it("renders distress gauge with needle and zones", () => {
+      const mockDistress = {
+        model: "service_z_double_prime" as const,
+        active_z: 4.82,
+        zone: "Safe" as const,
+        is_bank: false,
+        bank_warning: null,
+        factors: { x1_wc_ta: 0.2, x2_re_ta: 0.4, x3_ebit_ta: 0.15, x4_bve_tl: 1.8 },
+        thresholds: { distress_cutoff: 1.1, safe_cutoff: 2.6 },
+        interpretation: "Negligible probability of financial distress over a 2-year horizon.",
+      };
+      render(<AltmanZGauge distress={mockDistress as any} />);
+      expect(screen.getByText(/Altman Solvency & Distress/i)).toBeDefined();
+      expect(screen.getAllByText("4.82").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Safe/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole("img", { name: /Altman Z-Score Meter/i })).toBeDefined();
+    });
+
+    it("displays bank exclusion badge when company is a bank", () => {
+      const mockBank = {
+        model: "service_z_double_prime" as const,
+        active_z: null,
+        zone: "Excluded" as const,
+        status: "financial_institution_excluded",
+        is_bank: true,
+        bank_warning: "Financial institution excluded.",
+        factors: {},
+        thresholds: { distress_cutoff: 1.1, safe_cutoff: 2.6 },
+        interpretation: "Banks and insurers are excluded from Altman Z modeling.",
+      };
+      render(<AltmanZGauge distress={mockBank as any} />);
+      expect(screen.getByText(/Bank \/ Insurer Excluded/i)).toBeDefined();
     });
   });
 });

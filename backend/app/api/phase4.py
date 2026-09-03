@@ -18,6 +18,7 @@ from app.db import get_session
 from app.models import Company, CompanyProfile, HalalFlag, Score
 from app.services.scoring import DISCLAIMER, METHOD_VERSION
 from app.services.scoring_service import enrich_with_seed, load_universe
+from app.services.ids import normalize_company_id
 
 router = APIRouter(prefix="/api/v1", tags=["phase4"])
 
@@ -200,6 +201,7 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
             "as_of_fy": score.as_of_fy,
             "computed_at": score.computed_at,
             "method_version": score.method_version,
+            "percentiles": score.percentiles_json,
         }
     hf = db.get(HalalFlag, company_id)
     halal_payload = None
@@ -529,63 +531,10 @@ def sector_snapshot(sheet: str, response: Response, currency: str | None = Query
     if not currency or currency.upper() not in ("USD", "CAD"):
         raise HTTPException(status_code=400, detail="currency query parameter is required (USD or CAD)")
     cur = currency.upper()
+    from app.services.sector_cache import get_cached_sector_snapshot
 
-    stmt = (
-        select(Company, Score)
-        .outerjoin(Score, Score.company_id == Company.company_id)
-        .where(
-            (func.lower(Company.custom_industry_sheet) == sheet.lower())
-            | (func.lower(Company.gics_sector) == sheet.removeprefix("GICS_").lower())
-        )
-        .where(Company.currency == cur)
-    )
-    rows = list(db.execute(stmt).all())
-
-    # one row per company_id (Extra/GICS placements never enter `companies`)
-    seen: set[str] = set()
-    uniq: list[tuple[Company, Score | None]] = []
-    for c, s in rows:
-        if c.company_id not in seen:
-            seen.add(c.company_id)
-            uniq.append((c, s))
-
-    hist: dict[str, int] = {}
-    composites: list[float] = []
-    for _c, s in uniq:
-        if s is not None and s.composite is not None:
-            composites.append(s.composite)
-            hist[s.signal or "unknown"] = hist.get(s.signal or "unknown", 0) + 1
-        else:
-            hist["score_missing"] = hist.get("score_missing", 0) + 1
-
-    scored = [(c, s) for c, s in uniq if s is not None and s.composite is not None]
-    scored.sort(key=lambda cs: cs[1].composite, reverse=True)
-
-    def _entry(c, s):
-        return {"company_id": c.company_id, "name": c.name, "composite": s.composite, "signal": s.signal}
-
-    universe = {u["company_id"]: u for u in load_universe(db)}
-    med_rows = []
-    for c, _s in uniq:
-        entry = universe.get(c.company_id)
-        if entry:
-            med_rows.append(enrich_with_seed(entry["snapshot"], entry.get("seed_snapshot")))
-
-    return SectorSnapshotOut(
-        sheet=sheet,
-        currency=cur,
-        companies=len(uniq),
-        scored=len(scored),
-        signal_histogram=hist,
-        median_composite=_median(composites),
-        median_pe=_median([r.get("pe_calc") for r in med_rows if r.get("pe_calc") is not None]),
-        median_pb=_median([r.get("pb_calc") for r in med_rows if r.get("pb_calc") is not None]),
-        median_roe=_median([r.get("roe_calc") for r in med_rows if r.get("roe_calc") is not None]),
-        top=[_entry(c, s) for c, s in scored[:10]],
-        bottom=[_entry(c, s) for c, s in scored[-10:][::-1]],
-        method_version=METHOD_VERSION,
-        disclaimer=DISCLAIMER,
-    )
+    data = get_cached_sector_snapshot(db, sheet, cur)
+    return SectorSnapshotOut(**data)
 
 
 # --------------------------------------------------------------------------
@@ -624,3 +573,27 @@ def research_meta(response: Response, db: Session = Depends(get_session)):
         last_recompute=last.isoformat() if last else None,
         disclaimer=DISCLAIMER,
     )
+
+
+@router.get("/companies/{company_id}/financials/common-size")
+def get_company_common_size(
+    company_id: str,
+    years: int = Query(default=5, ge=1, le=10),
+    db: Session = Depends(get_session),
+):
+    """Koyfin-style common-size financial statements (Master Directive WS2)."""
+    cid = normalize_company_id(company_id) or company_id
+    from app.services.common_size_engine import compute_common_size
+
+    try:
+        return compute_common_size(db, cid, years=years)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/etfs/top-cohorts")
+def get_etf_top_cohorts(db: Session = Depends(get_session)):
+    """Retrieves top 5 companies by composite score across major ETF / index cohorts."""
+    from app.services.etf_resolver import get_etf_cohort_top5
+
+    return get_etf_cohort_top5(db)

@@ -25,7 +25,23 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):  # pragma: no cover
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA busy_timeout=15000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA cache_size=-64000")   # 64 MB page cache
+        cursor.execute("PRAGMA temp_store=MEMORY")
+        # Performance indexes — skip silently if tables don't exist yet (fresh DB / tests).
+        for ddl in [
+            "CREATE INDEX IF NOT EXISTS idx_snapshots_comp_fy "
+            "ON financial_snapshots(company_id, fiscal_year, period_type)",
+            "CREATE INDEX IF NOT EXISTS idx_scores_peer "
+            "ON scores(peer_group, composite_score)",
+            "CREATE INDEX IF NOT EXISTS idx_placements_comp_sheet "
+            "ON placements(company_id, sheet_name)",
+        ]:
+            try:
+                cursor.execute(ddl)
+            except Exception:  # noqa: BLE001 — table may not exist yet (test DB / first boot)
+                pass
         cursor.close()
 
 

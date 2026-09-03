@@ -52,6 +52,7 @@ def _score_payload(db: Session, row: Score, hf: HalalFlag | None) -> dict:
         "method_version": row.method_version,
         "computed_at": row.computed_at,
         "inputs_json": row.inputs_json,
+        "percentiles": row.percentiles_json,
         "halal": (
             {"status": hf.status, "method": hf.method, "tests": hf.tests_json} if hf else None
         ),
@@ -99,13 +100,32 @@ def sector_rankings(
         stmt = stmt.where(HalalFlag.status == "halal_candidate")
     rows = db.execute(stmt.order_by(Score.composite.desc()).limit(limit)).all()
 
-    from app.services.scoring_service import enrich_with_seed, load_universe
+    comp_ids = [c.company_id for s, c, h in rows]
+    snaps_map: dict[str, dict] = {}
+    if comp_ids:
+        from app.models import FinancialSnapshot
+        from app.services.scoring_service import enrich_with_seed, snapshot_dict
 
-    universe = {u["company_id"]: u for u in load_universe(db)}
+        all_snaps = db.execute(
+            select(FinancialSnapshot).where(
+                FinancialSnapshot.company_id.in_(comp_ids),
+                FinancialSnapshot.period_type == "FY",
+            )
+        ).scalars().all()
+        by_comp: dict[str, list[FinancialSnapshot]] = {}
+        for sp in all_snaps:
+            by_comp.setdefault(sp.company_id, []).append(sp)
+
+        for cid in comp_ids:
+            c_snaps = by_comp.get(cid, [])
+            dated = sorted((r for r in c_snaps if r.fiscal_year is not None), key=lambda r: r.fiscal_year, reverse=True)
+            seed_row = next((r for r in c_snaps if r.fiscal_year is None), None)
+            cur_snap = dated[0] if dated else seed_row
+            snaps_map[cid] = enrich_with_seed(snapshot_dict(cur_snap), snapshot_dict(seed_row))
+
     items = []
     for i, (s, c, h) in enumerate(rows):
-        entry = universe.get(c.company_id)
-        enriched = enrich_with_seed(entry["snapshot"], entry.get("seed_snapshot")) if entry else {}
+        enriched = snaps_map.get(c.company_id, {})
         items.append(
             {
                 "rank": i + 1,

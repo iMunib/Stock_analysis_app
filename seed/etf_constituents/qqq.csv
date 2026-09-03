@@ -1,0 +1,78 @@
+ticker,name,sector
+AAPL,Apple Inc.,Information Technology
+MSFT,Microsoft Corporation,Information Technology
+NVDA,NVIDIA Corporation,Information Technology
+AMZN,"Amazon.com, Inc.",Consumer Discretionary
+META,"Meta Platforms, Inc.",Communication Services
+GOOGL,Alphabet Inc. Class A,Communication Services
+GOOG,Alphabet Inc. Class C,Communication Services
+TSLA,"Tesla, Inc.",Consumer Discretionary
+AVGO,Broadcom Inc.,Information Technology
+COST,Costco Wholesale Corporation,Consumer Staples
+ASML,ASML Holding N.V.,Information Technology
+PEP,"PepsiCo, Inc.",Consumer Staples
+CSCO,"Cisco Systems, Inc.",Information Technology
+AZN,AstraZeneca PLC,Health Care
+LIN,Linde plc,Materials
+TMUS,"T-Mobile US, Inc.",Communication Services
+ADI,"Analog Devices, Inc.",Information Technology
+AMD,"Advanced Micro Devices, Inc.",Information Technology
+QCOM,QUALCOMM Incorporated,Information Technology
+TXN,Texas Instruments Incorporated,Information Technology
+NFLX,"Netflix, Inc.",Communication Services
+AMAT,"Applied Materials, Inc.",Information Technology
+INTU,Intuit Inc.,Information Technology
+ISRG,"Intuitive Surgical, Inc.",Health Care
+BKNG,Booking Holdings Inc.,Consumer Discretionary
+HON,Honeywell International Inc.,Industrials
+VRTX,Vertex Pharmaceuticals Incorporated,Health Care
+REGN,"Regeneron Pharmaceuticals, Inc.",Health Care
+PANW,"Palo Alto Networks, Inc.",Information Technology
+LRCX,Lam Research Corporation,Information Technology
+MDLZ,"Mondelez International, Inc.",Consumer Staples
+ADP,"Automatic Data Processing, Inc.",Information Technology
+KLAC,KLA Corporation,Information Technology
+GILD,"Gilead Sciences, Inc.",Health Care
+SNPS,"Synopsys, Inc.",Information Technology
+CDNS,"Cadence Design Systems, Inc.",Information Technology
+NXPI,NXP Semiconductors N.V.,Information Technology
+MAR,"Marriott International, Inc.",Consumer Discretionary
+CSX,CSX Corporation,Industrials
+ORLY,"O Reilly Automotive, Inc.",Consumer Discretionary
+CTAS,Cintas Corporation,Industrials
+MELI,"MercadoLibre, Inc.",Consumer Discretionary
+ABNB,"Airbnb, Inc.",Consumer Discretionary
+PCAR,PACCAR Inc,Industrials
+LULU,Lululemon Athletica Inc.,Consumer Discretionary
+KDP,Keurig Dr Pepper Inc.,Consumer Staples
+MNST,Monster Beverage Corporation,Consumer Staples
+PAYX,"Paychex, Inc.",Information Technology
+ROST,"Ross Stores, Inc.",Consumer Discretionary
+CPRT,"Copart, Inc.",Industrials
+ADSK,"Autodesk, Inc.",Information Technology
+DXCM,"DexCom, Inc.",Health Care
+FTNT,"Fortinet, Inc.",Information Technology
+IDXX,"IDEXX Laboratories, Inc.",Health Care
+FAST,Fastenal Company,Industrials
+BIIB,Biogen Inc.,Health Care
+VRSK,"Verisk Analytics, Inc.",Industrials
+EXC,Exelon Corporation,Utilities
+EA,Electronic Arts Inc.,Communication Services
+ODFL,"Old Dominion Freight Line, Inc.",Industrials
+WBD,"Warner Bros. Discovery, Inc.",Communication Services
+CTSH,Cognizant Technology Solutions Corporation,Information Technology
+GEHC,GE HealthCare Technologies Inc.,Health Care
+CSGP,"CoStar Group, Inc.",Real Estate
+ON,ON Semiconductor Corporation,Information Technology
+ANSS,"ANSYS, Inc.",Information Technology
+BKR,Baker Hughes Company,Energy
+TEAM,Atlassian Corporation,Information Technology
+CDW,CDW Corporation,Information Technology
+MCHP,Microchip Technology Incorporated,Information Technology
+TTWO,"Take-Two Interactive Software, Inc.",Communication Services
+ZS,"Zscaler, Inc.",Information Technology
+FSLR,"First Solar, Inc.",Information Technology
+DLTR,"Dollar Tree, Inc.",Consumer Discretionary
+ILMN,"Illumina, Inc.",Health Care
+WBA,"Walgreens Boots Alliance, Inc.",Consumer Staples
+SIRI,Sirius XM Holdings Inc.,Communication Services

@@ -1,0 +1,124 @@
+ticker,name,sector
+MSFT,Microsoft Corporation,Information Technology
+AAPL,Apple Inc.,Information Technology
+NVDA,NVIDIA Corporation,Information Technology
+GOOGL,Alphabet Inc. Class A,Communication Services
+GOOG,Alphabet Inc. Class C,Communication Services
+AMZN,"Amazon.com, Inc.",Consumer Discretionary
+META,"Meta Platforms, Inc.",Communication Services
+TSLA,"Tesla, Inc.",Consumer Discretionary
+AVGO,Broadcom Inc.,Information Technology
+LLY,Eli Lilly and Company,Health Care
+JNJ,Johnson & Johnson,Health Care
+PG,Procter & Gamble Company,Consumer Staples
+MRK,"Merck & Co., Inc.",Health Care
+ABBV,AbbVie Inc.,Health Care
+COST,Costco Wholesale Corporation,Consumer Staples
+CRM,"Salesforce, Inc.",Information Technology
+AMD,"Advanced Micro Devices, Inc.",Information Technology
+ADBE,Adobe Inc.,Information Technology
+PEP,"PepsiCo, Inc.",Consumer Staples
+NFLX,"Netflix, Inc.",Communication Services
+QCOM,QUALCOMM Incorporated,Information Technology
+INTC,Intel Corporation,Information Technology
+TXN,Texas Instruments Incorporated,Information Technology
+AMAT,"Applied Materials, Inc.",Information Technology
+INTU,Intuit Inc.,Information Technology
+NOW,"ServiceNow, Inc.",Information Technology
+ISRG,"Intuitive Surgical, Inc.",Health Care
+AMGN,Amgen Inc.,Health Care
+BKNG,Booking Holdings Inc.,Consumer Discretionary
+LRCX,Lam Research Corporation,Information Technology
+ADI,"Analog Devices, Inc.",Information Technology
+MDT,Medtronic plc,Health Care
+KLAC,KLA Corporation,Information Technology
+PANW,"Palo Alto Networks, Inc.",Information Technology
+SNPS,"Synopsys, Inc.",Information Technology
+CDNS,"Cadence Design Systems, Inc.",Information Technology
+REGN,"Regeneron Pharmaceuticals, Inc.",Health Care
+VRTX,Vertex Pharmaceuticals Incorporated,Health Care
+EQIX,"Equinix, Inc.",Real Estate
+CSX,CSX Corporation,Industrials
+CTAS,Cintas Corporation,Industrials
+ORCL,Oracle Corporation,Information Technology
+TMO,Thermo Fisher Scientific Inc.,Health Care
+ABT,Abbott Laboratories,Health Care
+UNP,Union Pacific Corporation,Industrials
+HON,Honeywell International Inc.,Industrials
+COP,ConocoPhillips,Energy
+EOG,"EOG Resources, Inc.",Energy
+SLB,Schlumberger Limited,Energy
+TJX,"The TJX Companies, Inc.",Consumer Discretionary
+NKE,"NIKE, Inc.",Consumer Discretionary
+SBUX,Starbucks Corporation,Consumer Discretionary
+PFE,Pfizer Inc.,Health Care
+BMY,Bristol-Myers Squibb Company,Health Care
+GILD,"Gilead Sciences, Inc.",Health Care
+CVS,CVS Health Corporation,Health Care
+CI,The Cigna Group,Health Care
+ELV,"Elevance Health, Inc.",Health Care
+HUM,Humana Inc.,Health Care
+BDX,"Becton, Dickinson and Company",Health Care
+BSX,Boston Scientific Corporation,Health Care
+ZTS,Zoetis Inc.,Health Care
+SYK,Stryker Corporation,Health Care
+EW,Edwards Lifesciences Corporation,Health Care
+IDXX,"IDEXX Laboratories, Inc.",Health Care
+DXCM,"DexCom, Inc.",Health Care
+A,"Agilent Technologies, Inc.",Health Care
+IQV,IQVIA Holdings Inc.,Health Care
+MTD,Mettler-Toledo International Inc.,Health Care
+WST,"West Pharmaceutical Services, Inc.",Health Care
+ALGN,"Align Technology, Inc.",Health Care
+RMD,ResMed Inc.,Health Care
+BA,The Boeing Company,Industrials
+CAT,Caterpillar Inc.,Industrials
+DE,Deere & Company,Industrials
+GE,General Electric Company,Industrials
+RTX,RTX Corporation,Industrials
+LMT,Lockheed Martin Corporation,Industrials
+NOC,Northrop Grumman Corporation,Industrials
+GD,General Dynamics Corporation,Industrials
+EMR,Emerson Electric Co.,Industrials
+ETN,Eaton Corporation plc,Industrials
+ITW,Illinois Tool Works Inc.,Industrials
+PH,Parker-Hannifin Corporation,Industrials
+PCAR,PACCAR Inc,Industrials
+NSC,Norfolk Southern Corporation,Industrials
+FDX,FedEx Corporation,Industrials
+UPS,"United Parcel Service, Inc.",Industrials
+WM,"Waste Management, Inc.",Industrials
+RSG,"Republic Services, Inc.",Industrials
+FAST,Fastenal Company,Industrials
+ODFL,"Old Dominion Freight Line, Inc.",Industrials
+CPRT,"Copart, Inc.",Industrials
+VRSK,"Verisk Analytics, Inc.",Industrials
+INFO,IHS Markit Ltd.,Industrials
+EFX,Equifax Inc.,Industrials
+XYL,Xylem Inc.,Industrials
+ROK,"Rockwell Automation, Inc.",Industrials
+AME,"AMETEK, Inc.",Industrials
+TT,Trane Technologies plc,Industrials
+CARR,Carrier Global Corporation,Industrials
+OTIS,Otis Worldwide Corporation,Industrials
+LIN,Linde plc,Materials
+APD,"Air Products and Chemicals, Inc.",Materials
+SHW,The Sherwin-Williams Company,Materials
+ECL,Ecolab Inc.,Materials
+FCX,Freeport-McMoRan Inc.,Materials
+NEM,Newmont Corporation,Materials
+CTVA,"Corteva, Inc.",Materials
+DOW,Dow Inc.,Materials
+DD,"DuPont de Nemours, Inc.",Materials
+PPG,"PPG Industries, Inc.",Materials
+ALB,Albemarle Corporation,Materials
+FMC,FMC Corporation,Materials
+IFF,International Flavors & Fragrances Inc.,Materials
+MLM,"Martin Marietta Materials, Inc.",Materials
+VMC,Vulcan Materials Company,Materials
+NUE,Nucor Corporation,Materials
+STLD,"Steel Dynamics, Inc.",Materials
+PKG,Packaging Corporation of America,Materials
+IP,International Paper Company,Materials
+BALL,Ball Corporation,Materials
+AMCR,Amcor plc,Materials

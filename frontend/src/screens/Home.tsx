@@ -155,9 +155,18 @@ export default function Home() {
 
           <Card padding="sm">
             <p className="text-xs text-ink-1 leading-relaxed">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2 font-semibold">Needs history · </span>
-              {meta.growth_null} of {meta.scored} scored names lack the 3+ years of history needed to compute growth,
-              so their composite is reduced. That is the honest state of the data, not a bug.
+              {meta.growth_null <= meta.scored * 0.15 ? (
+                <>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-pos font-semibold">Universe History Active · </span>
+                  {meta.scored - meta.growth_null} of {meta.scored} scored companies ({Math.round(((meta.scored - meta.growth_null) / (meta.scored || 1)) * 100)}%) have multi-year statement history with active growth scoring.
+                </>
+              ) : (
+                <>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2 font-semibold">Needs history · </span>
+                  {meta.growth_null} of {meta.scored} scored names lack the 3+ years of history needed to compute growth,
+                  so their composite is reduced. That is the honest state of the data, not a bug.
+                </>
+              )}
             </p>
           </Card>
 
@@ -291,6 +300,8 @@ export default function Home() {
       </Grid>
 
       <TopTableAll />
+
+      <ETFCohortsSection />
 
       <section aria-label="Watchlist" className="space-y-3">
         <div className="flex items-center justify-between border-b border-border pb-2">
@@ -432,5 +443,95 @@ function TopTableAll() {
         </ul>
       )}
     </Card>
+  );
+}
+
+function ETFCohortsSection() {
+  const [cohorts, setCohorts] = useState<import("../api/types").ETFCohortsOut | null>(null);
+
+  useEffect(() => {
+    api.etfTopCohorts().then(setCohorts).catch(() => setCohorts(null));
+  }, []);
+
+  if (!cohorts) return null;
+
+  const cohortsMeta = [
+    {
+      key: "SPUS",
+      title: "SPUS — Sharia Core",
+      subtitle: "Top 5 S&P 500 Halal Compounders",
+      universe: "SPUS",
+    },
+    {
+      key: "QQQ",
+      title: "QQQ — Nasdaq 100",
+      subtitle: "Top 5 Non-Financial Tech Leaders",
+      universe: "QQQ",
+    },
+    {
+      key: "VONV",
+      title: "VONV — Value Floor",
+      subtitle: "Top 5 Russell 1000 Deep Value",
+      universe: "VONV",
+    },
+  ];
+
+  return (
+    <section aria-label="Active ETF Cohorts" className="space-y-3">
+      <div className="flex items-center justify-between border-b border-border pb-2">
+        <div>
+          <h2 className="font-heading text-xl font-semibold text-ink-0">ETF Universe Leaders</h2>
+          <p className="text-xs text-ink-2 mt-0.5">Top-ranked constituents across monitored index cohorts</p>
+        </div>
+        <Link to="/screen" className="text-xs font-mono text-accent hover:underline">
+          Open screener →
+        </Link>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {cohortsMeta.map((c) => {
+          const items = cohorts[c.key] || [];
+          return (
+            <Card
+              key={c.key}
+              title={c.title}
+              subtitle={c.subtitle}
+              action={
+                <Link
+                  to={`/screen?universe=${c.universe}`}
+                  className="text-xs font-mono text-accent hover:underline"
+                >
+                  Screen all →
+                </Link>
+              }
+              padding="sm"
+            >
+              {items.length === 0 ? (
+                <p className="text-xs text-ink-2 py-3 text-center">No constituents scored yet.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {items.map((it, idx) => (
+                    <li key={it.company_id} className="flex items-center justify-between gap-2 py-2 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-[10px] text-ink-2 w-4 shrink-0">#{idx + 1}</span>
+                        <div className="min-w-0">
+                          <CompanyLink companyId={it.company_id} className="font-medium truncate block">
+                            {it.ticker}
+                          </CompanyLink>
+                          <span className="text-[10px] text-ink-2 truncate block">{it.name}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Score value={it.composite} />
+                        <SignalBadge signal={it.signal} small />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </section>
   );
 }

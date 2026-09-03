@@ -1,0 +1,56 @@
+ticker,name,sector
+BRK.B,Berkshire Hathaway Inc.,Financials
+JPM,JPMorgan Chase & Co.,Financials
+XOM,Exxon Mobil Corporation,Energy
+JNJ,Johnson & Johnson,Health Care
+PG,Procter & Gamble Company,Consumer Staples
+UNH,UnitedHealth Group Incorporated,Health Care
+HD,"The Home Depot, Inc.",Consumer Discretionary
+CVX,Chevron Corporation,Energy
+MRK,"Merck & Co., Inc.",Health Care
+ABBV,AbbVie Inc.,Health Care
+BAC,Bank of America Corporation,Financials
+KO,The Coca-Cola Company,Consumer Staples
+WMT,Walmart Inc.,Consumer Staples
+CSCO,"Cisco Systems, Inc.",Information Technology
+DIS,The Walt Disney Company,Communication Services
+VZ,Verizon Communications Inc.,Communication Services
+PFE,Pfizer Inc.,Health Care
+CMCSA,Comcast Corporation,Communication Services
+WFC,Wells Fargo & Company,Financials
+T,AT&T Inc.,Communication Services
+INTC,Intel Corporation,Information Technology
+COP,ConocoPhillips,Energy
+DHR,Danaher Corporation,Health Care
+TXN,Texas Instruments Incorporated,Information Technology
+PM,Philip Morris International Inc.,Consumer Staples
+IBM,International Business Machines Corporation,Information Technology
+NEE,"NextEra Energy, Inc.",Utilities
+UNP,Union Pacific Corporation,Industrials
+CAT,Caterpillar Inc.,Industrials
+HON,Honeywell International Inc.,Industrials
+LOW,"Lowe Companies, Inc.",Consumer Discretionary
+BMY,Bristol-Myers Squibb Company,Health Care
+AMGN,Amgen Inc.,Health Care
+BA,The Boeing Company,Industrials
+DE,Deere & Company,Industrials
+GS,"The Goldman Sachs Group, Inc.",Financials
+BLK,"BlackRock, Inc.",Financials
+MS,Morgan Stanley,Financials
+CVS,CVS Health Corporation,Health Care
+MDT,Medtronic plc,Health Care
+GE,General Electric Company,Industrials
+SCHW,The Charles Schwab Corporation,Financials
+LMT,Lockheed Martin Corporation,Industrials
+CB,Chubb Limited,Financials
+CI,The Cigna Group,Health Care
+TFC,Truist Financial Corporation,Financials
+USB,U.S. Bancorp,Financials
+PNC,"The PNC Financial Services Group, Inc.",Financials
+MET,"MetLife, Inc.",Financials
+PRU,"Prudential Financial, Inc.",Financials
+AIG,"American International Group, Inc.",Financials
+ALL,The Allstate Corporation,Financials
+TRV,"The Travelers Companies, Inc.",Financials
+HIG,"The Hartford Financial Services Group, Inc.",Financials
+AFL,Aflac Incorporated,Financials

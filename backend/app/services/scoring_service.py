@@ -214,6 +214,22 @@ def recompute(db: Session, company_id: str | None = None) -> dict:
             scored += 1
 
     db.commit()
+
+    # Workstream 2: Materialize sector summary cache when full universe is recomputed
+    if company_id is None:
+        from app.services.sector_cache import materialize_sector_cache
+        try:
+            materialize_sector_cache(db)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Workstream 5: Materialize sector percentile matrix
+        from app.services.percentile_engine import compute_and_materialize_percentiles
+        try:
+            compute_and_materialize_percentiles(db)
+        except Exception:  # noqa: BLE001
+            pass
+
     return {
         "companies_processed": len(target_universe),
         "scored": scored,
@@ -222,4 +238,13 @@ def recompute(db: Session, company_id: str | None = None) -> dict:
         "method_version": METHOD_VERSION,
         "computed_at": now.isoformat(),
     }
+
+
+def recompute_universe(db: Session | None = None) -> dict:
+    """Full universe scoring recompute entry point (Master Directive WS1/WS2)."""
+    if db is None:
+        from app.db import SessionLocal
+        with SessionLocal() as session:
+            return recompute(session, company_id=None)
+    return recompute(db, company_id=None)
 

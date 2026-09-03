@@ -289,6 +289,19 @@ def get_company_graham(company_id: str, db: Session = Depends(get_db)):
     return out
 
 
+@router.get("/companies/{company_id}/practitioner")
+def get_company_practitioner_analytics(company_id: str, db: Session = Depends(get_db)):
+    """Master Directive WS3: Practitioner analytical engines (Penman, Fridson, Graham, Malkiel, Housel)."""
+    cid = normalize_company_id(company_id) or company_id
+    company = db.get(Company, cid)
+    if not company:
+        raise HTTPException(status_code=404, detail=f"Company {cid} not found")
+
+    from app.services.practitioner_engine import get_practitioner_analytics
+
+    return get_practitioner_analytics(db, cid)
+
+
 @router.get("/companies/{company_id}/valuation", response_model=ValuationOut)
 def get_company_valuation(company_id: str, db: Session = Depends(get_db)):
     cid = normalize_company_id(company_id) or company_id

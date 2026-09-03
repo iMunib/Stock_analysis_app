@@ -26,6 +26,10 @@ custom industry groupings and QC notes. He needed:
    missing data — never inventing numbers.
 4. An AAOIFI-style halal *flag* (informational, never a filter).
 5. A fast local UI to search, read dossiers, compare up to 8 names, and browse sectors.
+6. ETF Universe cohort tags (S&P 500, TSX, SPUS Halal, QQQ Nasdaq 100, VONV Russell 1000 Value) with segmented cohort screening.
+7. Deep Forensic Accounting Suite: Altman Z/Z''-Score, Schilit Earnings Quality, Sloan Accruals, Penman Reformulation, and 8-variable Beneish M-Score ($M \le -1.78$) with automatic bank/insurance capital structure exclusion.
+8. True Shareholder Yield factoring in Stock-Based Compensation (SBC) dilution offset and tracking organic float shrink.
+9. Two-page institutional research factsheet print memo (`@media print`).
 
 **Business constraints (locked):**
 
@@ -558,3 +562,204 @@ Directive delivered in four suites on top of the frozen architecture (no chart l
 - `viz/CashFlowBridge.tsx` (WS5) — pure-SVG Ittelson waterfall (NI -> ±WC -> CFO
   -> CapEx -> FCF -> debt service -> retained cash) with `role="img"` labeling
   and a tabular fallback for screen readers. No chart libraries.
+
+---
+
+## Universal Analytics & Decision-Quality Desk Sprint (2026-09-02)
+
+Delivers all 7 workstreams of the Master Directive:
+
+### 1. Data Completeness Engine & Full History Backfill (WS1)
+- **CLI:** `python -m app.jobs.run_full_backfill --limit 720 --concurrency 2`
+  * Options: `--limit N`, `--concurrency 1-4`, `--resume` (skips companies with >= 4 FY rows), `--country US|CA`, `--dry-run`.
+  * SEC EDGAR `companyfacts` integration: ~365-day annual duration filter; inserts distinct `period_type='FY'` rows (`source='sec_companyfacts'`).
+  * Canadian TSX equities: Yahoo Finance annual periods with 0.2s polite delay.
+  * Seed protection: rows with `source='Sector_Financials_Final_Owner.xlsx'` are permanently read-only and never overwritten.
+  * Automatic trigger: `scoring_service.recompute_universe()` runs upon backfill completion.
+
+### 2. Database Performance & Timeout Hardening (WS2)
+- **Materialization (`sector_cache_summaries` table, Alembic `a7b8c9d0e1f2`):**
+  * Materializes sector counts, medians (composite, PE, PB, ROE), signal histogram, and top/bottom rankings per `(sector_name, currency)`.
+  * `GET /api/v1/sectors/{sheet}/snapshot` rewritten to read directly from cache: **< 5ms response time** (target < 25ms).
+  * `GET /api/v1/sectors/{sheet}/rankings?currency=ALL` optimized with scoped snapshot queries: **~10ms response time** (target < 250ms).
+- **SQLite Pragmas & Indexing:**
+  * WAL mode asserted, `busy_timeout=15000` (15s), `synchronous=NORMAL`, `cache_size=-64000` (64MB memory cache), `temp_store=MEMORY`.
+  * Indexes on `financial_snapshots(company_id, fiscal_year, period_type)`, `scores(peer_group, composite_score)`, `placements(company_id, sheet_name)`.
+- **Nginx Timeout Hardening:**
+  * `frontend/nginx.conf` hardened: `proxy_connect_timeout 30s; proxy_read_timeout 120s; proxy_send_timeout 60s;` (90s for `/api/v1/companies/`).
+
+### 3. Practitioner Literature Analytical Suite (WS3)
+- **`app/services/practitioner_engine.py`:**
+  * **Stephen Penman:** ROE = RNOA + FLEV x (RNOA - NBC), NOA, NFO, buyback distortion guardrail (`ROIC > 50%` and `FLEV > 2.5`).
+  * **Howard Schilit:** Accrual decoupling, DSO surge, inventory buildup, capitalized expenses, 0–100 Earnings Quality Rating (EQR).
+  * **Martin Fridson Reality Check:** EBITDA Reality Spread = EBITDA - CFO (positive & widening for 2 years -> "Aggressive accrual capitalization"), Fixed-Charge Coverage = (EBIT + Lease) / (Interest + Lease).
+  * **Benjamin Graham Floors:** Graham Number, NCAV per share, NNWC per share, margin of safety.
+  * **Burton Malkiel & JL Collins Index Hurdle:** 8.0% long-term nominal index hurdle, Required FCF Growth = 8.0% - FCF Yield.
+  * **Morgan Housel & Ramit Sethi Behavioral Guard:** Anti-FOMO 2-sigma valuation stretch warning, 60-Second Executive Safety Verdict (Moat Durability, Solvency Runway, Valuation Safety -> Pass/Caution).
+- **API:** `GET /api/v1/companies/{id}/practitioner`.
+
+### 4. Zero-NPM Interactive Stock Chart (WS4)
+- **`frontend/src/components/viz/TradingViewChart.tsx`:**
+  * Official TradingView technical widget embed in zero-npm iframe.
+  * Dynamic symbol formatting: `US:AAPL:US` -> `NASDAQ:AAPL`, `US:JNJ:US` -> `NYSE:JNJ`, `CA:RY:TSX` -> `TSX:RY`.
+  * Dark theme matching design tokens (`#0d1117`), daily interval, technical toolbar.
+  * Resilient SVG sparkline fallback with graceful empty state on iframe timeout or offline.
+  * Expandable "Price Chart" section with toggle in `Dossier.tsx`.
+
+### 5. Thomas Ittelson Cash Flow Bridge (WS5)
+- **`frontend/src/components/viz/CashFlowBridge.tsx`:**
+  * Pure SVG + CSS tokens (no npm chart libraries).
+  * Horizontal waterfall flow: Net Income -> +/- Working Capital -> CFO -> -CapEx -> FCF -> -Debt Repayment -> -Dividends/Buybacks -> Delta Cash.
+  * Accessible tabular fallback.
+
+### 6. Fact-Grounded Stock Research AI Assistant (WS6)
+- **Backend (`app/api/chat.py`):**
+  * `POST /api/v1/companies/{id}/chat`
+  * Assembles deterministic facts JSON strictly from local DB (identity, financials, scores, flags, Penman, Schilit, Graham, Malkiel, Housel).
+  * Adversarial equity analyst system prompt; 45s timeout guard; OpenRouter free-tier models (`meta-llama/llama-3.3-70b-instruct:free` with `mistralai/mistral-small-24b-instruct-2501:free` fallback).
+  * Hard invariant: AI cannot alter or overwrite fundamental numbers; currency is always explicitly attached to money.
+- **Frontend (`StockChatDrawer.tsx`):**
+  * Slide-over drawer on Dossier screen: "💬 AI Chat" hero action.
+  * Starter prompt chips ("Biggest accounting red flags?", "Dividend covered by real cash flow?", "Justify beating S&P 500 index?", "ROIC vs Penman RNOA").
+  * Markdown rendering with disclaimer.
+
+### 7. Verification & Golden Ticker Battery (WS7)
+- **Clean-room verification:** `python -m app.jobs.verify_clean_room` passes exit code 0 against an isolated fresh database.
+- **Golden tickers (`pytest tests/test_golden_tickers.py`):** 13 deterministic golden paths (MSFT history trust, AAPL ROIC/leverage decomposition, PYPL commercial metrics, RY Canadian bank CAD isolation, KITS symbol resolution, BABA ADR currency suppression, AFL insurer path, IIP.UN sparse data, AMD ingest state machine, invalid ticker graceful failure, Penman AAPL vs RY, Schilit MSFT clean, Graham MSFT floor).
+- **Latency verified:** Sector snapshot < 5ms (cached), rankings < 15ms.
+- **Backend tests:** 100% green across all 175 tests.
+- **Frontend tests:** 100% green across all 86 vitest unit tests.
+- **Playwright E2E:** 100% green across all 19 tests.
+- **TypeScript build:** `npm run build` exit code 0.
+
+---
+
+## Universal History Backfill & Competitor Fundamental Solidification (2026-09-02)
+
+### 1. Full Universe Multi-Year Statement Ingestion (WS1)
+- Ingested **9,601 dated annual (FY) statements** across all 720 companies in the universe (10,321 total snapshots including immutable owner seed rows).
+- Scored companies with Growth pillar populated rose from 8 to **682** (well exceeding directive threshold of 650).
+- "Growth not scored" warning on Home/Desk resolved; Desk now displays "Universe History Active (95%)".
+
+### 2. Koyfin-Style Common-Size Financial Statement Engine (WS2)
+- **Engine:** `app/services/common_size_engine.py`
+  * Normalizes income statement items to Total Revenue and balance sheet items to Total Assets.
+  * Multi-year margin drift detection: flags `MARGIN_CONTRACTION` (> 300 bps operating margin drop over 3 years) and `COST_CREEP` (> 200 bps OpEx/Revenue expansion over 3 years).
+- **API:** `GET /api/v1/companies/{id}/financials/common-size?years=5`
+
+### 3. GuruFocus-Style Solvency & Distress Engine (Altman Z-Score) (WS3)
+- **Engine:** `app/services/distress_engine.py`
+  * **Manufacturing / Capital-Intensive:** 5-factor Altman Z-Score: $Z = 1.2 X_1 + 1.4 X_2 + 3.3 X_3 + 0.6 X_4 + 0.999 X_5$. Safe > 2.99, Grey 1.81-2.99, Distress < 1.81.
+  * **Service / Tech / Asset-Light:** 4-factor Altman Z''-Score: $Z'' = 6.56 X_1 + 3.26 X_2 + 6.72 X_3 + 1.05 X_4$. Safe > 2.60, Grey 1.10-2.60, Distress < 1.10.
+  * **Financial Exclusions:** Automatically tags banks and insurers with `status: "financial_institution_excluded"`.
+- **API:** Integrated into `GET /api/v1/companies/{id}/practitioner` payload under `distress_analysis`.
+
+### 4. Simply Wall St-Style Dilution & Total Shareholder Yield (WS4)
+- **Engine:** `app/services/capital_return_engine.py`
+  * Diluted share count tracking: 1-Year Delta % and 3-Year CAGR %.
+  * Flags `SHAREHOLDER_DILUTION` (> +2.0% annual expansion) and `ACCELERATED_BUYBACKS` (< -2.0% annual contraction).
+  * Net Buyback Yield (%) + Dividend Yield (%) = **Total Shareholder Yield (TSY)**.
+- **API:** Integrated into `GET /api/v1/companies/{id}/practitioner` payload under `shareholder_yield`.
+
+### 5. Koyfin-Style Sector Percentile Matrix Engine (WS5)
+- **Engine:** `app/services/percentile_engine.py`
+  * Computes 0–100 percentile rank within same-currency sector peer group across 8 core ratios: P/E, EV/EBITDA, P/B, ROE, ROIC/RNOA, FCF Margin, Net Debt / EBITDA, and Total Shareholder Yield.
+  * Valuation multiples inverted so lower ratios map to higher percentiles.
+  * Materialized into `scores.percentiles_json` (Alembic migration `b8c9d0e1f2a3`) for instantaneous reads on `/dossier` and `/score`.
+
+---
+
+## Institutional UI/UX Research Desk & Visual Synthesis Pass (2026-09-02)
+
+### 1. Dossier Workspace Architecture & Tab Navigation
+- **8 Dedicated Research Tabs:**
+  1. `Overview`: 60s verdict, Composite Gauge, 4-Pillar Radar/Bars, StatTiles, Executive Safety Verdict.
+  2. `Financials`: Annual & TTM statements, Common-Size Income Statement & Balance Sheet (% of Revenue/Assets), YoY growth deltas, Ittelson SVG Cash Flow Bridge.
+  3. `Valuation & Expectations`: Reverse DCF sensitivity matrix, Graham Intrinsic Floors (Graham Number, NCAV, NNWC), Peer percentile comparisons, Index Opportunity Cost Hurdle (Malkiel/Collins 8% benchmark).
+  4. `Forensics & Solvency`: Penman Operating-vs-Financing Decomposition ($RNOA$ vs $FLEV$), Schilit Forensic Red Flags, Earnings Quality Rating (EQR), Altman Z/Z'' Distress Gauge.
+  5. `Capital Allocation`: Diluted Share Count CAGR (1Y/3Y), Shareholder Dilution vs Buyback flags, Dividend Yield, Net Buyback Yield, Total Shareholder Yield (TSY).
+  6. `Technicals & Chart`: Responsive TradingView interactive chart iframe with SVG sparkline fallback.
+  7. `Filings & Sources`: Provenance table, SEC EDGAR 10-K/20-F links with verified CIK, SEDAR+ links, fetch timestamps.
+  8. `Thesis & Notes`: LocalStorage scratchpad, bull/bear checklist, print-friendly export view.
+- **URL-Persisted State:** Persists tab state via search params (`/c/{id}?tab=financials`), supporting browser forward/back buttons.
+
+### 2. Pure SVG Visual Analytical Primitives
+- `PercentileMatrix.tsx`: Koyfin-style percentile distribution bars with quartile tick lines (25th, median 50th, 75th), tokenized gradient fills, and accessible screen-reader table alternative.
+- `AltmanZGauge.tsx`: Multi-factor distress meter with dynamic pointer needle, segmented color zones (Distress < 1.1, Grey 1.1–2.6, Safe > 2.6), and explicit bank/insurer exclusion banner.
+- `CommonSizeTable.tsx`: Multi-year common-size % and raw statements with automated margin drift alert badges (`COST_CREEP`, `GROSS_MARGIN_COMPRESSION`).
+- `CapitalReturnCard.tsx`: Diluted share count CAGR (1Y/3Y), buyback contraction vs dilution tags, Total Shareholder Yield (TSY) card, and pure SVG multi-year share count bar chart.
+
+### 3. Interactive Technical Chart & Fact-Grounded AI Drawer
+- `TradingViewChart.tsx`: Official TradingView widget embed matching dark theme tokens (`#0d1117`), with responsive SVG sparkline fallback.
+- `StockChatDrawer.tsx`: Fact-grounded AI research assistant slide-over drawer triggered by `"💬 Ask Analyst AI"`, 4 starter chips, disclaimer enforcement, and accessible hidden state transitions.
+
+### 4. Screener & Sector Navigation Polish
+- `Screener.tsx`: Materialized Altman Z Zone buttons (`ALL`, `Safe`, `Grey`, `Distress`), slider bounds for TSY %, EQR, and Percentiles.
+- **Institutional CSV Export:** Materialized export columns: `altman_z`, `altman_zone`, `penman_rnoa`, `penman_flev`, `total_shareholder_yield`, and `eqr`.
+
+### 5. Automated Verification Battery
+- **Vitest Unit Tests:** 94 / 94 tests passing across 20 files (100% green).
+- **Playwright E2E Tests:** 19 / 19 tests passing (100% green).
+- **Pytest Backend Tests:** 175 / 175 tests passing (100% green).
+- **CSS Design Token Conformance:** 0 hard-coded hex colors in components (`tokens.css` strict conformance).
+
+## ETF Universe Expansion, Forensic Moat & Final Hardening (2026-09-03)
+
+### 1. ETF Universe Expansion & Setup (SPUS, QQQ, VONV)
+- **Constituent Resolution:** Multi-tier resolver (`backend/app/services/etf_resolver.py`):
+  1. SEC EDGAR N-PORT XML filings (CIK-based holdings extraction).
+  2. Yahoo Finance `quoteSummary` holdings scraping.
+  3. Pre-curated seed lists in `seed/etf_constituents/` (`spus.csv`, `qqq.csv`, `vonv.csv`).
+- **Database Schema:** Alembic migration `c9d0e1f2a3b4_companies_universe_tags.py` adding `universe_tags` JSON column to `companies`.
+- **Constituent Counts (720 Core Universe):**
+  - S&P 500: 500 companies
+  - S&P/TSX: 220 companies
+  - SPUS (Halal): 121 companies
+  - QQQ (Nasdaq 100): 66 companies
+  - VONV (Value): 55 companies
+- **UI Cohorts & Segmented Screener:**
+  - `GET /api/v1/etfs/top-cohorts`: returns top 5 composite scorers per active basket for Desk cards (`Home.tsx`).
+  - Segmented selector in `Screener.tsx`: `ALL` | `S&P 500` | `S&P/TSX` | `SPUS (Halal)` | `QQQ (Nasdaq 100)` | `VONV (Value)`.
+
+### 2. Beneish M-Score 8-Variable Manipulation Engine
+- **Engine:** `backend/app/services/beneish_engine.py` implementing the complete 8-variable probabilistic model:
+  $$M = -4.84 + 0.920 \cdot DSRI + 0.528 \cdot GMI + 0.404 \cdot AQI + 0.892 \cdot SGI + 0.115 \cdot DEPI - 0.172 \cdot SGAI + 4.037 \cdot TATA + 0.0327 \cdot LVGI$$
+  - $DSRI$: $\frac{\text{Receivables}_t / \text{Revenue}_t}{\text{Receivables}_{t-1} / \text{Revenue}_{t-1}}$
+  - $GMI$: $\frac{\text{Gross Margin}_{t-1}}{\text{Gross Margin}_t}$
+  - $AQI$: $\frac{1 - (\text{Current Assets}_t + \text{PPE}_t) / \text{TA}_t}{1 - (\text{Current Assets}_{t-1} + \text{PPE}_{t-1}) / \text{TA}_{t-1}}$
+  - $SGI$: $\frac{\text{Revenue}_t}{\text{Revenue}_{t-1}}$
+  - $DEPI$: $\frac{\text{Depreciation Rate}_{t-1}}{\text{Depreciation Rate}_t}$
+  - $SGAI$: $\frac{\text{SGA}_t / \text{Revenue}_t}{\text{SGA}_{t-1} / \text{Revenue}_{t-1}}$
+  - $LVGI$: $\frac{\text{Total Debt}_t / \text{TA}_t}{\text{Total Debt}_{t-1} / \text{TA}_{t-1}}$
+  - $TATA$: $\frac{\text{Net Income}_t - \text{CFO}_t}{\text{TA}_t}$
+- **Thresholds & Exclusions:**
+  - $M \le -1.78$: Clean status / non-manipulator.
+  - $M > -1.78$: High probability of earnings manipulation.
+  - Banks and insurers: automatically marked `financial_institution_excluded` (no false alarms on regulated balance sheets).
+- **UI:** Mounted in `BeneishCard.tsx` under Dossier `Forensics & Solvency` tab.
+
+### 3. True Shareholder Yield & SBC Dilution Engine
+- **Engine:** `backend/app/services/capital_return_engine.py`:
+  - $\text{Net Repurchase Rate} = -\frac{\Delta \text{Diluted Shares}}{\text{Diluted Shares}_{t-1}} \times 100$
+  - $\text{SBC Drag \%} = \frac{\text{SBC Expense}}{\text{Total Revenue}} \times 100$
+  - $\text{Gross Buyback Yield} = \frac{\text{Repurchases}}{\text{Market Cap}} \times 100$
+  - $\text{SBC Dilution Offset} = \frac{\text{SBC Expense}}{\text{Market Cap}} \times 100$
+  - $\text{Net Buyback Yield} = \max(0, \text{Gross Buyback Yield} - \text{SBC Dilution Offset})$
+  - $\text{True Shareholder Yield} = \text{Dividend Yield} + \text{Net Buyback Yield}$
+- **Flags:**
+  - `ORGANIC_FLOAT_SHRINK`: Net Repurchase Rate $> 2.0\%$ and SBC Drag $< 3.0\%$.
+  - `DILUTIVE_BUYBACKS`: Gross repurchases $> 0$ but share count expanded year-over-year.
+- **UI:** Horizontal buyback vs SBC decomposition bar in `CapitalReturnCard.tsx`.
+
+### 4. 2-Page Institutional Factsheet Print Memo
+- **Component:** `frontend/src/components/dossier/FactsheetPrintView.tsx` with dedicated `@media print` 2-page stylesheet.
+  - Page 1: Hero header, 60s Executive Safety Verdict, 4-pillar scores, fundamental snapshot, Altman Z + Beneish M-Score solvency/distress matrix.
+  - Page 2: 5-Year common-size history, Reverse DCF implied growth vs historical CAGR, investment checklist, and compliance disclaimers.
+
+### 5. Final Verification Battery
+- **Clean-Room Verification:** `python -m app.jobs.verify_clean_room` PASSED (0 to 13 migrations, 720/1506 placements, 0 invented fiscal years).
+- **Golden Ticker Battery:** `pytest tests/test_golden_tickers.py` 16/16 PASSED (100%).
+- **Pytest Suite:** 185 / 185 passed (100% green).
+- **Vitest Suite:** 97 / 97 passed across 22 test files (100% green).
+- **Production Build:** `npm run build` exits 0 with 0 errors.
+- **Playwright E2E Suite:** 19 / 19 passed (100% green).

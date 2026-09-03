@@ -164,3 +164,62 @@ def draft_swot(facts: dict[str, Any], model: str, fallback: str, timeout: float 
                 ) from fallback_error
         raise
 
+
+def call_openrouter(
+    messages: list[dict],
+    model: str = "meta-llama/llama-3.3-70b-instruct:free",
+    fallback: str = "mistralai/mistral-small-24b-instruct-2501:free",
+    timeout: float = 45.0,
+    max_tokens: int = 600,
+    temperature: float = 0.3,
+) -> dict:
+    """Generic multi-turn conversation call for the chat endpoint.
+
+    Accepts a full messages list (system + user + assistant turns).
+    Returns {content, model}. Tries primary then fallback.
+    Never logs the key; free_latch enforced on every model ID.
+    """
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY not configured")
+    if not free_latch(model):
+        raise ValueError(f"refusing non-free model: {model!r}")
+
+    def _do_call(m: str) -> tuple[str, str]:
+        if not free_latch(m):
+            raise ValueError(f"refusing non-free model: {m!r}")
+        req = request.Request(
+            f"{OPENROUTER_BASE_URL}/chat/completions",
+            data=json.dumps(
+                {
+                    "model": m,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+            ).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:5173",
+                "X-Title": "Personal Research Desk",
+            },
+        )
+        with request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        content = (body.get("choices") or [{}])[0].get("message", {}).get("content")
+        if not content or not str(content).strip():
+            raise RuntimeError("openrouter returned empty content")
+        actual_model = body.get("model") or m
+        return str(content).strip(), str(actual_model)
+
+    try:
+        content, actual = _do_call(model)
+        return {"content": content, "model": actual}
+    except Exception as primary_err:  # noqa: BLE001
+        if fallback and fallback != model and free_latch(fallback):
+            try:
+                content, actual = _do_call(fallback)
+                return {"content": content, "model": actual, "fallback_from": model}
+            except Exception:  # noqa: BLE001
+                pass
+        raise primary_err

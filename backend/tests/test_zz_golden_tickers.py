@@ -273,3 +273,156 @@ def test_golden_graham_msft_number(db):
     assert g["graham_number"] is not None and g["graham_number"] > 0
     assert g["graham_margin_of_safety"] is not None
     assert g["deep_net_net"] is False
+
+
+# --------------------------------------------------- ETF Universe & Forensic Moat Sprint
+def test_golden_msft_beneish_and_etf_tags(db):
+    """US:MSFT:US evaluates Beneish M-Score <= -1.78 and tags SPUS, QQQ, SP500."""
+    from app.services.beneish_engine import compute_beneish_m_score
+    from app.services.etf_resolver import sync_universe_tags
+
+    added_ids = []
+    # Ensure at least 2 dated fiscal years exist in ephemeral test fixture
+    snaps = db.query(FinancialSnapshot).filter(
+        FinancialSnapshot.company_id == "US:MSFT:US",
+        FinancialSnapshot.fiscal_year.isnot(None),
+    ).all()
+    try:
+        if len(snaps) < 2:
+            s1 = FinancialSnapshot(
+                company_id="US:MSFT:US",
+                fiscal_year=2023,
+                period_type="FY",
+                currency="USD",
+                revenue=211915000000.0,
+                gross_profit=146052000000.0,
+                ebit=88523000000.0,
+                net_income=72361000000.0,
+                total_assets=411976000000.0,
+                total_liabilities=205753000000.0,
+                operating_cash_flow=87582000000.0,
+                shares_snapshot=7472000000.0,
+                source="sec_edgar",
+            )
+            s2 = FinancialSnapshot(
+                company_id="US:MSFT:US",
+                fiscal_year=2024,
+                period_type="FY",
+                currency="USD",
+                revenue=245122000000.0,
+                gross_profit=169684000000.0,
+                ebit=109433000000.0,
+                net_income=88136000000.0,
+                total_assets=512163000000.0,
+                total_liabilities=243686000000.0,
+                operating_cash_flow=118548000000.0,
+                shares_snapshot=7469000000.0,
+                source="sec_edgar",
+            )
+            db.add_all([s1, s2])
+            db.commit()
+            added_ids = [s1.id, s2.id]
+
+        sync_universe_tags(db)
+        msft = db.get(Company, "US:MSFT:US")
+        assert msft is not None
+        assert msft.universe_tags is not None
+        assert "SPUS" in msft.universe_tags, f"MSFT missing SPUS tag: {msft.universe_tags}"
+        assert "QQQ" in msft.universe_tags, f"MSFT missing QQQ tag: {msft.universe_tags}"
+        assert "SP500" in msft.universe_tags, f"MSFT missing SP500 tag: {msft.universe_tags}"
+
+        beneish = compute_beneish_m_score(db, "US:MSFT:US")
+        assert beneish["status"] == "computed"
+        assert beneish["m_score"] is not None
+        assert beneish["m_score"] <= -1.78, f"MSFT M-score must be <= -1.78, got {beneish['m_score']}"
+        assert beneish["is_manipulator"] is False
+        assert beneish["zone"] == "Non-manipulator"
+    finally:
+        if added_ids:
+            for snap_id in added_ids:
+                s = db.get(FinancialSnapshot, snap_id)
+                if s:
+                    db.delete(s)
+            db.commit()
+
+
+def test_golden_aapl_net_shareholder_yield(db):
+    """US:AAPL:US calculates Net Shareholder Yield accounting for share repurchases vs SBC."""
+    from app.services.capital_return_engine import compute_shareholder_yield
+
+    added_ids = []
+    # Ensure at least 2 dated fiscal years exist in ephemeral test fixture
+    snaps = db.query(FinancialSnapshot).filter(
+        FinancialSnapshot.company_id == "US:AAPL:US",
+        FinancialSnapshot.fiscal_year.isnot(None),
+    ).all()
+    try:
+        if len(snaps) < 2:
+            s1 = FinancialSnapshot(
+                company_id="US:AAPL:US",
+                fiscal_year=2023,
+                period_type="FY",
+                currency="USD",
+                revenue=383285000000.0,
+                shares_snapshot=15812547000.0,
+                source="sec_edgar",
+            )
+            s2 = FinancialSnapshot(
+                company_id="US:AAPL:US",
+                fiscal_year=2024,
+                period_type="FY",
+                currency="USD",
+                revenue=391035000000.0,
+                shares_snapshot=15408095000.0,
+                source="sec_edgar",
+            )
+            db.add_all([s1, s2])
+            db.commit()
+            added_ids = [s1.id, s2.id]
+
+        aapl = compute_shareholder_yield(db, "US:AAPL:US")
+        assert aapl["net_buyback_yield_pct"] is not None
+        assert aapl["true_shareholder_yield_pct"] is not None
+        assert aapl["net_repurchase_rate_pct"] is not None and aapl["net_repurchase_rate_pct"] > 0
+        assert "ORGANIC_FLOAT_SHRINK" in aapl["flags"]
+    finally:
+        if added_ids:
+            for snap_id in added_ids:
+                s = db.get(FinancialSnapshot, snap_id)
+                if s:
+                    db.delete(s)
+            db.commit()
+
+
+def test_golden_ry_beneish_exclusion_cad(db):
+    """CA:RY:TSX excludes industrial Beneish M-Score and maintains strict CAD isolation."""
+    from app.services.beneish_engine import compute_beneish_m_score
+
+    ry_beneish = compute_beneish_m_score(db, "CA:RY:TSX")
+    assert ry_beneish["status"] == "financial_institution_excluded"
+    assert ry_beneish["zone"] == "Excluded"
+    assert ry_beneish["m_score"] is None
+
+    ry = db.get(Company, "CA:RY:TSX")
+    assert ry is not None
+    assert ry.currency == "CAD"
+    assert ry.reporting_currency in ("CAD", None)
+
+
+def test_golden_amd_sbc_drag_dilution(db):
+    """US:AMD:US calculates SBC drag and dilution trajectories accurately."""
+    from app.services.capital_return_engine import compute_shareholder_yield
+
+    amd = compute_shareholder_yield(db, "US:AMD:US")
+    assert amd["sbc_drag_pct"] is not None
+    assert amd["sbc_drag_pct"] > 3.0, f"AMD SBC drag must be > 3.0%, got {amd['sbc_drag_pct']}"
+    assert amd["true_shareholder_yield_pct"] is not None
+
+
+def test_golden_etf_constituent_missing_symbols_graceful(db):
+    """ETF constituent ingestion handles missing symbols gracefully without crash."""
+    from app.services.etf_resolver import resolve_etf_constituents
+
+    res = resolve_etf_constituents("NONEXISTENT_BASKET_XYZ")
+    assert isinstance(res, list)
+    assert len(res) == 0

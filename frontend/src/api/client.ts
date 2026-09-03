@@ -91,7 +91,12 @@ export const api = {
   narrate: (endpoint: string) => post<NarrationResult>(endpoint, undefined, 180_000),
   penman: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/penman`),
   schilit: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/schilit`),
-  graham: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/graham`),  dossierQuality: (companyId: string) => get<Record<string, unknown>>(`/api/v1/companies/${enc(companyId)}/quality`),
+  graham: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/graham`),
+  practitioner: (companyId: string) =>
+    get<import("./types").PractitionerOut>(`/api/v1/companies/${enc(companyId)}/practitioner`),
+  commonSize: (companyId: string, years = 5) =>
+    get<import("./types").CommonSizeOut>(`/api/v1/companies/${enc(companyId)}/financials/common-size?years=${years}`),
+  dossierQuality: (companyId: string) => get<Record<string, unknown>>(`/api/v1/companies/${enc(companyId)}/quality`),
   refreshCompanyPrice: (companyId: string) =>
     post<{ job_id: string; status: string }>(`/api/v1/jobs/backfill`, {
       mode: "company",
@@ -119,4 +124,14 @@ export const api = {
     }
     return get<import("./types").ScreenOut>(`/api/v1/screen?${q.toString()}`);
   },
+  etfTopCohorts: () => get<import("./types").ETFCohortsOut>("/api/v1/etfs/top-cohorts"),
+  chat: (
+    companyId: string,
+    messages: Array<{ role: "user" | "assistant"; content: string }>
+  ) =>
+    post<{ role: string; content: string; model_used: string; disclaimer: string }>(
+      `/api/v1/companies/${enc(companyId)}/chat`,
+      { messages },
+      60_000 // 60s for LLM responses
+    ),
 };

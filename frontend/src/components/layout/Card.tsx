@@ -56,10 +56,10 @@ export function Card({
       {(title || action || infoTip) && (
         <div className="flex items-start justify-between gap-3 border-b border-border pb-3 mb-4">
           <div>
-            <div className="flex items-center gap-1.5 font-heading text-sm sm:text-base font-semibold text-ink-0">
+            <h3 className="flex items-center gap-1.5 font-heading text-sm sm:text-base font-semibold text-ink-0">
               {title}
               {infoTip}
-            </div>
+            </h3>
             {subtitle && (
               <p className="mt-0.5 text-xs text-ink-1 leading-relaxed">
                 {subtitle}

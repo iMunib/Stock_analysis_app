@@ -19,7 +19,7 @@ test.describe("Phase 10 sprint — layout + data trust", () => {
   });
 
   test("MSFT suspect years are chipped and excluded from growth", async ({ page }) => {
-    await page.goto(`/c/${encodeURIComponent("US:MSFT:US")}`);
+    await page.goto(`/c/${encodeURIComponent("US:MSFT:US")}?tab=financials`);
     await expect(page.getByText("Annual history")).toBeVisible({ timeout: 25_000 });
     // if the live DB still holds the $23-31B years, they must carry the chip
     const chips = await page.locator("span", { hasText: "excluded from growth" }).count();

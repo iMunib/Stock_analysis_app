@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.companies import router as companies_router
+from app.api.chat import router as chat_router
 from app.api.forensics import router as forensics_router
 from app.api.jobs import router as jobs_router
 from app.api.phase10 import router as phase10_router
@@ -90,6 +91,7 @@ app.add_middleware(
 )
 
 app.include_router(companies_router)
+app.include_router(chat_router)
 app.include_router(screen_router)
 app.include_router(forensics_router)
 app.include_router(sectors_router)

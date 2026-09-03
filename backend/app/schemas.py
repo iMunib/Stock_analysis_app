@@ -25,6 +25,7 @@ class CompanyOut(BaseModel):
     custom_industry_sheet: str | None = None
     currency: str | None = None
     indexes: Any = None
+    universe_tags: list[str] | None = None
     in_sp500: bool = False
     in_tsx_composite: bool = False
     cik: int | None = None

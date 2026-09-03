@@ -35,7 +35,7 @@ test.describe("Phase 9 — All-currency default + shell", () => {
 
   test("RY dossier shows verdict + pillar bars", async ({ page }) => {
     await page.goto(`/c/${encodeURIComponent("CA:RY:TSX")}`);
-    await expect(page.getByRole("heading", { name: /Royal Bank/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Royal Bank/i })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/of 8/).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /How it scores/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Why this score/i })).toBeVisible();

@@ -30,6 +30,7 @@ REQUIRED_TABLES = {
     "jobs",
     "company_profiles",
     "company_key_stats",
+    "sector_cache_summaries",
     "llm_cache",
     "alembic_version",
 }

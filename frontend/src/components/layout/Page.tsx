@@ -18,7 +18,7 @@ export function Page({
   className = "",
 }: PageProps) {
   return (
-    <main
+    <div
       className={`mx-auto w-full max-w-[var(--max-page-width)] px-4 sm:px-6 lg:px-8 py-6 space-y-6 animate-page ${className}`}
     >
       {breadcrumb && (
@@ -28,10 +28,10 @@ export function Page({
       )}
 
       {(title || actions) && (
-        <header className="flex flex-wrap items-baseline justify-between gap-4 border-b border-border pb-4">
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
           <div>
             {typeof title === "string" ? (
-              <h1 className="font-heading text-2xl sm:text-3xl font-semibold tracking-tight text-ink-0">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-ink-0">
                 {title}
               </h1>
             ) : (
@@ -48,7 +48,7 @@ export function Page({
       )}
 
       {children}
-    </main>
+    </div>
   );
 }
 

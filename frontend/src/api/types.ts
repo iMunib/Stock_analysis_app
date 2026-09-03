@@ -89,6 +89,7 @@ export interface ScorePayload {
   as_of_fy: number | null;
   computed_at: string | null;
   method_version: string;
+  percentiles?: Record<string, number | null> | null;
 }
 
 export interface HalalPayload {
@@ -451,6 +452,13 @@ export interface ScreenerRow {
   historical_5y_cagr: number | null;
   expectations_gap: number | null;
   dcf_status: string;
+  rnoa?: number | null;
+  flev?: number | null;
+  altman_z?: number | null;
+  altman_zone?: string | null;
+  total_shareholder_yield?: number | null;
+  value_percentile?: number | null;
+  quality_percentile?: number | null;
 }
 
 export interface ScreenerResult {
@@ -464,5 +472,156 @@ export interface DeleteCompanyOut {
   ok: boolean;
   company_id: string;
   message: string;
+}
+
+export interface DistressAnalysis {
+  company_id: string;
+  fiscal_year?: number | null;
+  status: "computed" | "financial_institution_excluded" | "insufficient_data";
+  model_used: "manufacturing" | "non_manufacturing" | "excluded" | null;
+  z_score: number | null;
+  z_double_prime: number | null;
+  active_z: number | null;
+  zone: "Safe" | "Grey" | "Distress" | "Excluded" | "Unknown";
+  message?: string;
+  factors?: {
+    x1_working_capital_to_ta: number;
+    x2_retained_earnings_to_ta: number;
+    x3_ebit_to_ta: number;
+    x4_market_equity_to_tl: number;
+    x5_sales_to_ta: number;
+  } | null;
+}
+
+export interface ShareholderYield {
+  company_id: string;
+  currency: string;
+  share_count_history: { fiscal_year: number; diluted_shares: number }[];
+  share_count_delta_1y_pct: number | null;
+  share_count_cagr_3y_pct: number | null;
+  net_repurchase_rate_pct?: number | null;
+  gross_buyback_yield_pct?: number | null;
+  sbc_drag_pct?: number | null;
+  sbc_dilution_offset_pct?: number | null;
+  net_buyback_yield_pct: number | null;
+  dividend_yield_pct: number | null;
+  total_shareholder_yield_pct: number | null;
+  true_shareholder_yield_pct?: number | null;
+  flags: string[];
+}
+
+export interface BeneishAnalysis {
+  company_id: string;
+  fiscal_year?: number | null;
+  status: string;
+  m_score: number | null;
+  is_manipulator: boolean;
+  zone: string;
+  threshold: number;
+  variables?: {
+    dsri: number | null;
+    gmi: number | null;
+    aqi: number | null;
+    sgi: number | null;
+    depi: number | null;
+    sgai: number | null;
+    lvgi: number | null;
+    tata: number | null;
+  } | null;
+  interpretation: string;
+  message?: string;
+}
+
+export interface ETFCohortItem {
+  company_id: string;
+  ticker: string;
+  name: string;
+  currency: string;
+  composite: number | null;
+  signal: string | null;
+  sector: string | null;
+  universe_tags?: string[] | null;
+}
+
+export type ETFCohortsOut = Record<string, ETFCohortItem[]>;
+
+export interface PractitionerOut {
+  company_id: string;
+  penman?: {
+    rnoa: number | null;
+    flev: number | null;
+    nbc: number | null;
+    noa: number | null;
+    nfo: number | null;
+    guardrail?: {
+      triggered: boolean;
+      reported_roic: number | null;
+      penman_rnoa: number | null;
+      flev: number | null;
+      flag: string | null;
+      note: string | null;
+    };
+  };
+  fridson?: {
+    reality_spread: number | null;
+    cfo: number | null;
+    ebitda: number | null;
+    flag: string | null;
+    interpretation: string | null;
+    fixed_charge_coverage: number | null;
+  };
+  graham?: {
+    graham_number: number | null;
+    ncav_per_share: number | null;
+    nnwc_per_share: number | null;
+    margin_of_safety_pct: number | null;
+    current_price: number | null;
+  };
+  malkiel?: {
+    index_hurdle_rate?: number;
+    index_nominal_hurdle_pct?: number;
+    fcf_yield_pct: number | null;
+    required_fcf_growth_10y?: number | null;
+    required_fcf_growth_pct?: number | null;
+    opportunity_cost_benchmark?: string;
+    interpretation?: string;
+  };
+  behavioral?: {
+    fomo_risk: boolean;
+    valuation_stretch_sigmas: number | null;
+    executive_safety_verdict: {
+      moat_durability: "Pass" | "Caution";
+      solvency_runway: "Pass" | "Caution";
+      valuation_safety: "Pass" | "Caution";
+      overall: "Pass" | "Caution";
+    };
+  };
+  distress_analysis?: DistressAnalysis;
+  shareholder_yield?: ShareholderYield;
+  beneish_analysis?: BeneishAnalysis;
+}
+
+export interface CommonSizeLineItem {
+  raw: number | null;
+  pct: number | null;
+}
+
+export interface MarginDriftFlag {
+  code: string;
+  severity: "info" | "warning" | "danger";
+  metric: string;
+  from_year: number;
+  to_year: number;
+  change_bps: number;
+  message: string;
+}
+
+export interface CommonSizeOut {
+  company_id: string;
+  currency: string;
+  years_delivered: number;
+  income_statement_common_size: Record<string, any>[];
+  balance_sheet_common_size: Record<string, any>[];
+  margin_drift_flags: MarginDriftFlag[];
 }
 
