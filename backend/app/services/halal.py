@@ -93,11 +93,28 @@ def evaluate_halal(company: dict, snap: dict | None) -> dict:
         ratio_results["cash_to_mcap"] = {"ratio": round(ratio, 4), "limit": CASH_TO_MCAP_LIMIT,
                                          "result": "pass" if ratio < CASH_TO_MCAP_LIMIT else "fail"}
 
-    ratio_results["impure_income"] = {
-        "result": "unknown",
-        "reason": "interest income not sourced in Phase 1-3; cannot certify impure income < 5%",
-    }
-    overall_unknown = True  # impure income unknown -> never pass as halal
+    IMPURE_INCOME_LIMIT = 0.05
+    interest_income = _f(snap.get("interest_income"))
+    rev = _f(snap.get("revenue"))
+    if interest_income is None:
+        ratio_results["impure_income"] = {
+            "result": "unknown",
+            "reason": "interest income missing from filings; cannot certify impure income <= 5%",
+        }
+        overall_unknown = True
+    elif rev is None or rev <= 0:
+        ratio_results["impure_income"] = {
+            "result": "unknown",
+            "reason": "revenue missing or non-positive; cannot compute impure income ratio",
+        }
+        overall_unknown = True
+    else:
+        impure_ratio = max(0.0, interest_income) / rev
+        ratio_results["impure_income"] = {
+            "ratio": round(impure_ratio, 4),
+            "limit": IMPURE_INCOME_LIMIT,
+            "result": "pass" if impure_ratio <= IMPURE_INCOME_LIMIT else "fail",
+        }
 
     tests["financial_ratios"] = {"result": "unknown" if overall_unknown else "pass", "ratios": ratio_results}
 
@@ -111,4 +128,11 @@ def evaluate_halal(company: dict, snap: dict | None) -> dict:
     else:
         status = "halal_candidate"
         note = "Activity and ratio screens passed (approximation, not a fatwa)."
-    return {"status": status, "tests": tests, "method": METHOD, "computed_at": now, "note": note}
+    return {
+        "status": status,
+        "halal_candidate": status == "halal_candidate",
+        "tests": tests,
+        "method": METHOD,
+        "computed_at": now,
+        "note": note,
+    }

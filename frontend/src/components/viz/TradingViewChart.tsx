@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useTheme } from "../../lib/theme";
 
 /**
  * TradingViewChart — zero-npm TradingView iframe embed (Workstream 4).
@@ -16,61 +17,94 @@ interface TradingViewChartProps {
   companyId: string;
   ticker?: string;
   exchange?: string;
+  tradingviewSymbol?: string;
   currency?: string;
-  height?: number;
+  height?: number | string;
   className?: string;
 }
 
-/** Derive TradingView symbol from company_id and optional context fields. */
+/** Derive TradingView symbol from company_id, authoritative tradingviewSymbol, or context fields. */
 function toTVSymbol(
   companyId: string,
   ticker?: string,
-  exchange?: string
+  exchange?: string,
+  tradingviewSymbol?: string
 ): string {
+  if (tradingviewSymbol && tradingviewSymbol.trim()) {
+    return tradingviewSymbol.trim();
+  }
+
   const parts = companyId.split(":");
   const country = parts[0] ?? "";
-  const tk = ticker ?? parts[1] ?? companyId;
+  let cleanTk = (ticker ?? parts[1] ?? companyId).trim().toUpperCase();
+  if (cleanTk.endsWith(".TO")) cleanTk = cleanTk.slice(0, -3);
+  if (cleanTk.endsWith(".TSX")) cleanTk = cleanTk.slice(0, -4);
+  if (cleanTk.endsWith(".US")) cleanTk = cleanTk.slice(0, -3);
 
-  if (exchange) {
-    // If caller passes a resolved exchange prefix, trust it.
-    return `${exchange.toUpperCase()}:${tk.toUpperCase()}`;
+  const tvTk = cleanTk.replace("-", ".");
+
+  if (exchange && exchange !== "US" && exchange !== "CA") {
+    // If caller passes a resolved exchange prefix (e.g. NASDAQ, NYSE, TSX, AMEX), trust it.
+    return `${exchange.toUpperCase()}:${tvTk}`;
   }
 
   if (country === "CA") {
-    return `TSX:${tk.toUpperCase()}`;
+    return `TSX:${cleanTk}`;
   }
 
-  // US: try to map common exchanges; NASDAQ is a safe default for US names.
-  // A full exchange mapping is not possible without a price data call,
-  // so we use NASDAQ as the default and let TradingView correct it.
+  // Comprehensive NYSE set for prominent US listings
   const NYSE_TICKERS = new Set([
     "BRK.A","BRK.B","JPM","BAC","WFC","C","GS","MS","JNJ","PG","XOM",
     "CVX","KO","MCD","WMT","HD","DIS","IBM","GE","GM","F","T","VZ","RTX",
     "MMM","CAT","BA","UNH","ABBV","MRK","PFE","ABT","BMY","LLY","AMGN",
     "MDT","CRM","ACN","SLB","HAL","COP","EOG","PSX","MPC","VLO","MA","V",
     "AXP","BK","USB","PNC","TFC","COF","SCHW","CB","MET","PRU","AFL","AIG",
-    "PYPL","BLK","ICE","CME","MCO","SPGI","MSCI","FIS","FISV","WU","SYF",
+    "BLK","ICE","MCO","SPGI","MSCI","FIS","WU","SYF","BABA","NVO","TSM",
+    "SAP","BHP","RIO","AZN","SHEL","TTE","SAN","DE","UNP","NEE","SCCO","UBER",
+    "DHR","SONY","PLD","NEM","PGR","LMT","GLW","CVS","SYK","BTI","PH","HDB",
+    "MO","BMO","BP","LOW","SPOT","BNS","SNOW","BNY","IBN","CNQ","MCK","FCX",
+    "EQNR","NET","HWM","CM","SO","GSK","ING","GD","AEM","KKR","VRT","TT",
+    "DUK","WM","BCS","MAR","ELV","UPS","LYG","ITUB","EPD","JCI","EMR","MSI",
+    "AMT","SPG","SHW","BAESY","E","BAM","CVNA","ECL","CP","APO","TRV","CMI",
+    "FDX","NOC","DB","NSC","ET","CI","TGT","NWG","CNI","RACE","CL","B","KMI",
+    "RCL","HLT","NU","MFC","BSX","AON","DLR","AMX","APD","RSG","HPE","AJG",
+    "WPM","ALL","VALE","TDG","CRH","RELX","URI","GWW","OXY","CVE","BE","LNG",
+    "OKE","MET","MPLX","TEL","TAK","D","O","NUE","PSA","MT","SRE","NDAQ","FIX",
+    "KEYS","DVN","AME","TER","STT","BDX","UMC","DAL","DEO","ETR","LHX","INFY",
+    "AMP","ROK","ARES","HEI","HLN","STM","KB","SLF","BSBR","IQV","AXON","IX",
+    "FERG","A","TEVA","CBRE","YUM","FER","HMC","LYV","WCN","FMX","PRU","ADM",
+    "WAT","ED","DHI","SYY","VIK","VG","SHG","HIG","NTR","RKT","CLS","PEG",
+    "MLM","KVUE","EC","KR","QSR","HSY","KGC","BBD","UI","EQT","TKO","WEC",
+    "VMC","IRM","PUK","MTB","CHT","EME","CNC","CCL","JBL","HAL","EXR","FTI",
+    "PCG","CPNG","TDY","PBA","ATO","LPLA","DTE","FTS","OTIS","LH","FE","CPAY",
+    "DOV","CNP","PPL","XYL","RF","SN","DRI","TPR","EXPD","PPG","FCNCA","JBHT",
+    "GPN","SW","BRO","WST","NVT","VLTO","CHD","OMC","CRS","TW","ULTA","EXE",
+    "SQM","USFD","BG","NRG","CIB","AER","IOT","IHG","KEY","EIX"
   ]);
-  if (NYSE_TICKERS.has(tk.toUpperCase())) {
-    return `NYSE:${tk.toUpperCase()}`;
+
+  if (NYSE_TICKERS.has(cleanTk) || NYSE_TICKERS.has(tvTk)) {
+    return `NYSE:${tvTk}`;
   }
 
-  return `NASDAQ:${tk.toUpperCase()}`;
+  return `NASDAQ:${tvTk}`;
 }
 
 const TradingViewChart: React.FC<TradingViewChartProps> = ({
   companyId,
   ticker,
   exchange,
+  tradingviewSymbol,
   currency,
   height = 450,
   className = "",
 }) => {
+  const [theme] = useTheme();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeError, setIframeError] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
 
-  const tvSymbol = toTVSymbol(companyId, ticker, exchange);
+  const tvSymbol = toTVSymbol(companyId, ticker, exchange, tradingviewSymbol);
+  const isLight = theme === "light";
 
   // TradingView widget embed URL (no API key required — it's a free public embed).
   const tvUrl = [
@@ -81,9 +115,9 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     "&hidetoptoolbar=0",
     "&symboledit=0",
     "&saveimage=0",
-    "&toolbarbg=F1F3F6",
+    `&toolbarbg=${isLight ? "F8FAFC" : "131922"}`,
     "&studies=[]",
-    "&theme=dark",
+    `&theme=${isLight ? "light" : "dark"}`,
     "&style=1",
     "&timezone=exchange",
     "&withdateranges=1",
@@ -139,7 +173,6 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         width="100%"
         height={height}
         frameBorder="0"
-        allowTransparency={true}
         scrolling="no"
         className="block"
         onLoad={handleLoad}
@@ -157,7 +190,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
 /** SVG fallback when the TradingView iframe times out. */
 const FallbackSparkline: React.FC<{
   tvSymbol: string;
-  height: number;
+  height: number | string;
 }> = ({ tvSymbol, height }) => (
   <div
     className="flex flex-col items-center justify-center rounded-card border border-border bg-bg-1 text-center"

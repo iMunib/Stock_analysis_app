@@ -58,13 +58,17 @@ def _universe_rows() -> tuple[dict[str, dict], dict[str, dict]]:
                     continue
                 cid = normalize_company_id(f"{country}:{ticker}:X") or f"US:{ticker}:US"
                 cid = f"US:{ticker.upper()}:US" if country == "US" else f"CA:{ticker.upper()}:TSX"
+                raw_cik = (row.get("CIK_SEDAR") or "").strip()
+                if raw_cik.endswith(".0"):
+                    raw_cik = raw_cik[:-2]
+                cik_val = int(raw_cik) if raw_cik.isdigit() else None
                 rec = {
                     "company_id": cid,
                     "ticker": ticker.upper(),
                     "country": country,
                     "currency": (row.get("Primary_Currency") or ("USD" if country == "US" else "CAD")).strip().upper(),
                     "yahoo": (row.get("Yahoo_Ticker") or "").strip() or None,
-                    "cik": int(row["CIK_SEDAR"]) if (row.get("CIK_SEDAR") or "").strip().isdigit() else None,
+                    "cik": cik_val,
                     "name": (row.get("Company_Name") or "").strip() or None,
                 }
                 by_id[cid] = rec
@@ -77,14 +81,19 @@ def yahoo_symbol_for(ticker: str, country: str) -> str:
     """Frozen Yahoo symbol rules: US plain, CA suffix .TO, dots preserved.
     Yahoo uses '-' for share-class dots (IIP.UN -> IIP-UN.TO); universe_master
     carries the authoritative symbol and wins when present."""
+    bare = ticker.upper().strip()
+    if country == "CA":
+        if bare.endswith(".TO"):
+            bare = bare[:-3]
+        elif bare.endswith(".TSX"):
+            bare = bare[:-4]
     by_id, by_primary = _universe_rows()
-    rec = by_primary.get(ticker.upper())
+    rec = by_primary.get(bare)
     if rec and rec.get("yahoo"):
         return rec["yahoo"]
-    t = ticker.upper()
     if country == "US":
-        return t
-    return t.replace(".", "-") + ".TO"
+        return bare
+    return bare.replace(".", "-") + ".TO"
 
 
 # ---- free-text resolver ----
@@ -194,7 +203,13 @@ def _sec_tickers() -> dict:
     if _SEC_CACHE is not None:
         return _SEC_CACHE
     cache_path = Path("data/sec_tickers_cache.json")
-    candidates = [Path("/app/data/sec_tickers_cache.json"), cache_path, Path("../data/sec_tickers_cache.json")]
+    candidates = [
+        Path("/app/data/sec_tickers_cache.json"),
+        cache_path,
+        Path("../data/sec_tickers_cache.json"),
+        Path(__file__).resolve().parents[2] / "data" / "sec_tickers_cache.json",
+        Path(__file__).resolve().parents[1] / "data" / "sec_tickers_cache.json",
+    ]
     path = next((p for p in candidates if p.is_file()), None)
     if path:
         with open(path, encoding="utf-8") as f:

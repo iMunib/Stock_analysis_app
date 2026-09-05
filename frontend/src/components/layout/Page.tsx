@@ -19,7 +19,7 @@ export function Page({
 }: PageProps) {
   return (
     <div
-      className={`mx-auto w-full max-w-[var(--max-page-width)] px-4 sm:px-6 lg:px-8 py-6 space-y-6 animate-page ${className}`}
+      className={`mx-auto w-full max-w-[var(--max-page-width)] space-y-5 animate-page ${className}`}
     >
       {breadcrumb && (
         <nav aria-label="Breadcrumb" className="text-xs text-ink-2 mb-2 font-mono">

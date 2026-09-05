@@ -89,28 +89,53 @@ class EdgarClient:
 # --- XBRL tag preferences (US-GAAP and IFRS), first match wins per concept ---
 _TAG_PREFS: dict[str, list[str]] = {
     "Revenue": [
-        "Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet",
-        "Revenue", "GrossRevenue"
+        "Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueGoodsNet",
+        "SalesRevenueServicesNet", "SalesRevenueNet", "RevenueFromContractWithCustomer",
+        "OperatingRevenue", "TotalRevenuesAndOtherIncome", "Revenue", "GrossRevenue"
     ],
-    "Net_Income": ["NetIncomeLoss", "ProfitLoss"],
+    "Net_Income": ["NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic", "IncomeLossFromContinuingOperations"],
     "Diluted_EPS": ["EarningsPerShareDiluted", "DilutedEarningsLossPerShare"],
-    "Gross_Profit": ["GrossProfit"],
-    "Operating_Cash_Flow": ["NetCashProvidedByUsedInOperatingActivities", "CashFlowsFromUsedInOperatingActivities"],
-    "Capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PurchaseOfPropertyPlantAndEquipment"],
-    "EBIT": ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities"],
+    "Gross_Profit": ["GrossProfit", "GrossMargin"],
+    "Operating_Cash_Flow": ["NetCashProvidedByUsedInOperatingActivities", "CashFlowsFromUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
+    "Capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PurchaseOfPropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets", "PaymentsToAcquireProductiveAssetsNet"],
+    "EBIT": ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities", "OperatingIncome"],
     "Interest_Expense": ["InterestExpense", "InterestExpenseNonoperating", "FinanceCosts"],
     "Cash_ST_Investments": ["CashAndCashEquivalentsAtCarryingValue", "CashAndCashEquivalents"],
     "Book_Equity": ["StockholdersEquity", "Equity", "EquityAttributableToOwnersOfParent"],
     "Total_Assets": ["Assets"],
     "Total_Liabilities": ["Liabilities"],
+    "Total_Debt": [
+        "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtNoncurrent",
+        "LongTermDebt", "DebtAndCapitalLeaseObligations", "DebtCurrent"
+    ],
     "Common_Shares": [
         "CommonStockSharesOutstanding", "EntityCommonStockSharesOutstanding",
-        "WeightedAverageNumberOfDilutedSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingDiluted"
+        "WeightedAverageNumberOfDilutedSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingDiluted",
+        "CommonStockSharesIssued"
     ],
+    "Accounts_Receivable": ["AccountsReceivableNetCurrent", "ReceivablesNetCurrent"],
+    "Inventory": ["InventoryNet"],
+    "Current_Assets": ["AssetsCurrent"],
+    "Current_Liabilities": ["LiabilitiesCurrent"],
+    "PPE_Net": ["PropertyPlantAndEquipmentNet"],
+    "Retained_Earnings": ["RetainedEarningsAccumulatedDeficit"],
+    "Stock_Based_Compensation": ["AllocatedShareBasedCompensationExpense", "ShareBasedCompensation"],
+    "Interest_Income": ["InvestmentIncomeInterest", "InterestAndDividendIncomeOperating"],
+    "Cost_Of_Revenue": [
+        "CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfServices"
+    ],
+    "Depreciation_Amortization": [
+        "DepreciationDepletionAndAmortization", "DepreciationAndAmortization", "Depreciation", "AmortizationOfIntangibleAssets"
+    ],
+    "EBITDA": ["OperatingIncomeLossBeforeDepreciationAndAmortization"],
 }
 
 # Balance-sheet instant concepts (balance_sheet facts keyed by "end")
-_INSTANT = {"Cash_ST_Investments", "Book_Equity", "Total_Assets", "Total_Liabilities", "Common_Shares"}
+_INSTANT = {
+    "Cash_ST_Investments", "Book_Equity", "Total_Assets", "Total_Liabilities", "Total_Debt", "Common_Shares",
+    "Accounts_Receivable", "Inventory", "Current_Assets", "Current_Liabilities", "PPE_Net", "Retained_Earnings"
+}
 
 
 def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
@@ -214,6 +239,14 @@ def parse_companyfacts(data: dict, expected_currency: str = "USD") -> list:
         cur = Counter(cur_list).most_common(1)[0][0] if cur_list else expected_currency
         forms_list = detected_forms_by_year.get(year, [])
         primary_form = Counter(forms_list).most_common(1)[0][0] if forms_list else "10-K"
+
+        # Accounting derivation: Gross Profit = Revenue - Cost of Revenue if not directly reported
+        if bucket.get("Gross_Profit") is None and bucket.get("Revenue") is not None and bucket.get("Cost_Of_Revenue") is not None:
+            bucket["Gross_Profit"] = bucket["Revenue"] - bucket["Cost_Of_Revenue"]
+
+        # Accounting derivation: EBITDA = EBIT + Depreciation & Amortization if not directly reported
+        if bucket.get("EBITDA") is None and bucket.get("EBIT") is not None and bucket.get("Depreciation_Amortization") is not None:
+            bucket["EBITDA"] = bucket["EBIT"] + bucket["Depreciation_Amortization"]
 
         stmt = AnnualStatement(
             fiscal_year=year,

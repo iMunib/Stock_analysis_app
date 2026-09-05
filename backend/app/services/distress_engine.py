@@ -30,31 +30,68 @@ MANUFACTURING_SECTORS = {
 }
 
 
-def _compute_factors(snap: FinancialSnapshot) -> dict[str, float] | None:
-    """Extracts X1-X5 factors from snapshot row."""
-    ta = snap.total_assets
-    tl = snap.total_liabilities
-    cash = snap.cash_st_investments or 0.0
-    debt = snap.total_debt or 0.0
-    equity = snap.book_equity
-    ebit = snap.ebit
-    rev = snap.revenue
+def _first_not_none(*vals):
+    for v in vals:
+        if v is not None:
+            return v
+    return None
+
+
+def _compute_factors(snap: FinancialSnapshot, seed: FinancialSnapshot | None = None) -> dict[str, float] | None:
+    """Extracts X1-X5 factors from snapshot row with accounting identity fallbacks."""
+    seed_ta = seed.total_assets if seed else None
+    seed_tl = seed.total_liabilities if seed else None
+    seed_cash = seed.cash_st_investments if seed else None
+    seed_debt = seed.total_debt if seed else None
+    seed_eq = seed.book_equity if seed else None
+    seed_ebit = seed.ebit if seed else None
+    seed_rev = seed.revenue if seed else None
+
+    ta = _first_not_none(snap.total_assets, seed_ta)
+    tl = _first_not_none(snap.total_liabilities, seed_tl)
+    cash = _first_not_none(snap.cash_st_investments, seed_cash, 0.0)
+    debt = _first_not_none(snap.total_debt, seed_debt, 0.0)
+    equity = _first_not_none(snap.book_equity, seed_eq)
+
+    # Accounting identities: Assets = Liabilities + Equity
+    if equity is None and ta is not None and tl is not None:
+        equity = ta - tl
+    if tl is None and ta is not None and equity is not None:
+        tl = max(0.0, ta - equity)
+
+    ebit = _first_not_none(snap.ebit, seed_ebit)
+    rev = _first_not_none(snap.revenue, seed_rev)
     mcap = snap.market_cap
+    if (mcap is None or mcap <= 0) and seed is not None:
+        mcap = seed.market_cap or ((seed.price or 0.0) * (seed.shares_snapshot or 0.0) if seed.price and seed.shares_snapshot else None)
+    if (mcap is None or mcap <= 0) and snap.price and snap.shares_snapshot:
+        mcap = snap.price * snap.shares_snapshot
 
     if ta is None or ta <= 0 or tl is None or equity is None:
         return None
 
     # X1: Working Capital / Total Assets
-    # Working Capital proxy: Current Assets (Cash + 0.35 * non-cash assets) - Current Liabilities (TL - Debt)
-    ca_proxy = cash + 0.35 * max(0.0, ta - cash)
-    cl_proxy = max(0.0, tl - debt) if debt <= tl else 0.5 * tl
-    wc = ca_proxy - cl_proxy
+    # Genuine Working Capital = Current Assets - Current Liabilities
+    ca = _first_not_none(getattr(snap, "current_assets", None), getattr(seed, "current_assets", None) if seed else None)
+    cl = _first_not_none(getattr(snap, "current_liabilities", None), getattr(seed, "current_liabilities", None) if seed else None)
+    if ca is not None and cl is not None:
+        wc = ca - cl
+    else:
+        ca_proxy = cash + 0.35 * max(0.0, ta - cash)
+        cl_proxy = max(0.0, tl - debt) if debt <= tl else 0.5 * tl
+        wc = ca_proxy - cl_proxy
     x1 = wc / ta
 
-    # X2: Retained Earnings / Total Assets (approximate by Book Equity)
-    x2 = equity / ta
+    # X2: Retained Earnings / Total Assets
+    re = _first_not_none(getattr(snap, "retained_earnings", None), getattr(seed, "retained_earnings", None) if seed else None)
+    if re is not None:
+        x2 = re / ta
+    else:
+        x2 = equity / ta
 
     # X3: EBIT / Total Assets
+    if ebit is None:
+        ebit = _first_not_none(getattr(snap, "net_income", None), getattr(seed, "net_income", None) if seed else None)
     x3 = (ebit / ta) if ebit is not None else 0.0
 
     # X4: Market Value of Equity / Total Liabilities
@@ -124,7 +161,7 @@ def compute_distress(db: Session, company_id: str) -> dict[str, Any]:
             "factors": None,
         }
 
-    factors = _compute_factors(snap)
+    factors = _compute_factors(snap, seed)
     if factors is None:
         return {
             "company_id": company_id,
@@ -152,11 +189,34 @@ def compute_distress(db: Session, company_id: str) -> dict[str, Any]:
     # Determine sector archetype
     sector = (company.gics_sector or "").lower().strip()
     is_mfg = sector in MANUFACTURING_SECTORS
-    model_used = "manufacturing" if is_mfg else "non_manufacturing"
-    active_z = z_classic if is_mfg else z_double_prime
+
+    data_quality_flags: list[str] = []
+    ppe = _first_not_none(getattr(snap, "ppe_net", None), getattr(seed, "ppe_net", None) if seed else None)
+    inv = _first_not_none(getattr(snap, "inventory", None), getattr(seed, "inventory", None) if seed else None)
+    ca = _first_not_none(getattr(snap, "current_assets", None), getattr(seed, "current_assets", None) if seed else None)
+    cl = _first_not_none(getattr(snap, "current_liabilities", None), getattr(seed, "current_liabilities", None) if seed else None)
+    re = _first_not_none(getattr(snap, "retained_earnings", None), getattr(seed, "retained_earnings", None) if seed else None)
+
+    if ca is None or cl is None:
+        data_quality_flags.append("PROXY_WORKING_CAPITAL_USED")
+    if re is None:
+        data_quality_flags.append("PROXY_RETAINED_EARNINGS_USED")
+
+    # Only fall back to Z'' when PP&E or inventory is inapplicable/absent
+    if is_mfg:
+        if (ppe is not None and ppe == 0) or (inv is not None and inv == 0):
+            model_used = "non_manufacturing"
+            active_z = z_double_prime
+            data_quality_flags.append("FALLBACK_Z_DOUBLE_PRIME_INAPPLICABLE_CAPITAL_ITEMS")
+        else:
+            model_used = "manufacturing"
+            active_z = z_classic
+    else:
+        model_used = "non_manufacturing"
+        active_z = z_double_prime
 
     # Determine Zone
-    if is_mfg:
+    if model_used == "manufacturing":
         if z_classic > 2.99:
             zone = "Safe"
         elif z_classic >= 1.81:
@@ -181,4 +241,5 @@ def compute_distress(db: Session, company_id: str) -> dict[str, Any]:
         "active_z": active_z,
         "zone": zone,
         "factors": factors,
+        "data_quality_flags": data_quality_flags,
     }

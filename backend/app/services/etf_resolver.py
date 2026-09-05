@@ -128,6 +128,19 @@ def resolve_etf_constituents(basket: str) -> list[str]:
     return load_static_constituents(basket_upper)
 
 
+RUSSELL1000_SET = {
+    "PLTR", "SNOW", "CRWD", "APP", "TTD", "HOOD", "MSTR", "CELH", "SMCI", "DELL",
+    "APO", "KKR", "COIN", "PINS", "NET", "DDOG", "MDB", "DASH", "DKNG", "VRT",
+    "GEV", "ARM", "SYM", "TOST", "CAVA", "RBLX", "DUOL", "AFRM", "SOFI", "BILL",
+    "PATH", "S", "ZS", "TEAM", "HUBS", "ESTC", "MNDY", "IOT", "CFLT", "GTLB",
+    "OKTA", "ALNY", "VKTX", "CRSP", "AXON",
+}
+
+MICROCAP_SET = {
+    "HROW", "INOD", "POWI", "XPEL", "ACMR", "TMDX", "PRCT", "PLMR", "CRSR", "AUDC",
+}
+
+
 def sync_universe_tags(db: Session) -> dict[str, int]:
     """Tags all companies in the universe with their index/ETF cohorts.
 
@@ -137,12 +150,17 @@ def sync_universe_tags(db: Session) -> dict[str, int]:
     - 'SPUS': S&P 500 Sharia-compliant equities
     - 'QQQ': Nasdaq 100 non-financial tech leaders
     - 'VONV': Russell 1000 Value equities
+    - 'RUSSELL1000': Russell 1000 mid & large-cap equities
+    - 'MICROCAP': Curated high-growth micro/small-cap equities
     """
     spus_set = set(resolve_etf_constituents("SPUS"))
     qqq_set = set(resolve_etf_constituents("QQQ"))
     vonv_set = set(resolve_etf_constituents("VONV"))
 
-    counts: dict[str, int] = {"SP500": 0, "TSX": 0, "SPUS": 0, "QQQ": 0, "VONV": 0}
+    counts: dict[str, int] = {
+        "SP500": 0, "TSX": 0, "SPUS": 0, "QQQ": 0, "VONV": 0,
+        "RUSSELL1000": 0, "MICROCAP": 0,
+    }
 
     companies = db.execute(select(Company)).scalars().all()
     for c in companies:
@@ -175,6 +193,17 @@ def sync_universe_tags(db: Session) -> dict[str, int]:
         if clean_ticker in vonv_set or raw_ticker in vonv_set:
             tags.add("VONV")
             counts["VONV"] += 1
+
+        # RUSSELL1000 check (S&P 500 is a strict subset of Russell 1000 + curated mid/large caps + VONV)
+        if "SP500" in tags or clean_ticker in RUSSELL1000_SET or raw_ticker in RUSSELL1000_SET or "VONV" in tags:
+            if c.country == "US":
+                tags.add("RUSSELL1000")
+                counts["RUSSELL1000"] += 1
+
+        # MICROCAP check
+        if clean_ticker in MICROCAP_SET or raw_ticker in MICROCAP_SET:
+            tags.add("MICROCAP")
+            counts["MICROCAP"] += 1
 
         c.universe_tags = sorted(list(tags))
 

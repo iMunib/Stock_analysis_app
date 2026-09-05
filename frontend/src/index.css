@@ -6,6 +6,11 @@
 
 html {
   color-scheme: dark;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
@@ -18,6 +23,13 @@ body {
     linear-gradient(90deg, rgba(224, 168, 79, 0.02) 1px, transparent 1px);
   background-size: 56px 56px;
 }
+
+html[data-theme="light"] body {
+  background-image:
+    linear-gradient(rgba(180, 120, 24, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 120, 24, 0.025) 1px, transparent 1px);
+}
+
 
 /* Ensure all monospace numbers align vertically */
 .font-mono, [class*="font-mono"] {
@@ -35,6 +47,20 @@ select:focus-visible {
 
 table {
   border-collapse: collapse;
+}
+
+/* Eliminate ugly horizontal scrollbars across browsers */
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 /* Purposeful CSS Motion System */

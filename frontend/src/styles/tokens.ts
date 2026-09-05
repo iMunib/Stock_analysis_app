@@ -60,4 +60,56 @@ export const TOKENS = {
   maxWidth: "1280px",
 } as const;
 
+export const TOKENS_LIGHT = {
+  surfaces: {
+    bg0: "#f8fafc",
+    bg1: "#ffffff",
+    bg2: "#f1f5f9",
+    bg3: "#e2e8f0",
+  },
+  typography: {
+    ink0: "#0f172a",
+    ink1: "#475569",
+    ink2: "#64748b",
+    display: '"Spectral", Georgia, serif',
+    heading: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+    body: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+    mono: '"IBM Plex Mono", ui-monospace, monospace',
+  },
+  accent: {
+    gold: "#b47818",
+    goldWeak: "rgba(180, 120, 24, 0.10)",
+    goldStrong: "#925f0e",
+  },
+  functional: {
+    pos: "#16a34a",
+    posWeak: "rgba(22, 163, 74, 0.10)",
+    neg: "#dc2626",
+    negWeak: "rgba(220, 38, 38, 0.10)",
+    warn: "#d97706",
+    warnWeak: "rgba(217, 119, 6, 0.10)",
+    info: "#2563eb",
+    infoWeak: "rgba(37, 99, 235, 0.10)",
+  },
+  borders: {
+    normal: "#e2e8f0",
+    strong: "#cbd5e1",
+  },
+  spacing: TOKENS.spacing,
+  radii: TOKENS.radii,
+  elevation: {
+    card: "0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03)",
+    hover: "0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.04)",
+    modal: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
+  },
+  maxWidth: "1280px",
+} as const;
+
+export type ThemeMode = "dark" | "light";
+
+export function getThemeTokens(theme: ThemeMode = "dark") {
+  return theme === "light" ? TOKENS_LIGHT : TOKENS;
+}
+
 export default TOKENS;
+

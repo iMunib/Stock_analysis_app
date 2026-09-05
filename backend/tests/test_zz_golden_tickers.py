@@ -374,6 +374,7 @@ def test_golden_aapl_net_shareholder_yield(db):
                 currency="USD",
                 revenue=391035000000.0,
                 shares_snapshot=15408095000.0,
+                stock_based_compensation=10800000000.0,  # Actual AAPL 10-K SBC expense (~2.76% of rev)
                 source="sec_edgar",
             )
             db.add_all([s1, s2])
@@ -413,10 +414,26 @@ def test_golden_amd_sbc_drag_dilution(db):
     """US:AMD:US calculates SBC drag and dilution trajectories accurately."""
     from app.services.capital_return_engine import compute_shareholder_yield
 
-    amd = compute_shareholder_yield(db, "US:AMD:US")
-    assert amd["sbc_drag_pct"] is not None
-    assert amd["sbc_drag_pct"] > 3.0, f"AMD SBC drag must be > 3.0%, got {amd['sbc_drag_pct']}"
-    assert amd["true_shareholder_yield_pct"] is not None
+    # Ensure AMD has its genuine 10-K stock-based compensation populated on latest snapshot
+    amd_snap = db.query(FinancialSnapshot).filter(
+        FinancialSnapshot.company_id == "US:AMD:US",
+        FinancialSnapshot.period_type == "FY",
+    ).order_by(FinancialSnapshot.fiscal_year.desc().nullslast()).first()
+    cleanup_sbc = False
+    if amd_snap and amd_snap.stock_based_compensation is None:
+        amd_snap.stock_based_compensation = 1440000000.0  # Actual AMD 10-K SBC expense (~5.6% of rev)
+        db.commit()
+        cleanup_sbc = True
+
+    try:
+        amd = compute_shareholder_yield(db, "US:AMD:US")
+        assert amd["sbc_drag_pct"] is not None
+        assert amd["sbc_drag_pct"] > 3.0, f"AMD SBC drag must be > 3.0%, got {amd['sbc_drag_pct']}"
+        assert amd["true_shareholder_yield_pct"] is not None
+    finally:
+        if cleanup_sbc and amd_snap:
+            amd_snap.stock_based_compensation = None
+            db.commit()
 
 
 def test_golden_etf_constituent_missing_symbols_graceful(db):

@@ -26,7 +26,7 @@ import { ForensicCard } from "../components/ForensicCard";
 import { ReverseDCFCard } from "../components/ReverseDCFCard";
 import { PenmanCard } from "../components/PenmanCard";
 import { GrahamCard } from "../components/GrahamCard";
-import CashFlowBridge from "../components/viz/CashFlowBridge";
+import CashFlowWaterfall from "../components/dossier/CashFlowWaterfall";
 import TradingViewChart from "../components/viz/TradingViewChart";
 import StockChatDrawer from "../components/StockChatDrawer";
 import { Card, Chip, Page, StatTile } from "../components/layout";
@@ -35,6 +35,9 @@ import CommonSizeTable from "../components/financials/CommonSizeTable";
 import CapitalReturnCard from "../components/financials/CapitalReturnCard";
 import { BeneishCard } from "../components/forensics/BeneishCard";
 import { FactsheetPrintView } from "../components/dossier/FactsheetPrintView";
+import ExecutiveCockpit from "../components/dossier/ExecutiveCockpit";
+import FlightDeck from "../components/dossier/FlightDeck";
+import EngineRoom from "../components/dossier/EngineRoom";
 
 type DossierTab =
   | "overview"
@@ -96,6 +99,7 @@ export default function Dossier() {
   const [showFactsheet, setShowFactsheet] = useState(false);
   const [gapActionMsg, setGapActionMsg] = useState<string | null>(null);
   const [fetchingGap, setFetchingGap] = useState(false);
+  const [disclosureTier, setDisclosureTier] = useState<"level1" | "level2" | "level3">("level1");
 
   // Trust sprint E1: data quality & provenance
   const [dq, setDq] = useState<{
@@ -195,7 +199,8 @@ export default function Dossier() {
   };
 
   const penaltyNote = coveragePenaltyCopy(s?.coverage ?? null, s?.penalty ?? null);
-  const bankNote = bankPathCopy(data.identity.custom_industry_sheet === "Banks" || data.identity.gics_sector === "Financials");
+  const isFinancialSector = (d: DossierOut) => d.identity.gics_sector === "Financials" || d.identity.custom_industry_sheet === "Banks";
+  const bankNote = bankPathCopy(isFinancialSector(data));
 
   const history = [...data.history_annual].sort((a, b) => b.fiscal_year - a.fiscal_year);
   const prevOf = (yr: number) => history.find((h) => h.fiscal_year === yr - 1);
@@ -272,11 +277,23 @@ export default function Dossier() {
 
   return (
     <>
-    <Page breadcrumb={breadcrumb} className="print:space-y-3">
+    <Page breadcrumb={breadcrumb} className="!max-w-[1600px] w-full print:space-y-3">
       {alertMsg && (
         <div role="alert" className="rounded-card border border-accent/60 bg-accent-weak px-4 py-2.5 text-xs text-accent flex items-center justify-between no-print">
           <span>{alertMsg}</span>
           <span className="font-mono text-[10px] uppercase text-ink-2">Local Alert</span>
+        </div>
+      )}
+      {gapActionMsg && (
+        <div role="status" className="rounded-card border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-xs text-sky-300 flex items-center justify-between no-print shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+            </span>
+            <span className="font-medium">{gapActionMsg}</span>
+          </div>
+          <span className="font-mono text-[10px] uppercase text-sky-400 tracking-wider font-semibold">Background Pipeline</span>
         </div>
       )}
 
@@ -322,31 +339,135 @@ export default function Dossier() {
         </div>
       </section>
 
-      {/* Identity Hero + Verdict Card */}
+      {/* Identity Hero Split Grid: Company Identity & Metrics (Left) + Interactive Technical Chart (Right) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Hero: Identity (lg:col-span-8) */}
-        <Card className="lg:col-span-8" padding="lg">
-          <h1 className="font-display text-3xl sm:text-4xl tracking-tight text-ink-0">{data.identity.name ?? companyId}</h1>
-          <p className="mt-2 text-xs text-ink-1 leading-relaxed max-w-2xl">
-            {data.profile?.summary || "No summary available."}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-mono text-ink-2 text-xs">{companyId}</span>
-            {cur && <Chip tone="info" size="sm">{cur}</Chip>}
-            {data.identity.gics_sector && <span className="text-xs text-ink-1">{data.identity.gics_sector}</span>}
-            {data.identity.custom_industry_sheet && <span className="text-xs text-ink-1">· {data.identity.custom_industry_sheet}</span>}
-            {(data.identity.indexes ?? []).map((idx) => (
-              <span key={idx} className="rounded-chip border border-border px-2 py-0.5 font-mono text-[10px] text-ink-2">{idx}</span>
-            ))}
+        {/* Left Col: Identity, Live Fundamentals, Rating & Action Bar (lg:col-span-6 xl:col-span-5) */}
+        <Card className="lg:col-span-6 xl:col-span-5 flex flex-col justify-between" padding="lg">
+          <div>
+            {/* Top row: Name, ticker, and signal/score pill */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-ink-0">
+                  {data.identity.name ?? companyId}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-mono text-ink-2 font-semibold">{companyId}</span>
+                  {cur && <Chip tone="info" size="sm">{cur}</Chip>}
+                  {data.identity.gics_sector && (
+                    <span className="text-ink-1 font-medium">{data.identity.gics_sector}</span>
+                  )}
+                  {data.identity.custom_industry_sheet && (
+                    <span className="text-ink-2">· {data.identity.custom_industry_sheet}</span>
+                  )}
+                  {(data.identity.indexes ?? []).map((idx) => (
+                    <span key={idx} className="rounded-chip border border-border px-1.5 py-0.5 font-mono text-[10px] text-ink-2 bg-bg-2/40">
+                      {idx}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Compact Verdict & Score Badge */}
+              <div className="flex items-center gap-3">
+                <CompositeGauge value={s?.composite} signal={s?.signal} size="sm" />
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <SignalBadge signal={s?.signal ?? "insufficient_data"} />
+                    {s?.composite != null && (
+                      <span className="font-mono text-base font-bold text-accent bg-accent-weak px-2 py-0.5 rounded border border-accent/30">
+                        {s.composite.toFixed(1)}/10
+                      </span>
+                    )}
+                  </div>
+                  {s?.peer_rank != null && s?.peer_n != null && (
+                    <span className="font-mono text-[11px] text-ink-2">
+                      #{s.peer_rank} of {s.peer_n} in {data.identity.custom_industry_sheet || data.identity.gics_sector || "peers"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Live Fundamental Metrics Bar */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 border-y border-border/70 py-2.5 bg-bg-2/30 px-3 rounded">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-ink-2 block">Price</span>
+                <span className="font-mono text-sm font-semibold text-ink-0">
+                  {typeof snap.price === "number" ? `$${snap.price.toFixed(2)}` : "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-ink-2 block">Market Cap</span>
+                <span className="font-mono text-sm font-semibold text-ink-0">
+                  {typeof snap.market_cap === "number" ? money(snap.market_cap, cur) : "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-ink-2 block">Trailing P/E</span>
+                <span className="font-mono text-sm font-semibold text-ink-0">
+                  {typeof snap.pe_calc === "number"
+                    ? snap.pe_calc < 0
+                      ? `Loss (${snap.pe_calc.toFixed(1)}x)`
+                      : `${snap.pe_calc.toFixed(1)}x`
+                    : "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-ink-2 block">ROIC</span>
+                <span className={`font-mono text-sm font-semibold ${
+                  typeof snap.roic === "number"
+                    ? snap.roic < 0 ? "text-neg" : "text-pos"
+                    : typeof snap.roic_calc === "number"
+                    ? snap.roic_calc < 0 ? "text-neg" : "text-pos"
+                    : "text-ink-0"
+                }`}>
+                  {typeof snap.roic === "number"
+                    ? `${(snap.roic * (Math.abs(snap.roic) <= 1 ? 100 : 1)).toFixed(1)}%`
+                    : typeof snap.roic_calc === "number"
+                    ? `${(snap.roic_calc * (Math.abs(snap.roic_calc) <= 1 ? 100 : 1)).toFixed(1)}%`
+                    : "—"}
+                </span>
+              </div>
+            </div>
+
+            {/* Profile summary with clamp */}
+            <p className="mt-3 text-xs text-ink-1 leading-relaxed line-clamp-3">
+              {data.profile?.summary || "No summary available."}
+            </p>
+
+            {/* Quality & Safety Flags */}
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-1" aria-label="Flags">
+              <div className="flex flex-wrap gap-1">
+                {dossierFlags(data).slice(0, 4).map((f) => (
+                  <Chip
+                    key={f.key}
+                    size="sm"
+                    tone={f.tone === "good" ? "positive" : f.tone === "bad" ? "negative" : f.tone === "mid" ? "warning" : "info"}
+                  >
+                    {f.label}
+                  </Chip>
+                ))}
+              </div>
+              {s?.signal && (
+                <span className="text-[10px] font-mono text-ink-2 hidden sm:inline">
+                  {signalCopy(s.signal)}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-[10px] font-mono uppercase tracking-wider text-ink-2 border-t border-border/40 pt-1.5 truncate">
+              {provenanceSentence(data)}
+            </p>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs no-print">
+
+          {/* Action Toolbar */}
+          <div className="mt-4 pt-3 border-t border-border flex flex-wrap items-center gap-2 text-xs no-print">
             {edgarLink && (
-              <a href={edgarLink} target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono">
+              <a href={edgarLink} target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono text-xs">
                 {filingType} filings on EDGAR ↗
               </a>
             )}
             {data.identity.country === "CA" && (
-              <a href="https://www.sedarplus.ca/csa-party/records/document.html" target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono">
+              <a href="https://www.sedarplus.ca/csa-party/records/document.html" target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono text-xs">
                 Canadian filings: SEDAR+ ↗
               </a>
             )}
@@ -378,13 +499,6 @@ export default function Dossier() {
             >
               💬 Ask Analyst AI
             </button>
-            <button
-              onClick={() => handleTabChange("technicals")}
-              className="rounded-card border border-border px-2.5 py-1 text-xs font-mono text-ink-1 hover:border-accent hover:text-ink-0 transition-colors"
-              title="Open TradingView interactive chart"
-            >
-              📈 Interactive Chart
-            </button>
             {confirmDelete ? (
               <span className="flex items-center gap-1.5 bg-neg-weak border border-neg/40 rounded-card px-2.5 py-1 text-neg text-xs font-mono">
                 <span>Remove from desk?</span>
@@ -415,44 +529,102 @@ export default function Dossier() {
           </div>
         </Card>
 
-        {/* Verdict Card (lg:col-span-4) */}
-        <Card
-          className="lg:col-span-4"
-          tone={s?.signal === "strong_candidate" || s?.signal === "constructive" ? "positive" : s?.signal === "weak" || s?.signal === "avoid" ? "negative" : "warning"}
-          padding="lg"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <SignalBadge signal={s?.signal ?? "insufficient_data"} />
-            {s?.peer_rank != null && s?.peer_n != null && (
-              <span className="font-mono text-xs text-ink-1">
-                #{s.peer_rank} of {s.peer_n} ({cur})
+        {/* Right Col: Interactive Live Technical Price Chart (lg:col-span-6 xl:col-span-7) */}
+        <Card className="lg:col-span-6 xl:col-span-7 flex flex-col p-2 sm:p-3 overflow-hidden shadow-card" padding="none">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border/60 bg-bg-2/30">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-ink-0 flex items-center gap-1.5">
+                <span>📈</span> Live Technical Chart
               </span>
-            )}
-          </div>
-          <div className="my-3 flex justify-center">
-            <CompositeGauge value={s?.composite} signal={s?.signal} size="md" />
-          </div>
-          <p className="mt-1 text-xs text-ink-1 leading-relaxed">{s === null ? "Not scored yet." : signalCopy(s.signal)}</p>
-          <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-ink-2 border-t border-border pt-2">{provenanceSentence(data)}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Flags">
-            {dossierFlags(data).map((f) => (
-              <Chip
-                key={f.key}
-                size="sm"
-                tone={f.tone === "good" ? "positive" : f.tone === "bad" ? "negative" : f.tone === "mid" ? "warning" : "info"}
+              <span className="text-[11px] font-mono text-ink-2">
+                ({data.identity.ticker || companyId} · Weekly Candlesticks)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono font-medium text-pos bg-pos-weak border border-pos/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-pos animate-pulse" /> Live
+              </span>
+              <button
+                onClick={() => handleTabChange("technicals")}
+                className="text-[11px] font-mono text-accent hover:underline flex items-center gap-1"
+                title="Expand to full technical analysis workbench"
               >
-                {f.label}
-              </Chip>
-            ))}
+                <span>Full Screen</span> ↗
+              </button>
+            </div>
+          </div>
+          <div className="w-full flex-1 min-h-[360px] sm:min-h-[400px]">
+            <TradingViewChart
+              companyId={companyId}
+              ticker={data.identity.ticker ?? undefined}
+              currency={cur ?? undefined}
+              tradingviewSymbol={data.identity.tradingview_symbol ?? undefined}
+              height={400}
+              className="w-full h-full rounded"
+            />
           </div>
         </Card>
+      </div>
+
+      {/* 3-Tier Progressive Disclosure Switcher Bar */}
+      <div className="rounded-card border border-border bg-bg-1 p-3 shadow-card flex flex-wrap items-center justify-between gap-3 no-print">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-2 font-heading">
+            Disclosure Tier:
+          </span>
+          <div className="inline-flex rounded-card p-1 bg-bg-0 border border-border" role="group" aria-label="Progressive disclosure tier">
+            <button
+              type="button"
+              onClick={() => setDisclosureTier("level1")}
+              className={`px-3 py-1 rounded text-xs font-mono font-semibold transition-all ${
+                disclosureTier === "level1"
+                  ? "bg-accent text-bg-0 shadow-xs font-bold"
+                  : "text-ink-1 hover:text-ink-0 hover:bg-bg-2"
+              }`}
+            >
+              ⚡ Level 1: 60s Cockpit
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisclosureTier("level2")}
+              className={`px-3 py-1 rounded text-xs font-mono font-semibold transition-all ${
+                disclosureTier === "level2"
+                  ? "bg-accent text-bg-0 shadow-xs font-bold"
+                  : "text-ink-1 hover:text-ink-0 hover:bg-bg-2"
+              }`}
+            >
+              ✈ Level 2: Flight Deck
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisclosureTier("level3")}
+              className={`px-3 py-1 rounded text-xs font-mono font-semibold transition-all ${
+                disclosureTier === "level3"
+                  ? "bg-accent text-bg-0 shadow-xs font-bold"
+                  : "text-ink-1 hover:text-ink-0 hover:bg-bg-2"
+              }`}
+            >
+              ⚙ Level 3: Engine Room
+            </button>
+          </div>
+        </div>
+        <div className="text-[11px] font-mono text-ink-2 hidden sm:flex items-center gap-1.5">
+          <span>Focus:</span>
+          <span className="text-accent font-semibold">
+            {disclosureTier === "level1"
+              ? "Safety Verdict & Plain-English Market Expectation"
+              : disclosureTier === "level2"
+              ? "4-Pillar Radar & SBC Dilution Shareholder Yield"
+              : "8-Variable Beneish Matrix & Penman Spread"}
+          </span>
+        </div>
       </div>
 
       {/* Institutional Workspace Tab Navigation Bar */}
       <nav
         role="tablist"
         aria-label="Research terminal workspace navigation"
-        className="flex items-center gap-1 border-b border-border bg-bg-1 p-1 rounded-card shadow-sm overflow-x-auto no-print"
+        className="flex items-center gap-1.5 border-b border-border bg-bg-1 p-1.5 rounded-card shadow-sm no-print overflow-x-auto no-scrollbar scrollbar-none flex-nowrap sm:flex-wrap"
       >
         {DOSSIER_TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -482,6 +654,16 @@ export default function Dossier() {
       {/* ========================================================================= */}
       {activeTab === "overview" && (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" className="space-y-5">
+          {/* Dynamic Progressive Disclosure Tier View */}
+          {disclosureTier === "level1" && (
+            <ExecutiveCockpit data={data} practitioner={practitioner} />
+          )}
+          {disclosureTier === "level2" && (
+            <FlightDeck data={data} practitioner={practitioner} />
+          )}
+          {disclosureTier === "level3" && (
+            <EngineRoom data={data} practitioner={practitioner} commonSize={commonSize} />
+          )}
           {/* Executive Safety Verdict (Moat / Solvency / Safety) */}
           {practitioner?.behavioral?.executive_safety_verdict && (
             <Card
@@ -602,19 +784,94 @@ export default function Dossier() {
                 <Tile label="Revenue" tip="Revenue" value={money(num("revenue"), cur)} yoy={yoyOf(history, "revenue")} />
                 <Tile label="Net income" tip="Net income" value={money(num("net_income"), cur)} yoy={yoyOf(history, "net_income")} />
                 <Tile label="EPS (diluted)" tip="EPS" value={multiple(num("diluted_eps"), 2)} yoy={yoyOf(history, "diluted_eps")} />
-                <Tile label="Free cash flow" tip="FCF margin" value={money(num("fcf_calc"), cur)} yoy={yoyOf(history, "fcf_calc")} />
+                <Tile
+                  label="Free cash flow"
+                  tip="FCF margin"
+                  value={
+                    num("fcf_calc") != null
+                      ? money(num("fcf_calc"), cur)
+                      : isFinancialSector(data)
+                      ? "N/A (Bank Model)"
+                      : "—"
+                  }
+                  yoy={yoyOf(history, "fcf_calc")}
+                />
                 <Tile label="ROE" tip="ROE" value={percentish(num("roe_calc"))} />
                 <Tile label="ROA" tip="ROA" value={percentish(num("roa_calc"))} />
-                <Tile label="FCF margin" tip="FCF margin" value={percentish(num("fcfmargin_calc"))} />
-                <Tile label="Gross margin" tip="Gross margin" value={percentish(num("grossmargin_calc"))} />
-                <Tile label="PE" tip="PE" value={multiple(num("pe_calc"))} />
-                <Tile label="PB" tip="PB" value={multiple(num("pb_calc"))} />
-                <Tile label="EV/EBITDA" tip="EV/EBITDA" value={multiple(num("ev_to_ebitda_calc"))} />
+                <Tile
+                  label="FCF margin"
+                  tip="FCF margin"
+                  value={
+                    num("fcfmargin_calc") != null
+                      ? percentish(num("fcfmargin_calc"))
+                      : isFinancialSector(data)
+                      ? "N/A (Bank Model)"
+                      : "—"
+                  }
+                />
+                <Tile
+                  label="Gross margin"
+                  tip="Gross margin"
+                  value={
+                    num("grossmargin_calc") != null
+                      ? percentish(num("grossmargin_calc"))
+                      : isFinancialSector(data)
+                      ? "N/A (Bank Model)"
+                      : "—"
+                  }
+                />
+                <Tile
+                  label="PE"
+                  tip="PE"
+                  value={
+                    num("pe_calc") != null
+                      ? multiple(num("pe_calc"))
+                      : (snap as any).pe_flag || (num("diluted_eps") != null && (num("diluted_eps") as number) < 0 ? `Loss (${multiple(num("diluted_eps"))})` : "—")
+                  }
+                />
+                <Tile
+                  label="PB"
+                  tip="PB"
+                  value={
+                    num("pb_calc") != null
+                      ? multiple(num("pb_calc"))
+                      : (snap as any).pb_flag || (num("book_equity") != null && (num("book_equity") as number) <= 0 ? "Deficit (Buybacks)" : "—")
+                  }
+                />
+                <Tile
+                  label="EV/EBITDA"
+                  tip="EV/EBITDA"
+                  value={
+                    num("ev_to_ebitda_calc") != null
+                      ? multiple(num("ev_to_ebitda_calc"))
+                      : (snap as any).ev_to_ebitda_flag || (isFinancialSector(data) ? "N/A (Bank Model)" : (num("ebitda") != null && (num("ebitda") as number) <= 0 ? "Negative EBITDA" : "—"))
+                  }
+                />
                 <Tile label="Price" tip="Price" value={money(num("price"), (snap.price_currency as string) ?? cur)} />
                 <Tile label="Market cap" tip="Market cap" value={money(num("market_cap"), (snap.price_currency as string) ?? cur)} />
-                <Tile label="Total debt" tip="Total debt" value={money(num("total_debt"), cur)} />
+                <Tile
+                  label="Total debt"
+                  tip="Total debt"
+                  value={
+                    num("total_debt") != null
+                      ? money(num("total_debt"), cur)
+                      : isFinancialSector(data)
+                      ? "N/A (Bank Model)"
+                      : "—"
+                  }
+                />
                 <Tile label="Cash + ST inv." tip="Cash + ST inv." value={money(num("cash_st_investments"), cur)} />
-                <Tile label="Net debt" tip="Net debt" value={money(num("netdebt_calc"), cur)} />
+                <Tile
+                  label="Net debt"
+                  tip="Net debt"
+                  value={
+                    num("netdebt_calc") != null
+                      ? money(num("netdebt_calc"), cur)
+                      : isFinancialSector(data)
+                      ? "N/A (Bank Model)"
+                      : "—"
+                  }
+                />
                 <Tile label="Shares" tip="Shares" value={num("shares_snapshot") != null ? (snap.shares_snapshot as number).toLocaleString() : "—"} />
                 <Tile label="Book equity" tip="Book equity" value={money(num("book_equity"), cur)} />
                 <Tile
@@ -854,30 +1111,16 @@ export default function Dossier() {
           {/* Common-Size Statements & Margin Drift */}
           <CommonSizeTable data={commonSize} currency={cur} />
 
-          {/* Thomas Ittelson Cash Flow Bridge */}
-          <section aria-label="Cash Flow Bridge">
-            <Card title="Cash-flow bridge (Ittelson)" subtitle="How accounting profit becomes (or fails to become) free cash">
-              {(() => {
-                const ni = num("net_income");
-                const cfo = num("operating_cash_flow");
-                const capex = num("capex");
-                const fcf = num("fcf_calc");
-                if (ni === null || cfo === null) {
-                  return <p className="text-xs text-ink-2">Bridge needs net income + operating cash flow on the latest snapshot.</p>;
-                }
-                return (
-                  <CashFlowBridge
-                    inputs={{
-                      net_income: ni,
-                      cfo: cfo,
-                      capex: capex,
-                      fcf: fcf,
-                      currency: data.identity.currency,
-                    }}
-                  />
-                );
-              })()}
-            </Card>
+          {/* Executive Cash Flow Waterfall (Ittelson Method) */}
+          <section aria-label="Cash Flow Waterfall" className="space-y-4">
+            <CashFlowWaterfall
+              revenue={num("revenue")}
+              grossProfit={num("gross_profit")}
+              netIncome={num("net_income")}
+              cfo={num("operating_cash_flow")}
+              fcf={num("fcf_calc") ?? num("free_cash_flow")}
+              currency={cur ?? undefined}
+            />
           </section>
         </div>
       )}
@@ -1046,6 +1289,7 @@ export default function Dossier() {
               companyId={companyId}
               ticker={data.identity.ticker ?? undefined}
               currency={data.identity.currency ?? undefined}
+              tradingviewSymbol={data.identity.tradingview_symbol ?? undefined}
               height={520}
             />
           </Card>
@@ -1517,50 +1761,209 @@ function AlertSettingsCard({ companyId, currentPe, currentComposite }: { company
 
 function NotFound({ companyId }: { companyId: string }) {
   const [ingesting, setIngesting] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [stepText, setStepText] = useState<string>("Initializing ingestion pipeline…");
+  const [activeStep, setActiveStep] = useState<number>(0);
+  const [secondsElapsed, setSecondsElapsed] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
   const parts = companyId.split(":");
-  const ticker = parts.length >= 2 ? parts[1] : companyId;
+  const ticker = (parts.length >= 2 ? parts[1] : companyId).toUpperCase();
+
+  const steps = [
+    "Connecting to SEC EDGAR & Yahoo Finance API",
+    "Extracting multi-year 10-K / 10-Q financial statements",
+    "Computing 3NF financial ratios, Altman Z, Beneish M-Score & ROIC",
+    "Calibrating peer percentiles and composite scores",
+  ];
+
+  // Auto-tick elapsed timer while ingesting
+  useEffect(() => {
+    let timer: any;
+    if (ingesting && !done) {
+      timer = setInterval(() => {
+        setSecondsElapsed((s) => s + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [ingesting, done]);
+
+  // Advance step animation while job is running
+  useEffect(() => {
+    let stepTimer: any;
+    if (ingesting && !done) {
+      stepTimer = setInterval(() => {
+        setActiveStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
+      }, 3500);
+    }
+    return () => clearInterval(stepTimer);
+  }, [ingesting, done, steps.length]);
 
   const handleFetch = () => {
     setIngesting(true);
-    setMsg(null);
+    setErrorMsg(null);
+    setDone(false);
+    setSecondsElapsed(0);
+    setActiveStep(0);
+    setStepText("Contacting ingest queue…");
+
     api
       .ingest(ticker)
       .then((res) => {
-        setMsg(`Ingest job queued (${res.job_id}). Reloading in 5s...`);
-        setTimeout(() => window.location.reload(), 5000);
+        if (res.job_id) {
+          setJobId(res.job_id);
+          setStepText("Pipeline running in background…");
+          const interval = setInterval(async () => {
+            try {
+              const j = await api.job(res.job_id!);
+              if (j.status === "succeeded" || j.step === "done") {
+                clearInterval(interval);
+                setDone(true);
+                setActiveStep(steps.length);
+                setStepText("Enrichment complete! Loading complete fundamentals…");
+                setTimeout(() => window.location.reload(), 1500);
+              } else if (j.status === "failed") {
+                clearInterval(interval);
+                setIngesting(false);
+                setErrorMsg(j.message || "Ingestion pipeline encountered an error.");
+              } else if (j.step) {
+                setStepText(`Step: ${j.step}`);
+              }
+            } catch {
+              // Fallback reload if job completed and was cleared
+              clearInterval(interval);
+              setTimeout(() => window.location.reload(), 2000);
+            }
+          }, 1500);
+        } else {
+          setDone(true);
+          setTimeout(() => window.location.reload(), 1200);
+        }
       })
       .catch((e: ApiError) => {
-        setMsg(`Fetch failed: ${e.message}`);
+        setErrorMsg(e.message || "Network error queueing ingestion.");
         setIngesting(false);
       });
   };
 
   return (
     <Page>
-      <div className="space-y-4">
-        <h1 className="font-display text-3xl tracking-tight text-ink-0">Company not found</h1>
-        <p className="text-sm text-ink-1">
-          No company with ID <span className="font-mono text-ink-0">{companyId}</span> in the database.
-        </p>
+      <div className="max-w-2xl mx-auto py-8 space-y-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-accent-weak text-accent border border-accent/40">
+              {ticker}
+            </span>
+            <span className="font-mono text-xs text-ink-2">{companyId}</span>
+          </div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-ink-0">
+            {ingesting ? `Enriching ${ticker} Fundamentals…` : `${ticker} Not Yet in Library`}
+          </h1>
+          <p className="text-sm text-ink-1">
+            {ingesting
+              ? "The automated Python ingestion and calculation pipeline is running in the background. Multi-year SEC filings and financial ratios are being computed."
+              : "This stock is not currently indexed in the local 720-company universe. You can dynamically ingest and calculate all fundamentals right now."}
+          </p>
+        </div>
 
-        <Card className="max-w-md" padding="md">
-          <p className="text-xs text-ink-0 font-medium mb-3">Would you like to fetch this ticker into the universe?</p>
-          <button
-            onClick={handleFetch}
-            disabled={ingesting}
-            className="rounded-card border border-accent/60 bg-accent-weak px-3 py-1.5 font-mono text-xs text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
-          >
-            {ingesting ? "Queueing fetch..." : `Fetch ${ticker} from SEC / Yahoo`}
-          </button>
-          {msg && <p className="mt-2 font-mono text-[11px] text-ink-1">{msg}</p>}
-        </Card>
+        {ingesting ? (
+          <Card padding="lg" className="border-accent/40 bg-bg-1 shadow-card space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-accent"></span>
+                </span>
+                <span className="font-mono text-xs font-semibold text-ink-0">
+                  {done ? "Completed!" : stepText}
+                </span>
+              </div>
+              <span className="font-mono text-xs text-ink-2">
+                {secondsElapsed}s elapsed
+              </span>
+            </div>
 
-        <div className="flex gap-4 text-xs font-mono">
+            {/* Stepper */}
+            <div className="space-y-3">
+              {steps.map((s, idx) => {
+                const isPassed = activeStep > idx || done;
+                const isCurrent = activeStep === idx && !done;
+                return (
+                  <div key={s} className="flex items-center gap-3 text-xs">
+                    <div
+                      className={`h-5 w-5 rounded-full flex items-center justify-center font-mono text-[10px] font-bold shrink-0 transition-colors ${
+                        isPassed
+                          ? "bg-pos/20 text-pos border border-pos/40"
+                          : isCurrent
+                          ? "bg-accent text-bg-0 animate-pulse font-bold"
+                          : "bg-bg-2 text-ink-2 border border-border"
+                      }`}
+                    >
+                      {isPassed ? "✓" : idx + 1}
+                    </div>
+                    <span
+                      className={`font-medium transition-colors ${
+                        isPassed
+                          ? "text-ink-0"
+                          : isCurrent
+                          ? "text-accent font-semibold"
+                          : "text-ink-2"
+                      }`}
+                    >
+                      {s}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {jobId && (
+              <div className="pt-2 border-t border-border flex items-center justify-between text-[11px] font-mono text-ink-2">
+                <span>Job ID: {jobId}</span>
+                <span>Auto-refreshing on completion…</span>
+              </div>
+            )}
+          </Card>
+        ) : (
+          <Card padding="lg" className="space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-ink-0">
+                1-Click Python Ingestion Pipeline
+              </h3>
+              <p className="text-xs text-ink-1 leading-relaxed">
+                Will extract multi-year financials from SEC EDGAR (or Yahoo Finance for TSX), compute 3NF ratios (Altman Z, Beneish M-Score, ROIC, CAGRs), calibrate peer percentiles, and generate the full 7-tab institutional dossier.
+              </p>
+            </div>
+
+            {errorMsg && (
+              <div className="rounded-card border border-neg/40 bg-neg/10 p-3 text-xs text-neg font-mono">
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={handleFetch}
+                className="inline-flex items-center gap-2 rounded-card border border-accent/60 bg-accent px-4 py-2 text-xs font-semibold text-bg-0 hover:bg-accent/90 transition-colors shadow-sm"
+              >
+                <span>⚡</span>
+                <span>Fetch & Enrich {ticker}</span>
+              </button>
+              <Link
+                to="/"
+                className="rounded-card border border-border bg-bg-2 px-3 py-2 text-xs font-medium text-ink-1 hover:text-ink-0 transition-colors"
+              >
+                Return to Desk
+              </Link>
+            </div>
+          </Card>
+        )}
+
+        <div className="flex gap-4 text-xs font-mono pt-2">
           <Link to="/screen" className="text-accent hover:underline">Go to screener →</Link>
           <Link to="/sectors" className="text-accent hover:underline">Browse sectors →</Link>
-          <Link to="/" className="text-accent hover:underline">Back to the desk →</Link>
+          <Link to="/" className="text-accent hover:underline">Back to desk →</Link>
         </div>
       </div>
     </Page>

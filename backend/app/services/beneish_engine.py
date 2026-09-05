@@ -37,7 +37,7 @@ def _safe_div(num: float | None, denom: float | None, default: float = 1.0) -> f
     return num / denom
 
 
-def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
+def compute_beneish_m_score(db: Session, company_id: str, strict: bool = False) -> dict[str, Any]:
     """Computes the 8-variable Beneish M-Score and manipulation classification."""
     company = db.get(Company, company_id)
     if company is None:
@@ -48,6 +48,8 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
         return {
             "company_id": company_id,
             "status": "financial_institution_excluded",
+            "data_available": False,
+            "beneish_score": None,
             "m_score": None,
             "is_manipulator": False,
             "zone": "Excluded",
@@ -76,6 +78,8 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
             return {
                 "company_id": company_id,
                 "status": "insufficient_data",
+                "data_available": False,
+                "beneish_score": None,
                 "m_score": None,
                 "is_manipulator": False,
                 "zone": "Insufficient Data",
@@ -112,17 +116,18 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
     debt_prev = t_prev.total_debt or 0.0
 
     # 1. DSRI (Days Sales in Receivables Index)
-    # Receivables proxy: (Current Assets proxy - Cash) or ~14% of revenue
+    # Genuine formula: (Receivables_t / Sales_t) / (Receivables_{t-1} / Sales_{t-1})
     ar_t = getattr(t, "accounts_receivable", None)
     ar_prev = getattr(t_prev, "accounts_receivable", None)
-    if ar_t is None or ar_prev is None:
+    has_genuine_ar = (ar_t is not None and ar_prev is not None and rev_t > 0 and rev_prev > 0)
+    if has_genuine_ar:
+        rec_to_rev_t = ar_t / rev_t
+        rec_to_rev_prev = ar_prev / rev_prev
+        dsri = _safe_div(rec_to_rev_t, rec_to_rev_prev, 1.0)
+    else:
         rec_to_rev_t = 0.14
         rec_to_rev_prev = 0.14
         dsri = 1.0
-    else:
-        rec_to_rev_t = _safe_div(ar_t, rev_t, 0.14)
-        rec_to_rev_prev = _safe_div(ar_prev, rev_prev, 0.14)
-        dsri = _safe_div(rec_to_rev_t, rec_to_rev_prev, 1.0)
 
     # 2. GMI (Gross Margin Index)
     gm_t = _safe_div(gp_t, rev_t, 0.35)
@@ -130,14 +135,33 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
     gmi = _safe_div(gm_prev, gm_t, 1.0)
 
     # 3. AQI (Asset Quality Index)
-    ca_t = getattr(t, "current_assets", None) or (t.cash_st_investments or 0.0) + 0.35 * max(0.0, ta_t - (t.cash_st_investments or 0.0))
-    ca_prev = getattr(t_prev, "current_assets", None) or (t_prev.cash_st_investments or 0.0) + 0.35 * max(0.0, ta_prev - (t_prev.cash_st_investments or 0.0))
-    ppe_t = getattr(t, "ppe_net", None) or max(0.0, ta_t - ca_t) * 0.7
-    ppe_prev = getattr(t_prev, "ppe_net", None) or max(0.0, ta_prev - ca_prev) * 0.7
+    # Genuine formula: Non-Current Assets = Total Assets - Current Assets - Net PP&E
+    ca_t_raw = getattr(t, "current_assets", None)
+    ca_prev_raw = getattr(t_prev, "current_assets", None)
+    ppe_t_raw = getattr(t, "ppe_net", None)
+    ppe_prev_raw = getattr(t_prev, "ppe_net", None)
+    has_genuine_aqi = (
+        ca_t_raw is not None and ca_prev_raw is not None and
+        ppe_t_raw is not None and ppe_prev_raw is not None and
+        ta_t > 0 and ta_prev > 0
+    )
 
-    non_ca_t = 1.0 - _safe_div(ca_t + ppe_t, ta_t, 0.8)
-    non_ca_prev = 1.0 - _safe_div(ca_prev + ppe_prev, ta_prev, 0.8)
-    aqi = _safe_div(max(0.01, non_ca_t), max(0.01, non_ca_prev), 1.0)
+    if has_genuine_aqi:
+        ca_t = ca_t_raw
+        ca_prev = ca_prev_raw
+        ppe_t = ppe_t_raw
+        ppe_prev = ppe_prev_raw
+        nca_t = max(0.0, ta_t - ca_t - ppe_t)
+        nca_prev = max(0.0, ta_prev - ca_prev - ppe_prev)
+        aqi = _safe_div(nca_t / ta_t, nca_prev / ta_prev, 1.0)
+    else:
+        ca_t = ca_t_raw or (t.cash_st_investments or 0.0) + 0.35 * max(0.0, ta_t - (t.cash_st_investments or 0.0))
+        ca_prev = ca_prev_raw or (t_prev.cash_st_investments or 0.0) + 0.35 * max(0.0, ta_prev - (t_prev.cash_st_investments or 0.0))
+        ppe_t = ppe_t_raw or max(0.0, ta_t - ca_t) * 0.7
+        ppe_prev = ppe_prev_raw or max(0.0, ta_prev - ca_prev) * 0.7
+        non_ca_t = 1.0 - _safe_div(ca_t + ppe_t, ta_t, 0.8)
+        non_ca_prev = 1.0 - _safe_div(ca_prev + ppe_prev, ta_prev, 0.8)
+        aqi = _safe_div(max(0.01, non_ca_t), max(0.01, non_ca_prev), 1.0)
 
     # 4. SGI (Sales Growth Index)
     sgi = _safe_div(rev_t, rev_prev, 1.0)
@@ -150,11 +174,18 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
     depi = _safe_div(dep_rate_prev, dep_rate_t, 1.0)
 
     # 6. SGAI (SG&A Expenses Index)
-    sga_t = getattr(t, "sga_expense", None) or max(0.0, gp_t - ebit_t)
-    sga_prev = getattr(t_prev, "sga_expense", None) or max(0.0, gp_prev - ebit_prev)
-    sga_ratio_t = _safe_div(sga_t, rev_t, 0.20)
-    sga_ratio_prev = _safe_div(sga_prev, rev_prev, 0.20)
-    sgai = _safe_div(sga_ratio_t, sga_ratio_prev, 1.0)
+    sga_t_raw = getattr(t, "sga_expense", None)
+    sga_prev_raw = getattr(t_prev, "sga_expense", None)
+    if sga_t_raw is not None and sga_prev_raw is not None and rev_t > 0 and rev_prev > 0:
+        sga_ratio_t = sga_t_raw / rev_t
+        sga_ratio_prev = sga_prev_raw / rev_prev
+        sgai = _safe_div(sga_ratio_t, sga_ratio_prev, 1.0)
+    else:
+        sga_t = sga_t_raw or max(0.0, gp_t - ebit_t)
+        sga_prev = sga_prev_raw or max(0.0, gp_prev - ebit_prev)
+        sga_ratio_t = _safe_div(sga_t, rev_t, 0.20)
+        sga_ratio_prev = _safe_div(sga_prev, rev_prev, 0.20)
+        sgai = _safe_div(sga_ratio_t, sga_ratio_prev, 1.0)
 
     # 7. LVGI (Leverage Index)
     lev_t = _safe_div(debt_t, ta_t, 0.30)
@@ -163,6 +194,22 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
 
     # 8. TATA (Total Accruals to Total Assets)
     tata = _safe_div(ni_t - cfo_t, ta_t, 0.0)
+
+    data_available = bool(has_genuine_ar and has_genuine_aqi)
+    if strict and not data_available:
+        return {
+            "company_id": company_id,
+            "status": "insufficient_data",
+            "data_available": False,
+            "beneish_score": None,
+            "m_score": None,
+            "is_manipulator": False,
+            "zone": "Insufficient Data",
+            "threshold": -1.78,
+            "variables": None,
+            "message": "Required genuine historical line items (accounts receivable, current assets, net PP&E) are absent.",
+            "interpretation": "Insufficient genuine statement lines on file.",
+        }
 
     # Clamp index variables to robust domain (prevent wild infinity / negative distortions)
     dsri = max(0.1, min(5.0, dsri))
@@ -200,6 +247,8 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
         "company_id": company_id,
         "fiscal_year": t.fiscal_year,
         "status": "computed",
+        "data_available": data_available,
+        "beneish_score": m_score_rounded if data_available else None,
         "m_score": m_score_rounded,
         "is_manipulator": is_manipulator,
         "zone": zone,
@@ -215,4 +264,5 @@ def compute_beneish_m_score(db: Session, company_id: str) -> dict[str, Any]:
             "tata": round(tata, 3),
         },
         "interpretation": interp,
+        "data_quality_flags": [] if data_available else ["HEURISTIC_LINES_USED"],
     }

@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.config import find_seed_workbook, SEED_FILENAME
 from app.db import SessionLocal
-from app.models import Company, DataQualityFlag, FinancialSnapshot, ImportRun, Placement
+from app.models import Company, DataQualityFlag, FinancialSnapshot, ImportRun, Placement, FinancialStatement, DerivedMetric, PeerBenchmark
+from app.services.fundamentals import compute_snapshot_ratios, sync_snapshot_to_3nf
 from app.services.ids import normalize_company_id
 
 MONEY_COLS = [
@@ -183,6 +184,8 @@ def _import_companies(db: Session, wb, source_name: str) -> int:
             }[col]
             if hasattr(snap, attr):
                 setattr(snap, attr, _cell(_row_get(header, row, col)))
+        compute_snapshot_ratios(snap, company)
+        sync_snapshot_to_3nf(db, snap, company)
         imported += 1
     # Flush so later passes (placements, quality flags) can resolve companies via
     # db.get(): pending objects are not in the identity map until flushed.
@@ -360,25 +363,38 @@ def _build_fixture_workbook(tmp_path: Path) -> Path:
 
 
 def run_import(force: bool = False, seed_path: Path | None = None) -> dict:
-    """Main entry. Returns a summary dict. Prints honest failure when seed missing."""
-    fixture = False
-    path = seed_path or find_seed_workbook()
-    if path is None:
-        print("FAIL: seed workbook missing", flush=True)
-        fixture = True
-        fixture_dir = Path("./data").resolve()
-        fixture_dir.mkdir(parents=True, exist_ok=True)
-        path = _build_fixture_workbook(fixture_dir / "fixture_seed.xlsx")
-        print(f"Importing synthetic 5-row fixture instead: {path}", flush=True)
-
-    stat = path.stat()
-    source_name = path.name
-    source_mtime = stat.st_mtime
-
-    import openpyxl
-
+    """Main entry. Returns a summary dict. Database is primary durable operational store."""
     db: Session = SessionLocal()
     try:
+        # Check if operational database already contains companies
+        existing_companies = db.execute(select(Company.company_id)).scalars().all()
+        if existing_companies and seed_path is None and not force:
+            print(
+                f"Operational SQLite database already populated with {len(existing_companies)} companies. "
+                "Excel seed reading skipped (database is primary durable store).",
+                flush=True,
+            )
+            return {"status": "skipped", "companies": len(existing_companies), "source": "database_operational"}
+
+        fixture = False
+        path = seed_path or find_seed_workbook()
+        if path is None:
+            if existing_companies:
+                print(f"Seed workbook redacted/archived; SQLite database is operational with {len(existing_companies)} companies.", flush=True)
+                return {"status": "skipped", "companies": len(existing_companies), "source": "database_operational"}
+            print("FAIL: seed workbook missing", flush=True)
+            fixture = True
+            fixture_dir = Path("./data").resolve()
+            fixture_dir.mkdir(parents=True, exist_ok=True)
+            path = _build_fixture_workbook(fixture_dir / "fixture_seed.xlsx")
+            print(f"Importing synthetic 5-row fixture instead: {path}", flush=True)
+
+        stat = path.stat()
+        source_name = path.name
+        source_mtime = stat.st_mtime
+
+        import openpyxl
+
         last = db.execute(
             select(ImportRun)
             .where(ImportRun.source_filename == source_name, ImportRun.source_mtime == source_mtime)

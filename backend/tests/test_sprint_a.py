@@ -107,7 +107,7 @@ def test_parser_prefers_365d_duplicate():
     assert rows[0].fields["Revenue"] == 143_000_000_000.0
 
 
-def test_live_db_msft_still_suspect_after_patch():
+def test_live_db_msft_still_suspect_after_patch(imported_db):
     """Read-path check: if the live DB still holds the bad 2019 row, dossier must flag it."""
     import os
 

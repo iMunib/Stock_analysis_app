@@ -83,6 +83,15 @@ class SnapshotOut(BaseModel):
     ebitda: float | None = None
     interest_expense: float | None = None
     topline_alt: float | None = None
+    # expanded GAAP/IFRS line items (Phase 1)
+    accounts_receivable: float | None = None
+    inventory: float | None = None
+    current_assets: float | None = None
+    current_liabilities: float | None = None
+    ppe_net: float | None = None
+    retained_earnings: float | None = None
+    stock_based_compensation: float | None = None
+    interest_income: float | None = None
     # ratios
     fcfmargin_calc: float | None = None
     grossmargin_calc: float | None = None

@@ -17,7 +17,7 @@ from app.services.llm import free_latch, llm_status
 
 
 @pytest.fixture(scope="module")
-def scored():
+def scored(imported_db):
     with TestClient(app) as c:
         r = c.post("/api/v1/scores/recompute", json={"universe": "seed"})
         assert r.status_code == 200
@@ -26,10 +26,17 @@ def scored():
 
 # ---------- secrets hygiene ----------
 
-def test_env_example_has_placeholders_only():
+def _find_root_file(name: str):
     from pathlib import Path
+    for parent in [Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[1], Path("/app"), Path("/")]:
+        cand = parent / name
+        if cand.exists():
+            return cand
+    return Path(name)
 
-    p = Path(__file__).resolve().parents[2] / ".env.example"
+
+def test_env_example_has_placeholders_only():
+    p = _find_root_file(".env.example")
     text = p.read_text(encoding="utf-8")
     assert "OPENROUTER_API_KEY=" in text
     for line in text.splitlines():
@@ -38,9 +45,7 @@ def test_env_example_has_placeholders_only():
 
 
 def test_gitignore_covers_env():
-    from pathlib import Path
-
-    p = Path(__file__).resolve().parents[2] / ".gitignore"
+    p = _find_root_file(".gitignore")
     text = p.read_text(encoding="utf-8")
     for needle in (".env", ".env.local", ".env.*", "!.env.example", "playwright-report/", "test-results/"):
         assert needle in text, f".gitignore missing {needle}"

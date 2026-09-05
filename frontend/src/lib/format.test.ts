@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { money, multiple, percentish, score1, yoyPct } from "./format";
 
 describe("percentish formatting (compare 30.2% not 0.3)", () => {
-  it("treats |x| <= 1.5 as a fraction", () => {
+  it("treats fractions as percents, including high-ROE compounders like AAPL (1.519 -> 151.9%)", () => {
     expect(percentish(0.302)).toBe("30.2%");
     expect(percentish(0.3)).toBe("30.0%");
+    expect(percentish(1.519)).toBe("151.9%");
     expect(percentish(-0.05)).toBe("-5.0%");
   });
-  it("treats |x| > 1.5 as already-percent", () => {
+  it("treats |x| > 5.0 as already-percent", () => {
     expect(percentish(30.2)).toBe("30.2%");
     expect(percentish(45)).toBe("45.0%");
   });

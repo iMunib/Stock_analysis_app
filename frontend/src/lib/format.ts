@@ -4,7 +4,7 @@
 export function percentish(v: number | null | undefined, digits = 1): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   const abs = Math.abs(v);
-  const frac = abs <= 1.5 ? v * 100 : v;
+  const frac = abs <= 5.0 ? v * 100 : v;
   return `${frac.toFixed(digits)}%`;
 }
 

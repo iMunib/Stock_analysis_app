@@ -325,3 +325,50 @@ def compute_and_store_reverse_dcf(db: Session, company_id: str) -> ValuationReve
 
     db.flush()
     return row
+
+
+OPPORTUNITY_COST_HURDLE = 0.08  # Burton Malkiel & J.L. Collins 8.0% nominal index hurdle
+
+
+def evaluate_reverse_dcf_hurdles(dcf_row: ValuationReverseDCF | None) -> dict[str, Any]:
+    """Evaluates expectations gap and benchmarks against 8.0% Malkiel/Collins index hurdle."""
+    if dcf_row is None or dcf_row.market_implied_growth_10y is None:
+        return {
+            "hurdle_rate": OPPORTUNITY_COST_HURDLE,
+            "market_implied_growth_10y": None,
+            "historical_5y_cagr": None,
+            "expectations_gap": None,
+            "hurdle_status": "insufficient_data",
+            "gap_status": "insufficient_data",
+            "hurdle_passed": False,
+        }
+    implied = dcf_row.market_implied_growth_10y
+    gap = dcf_row.expectations_gap
+    cagr = dcf_row.historical_5y_cagr
+
+    hurdle_passed = implied <= OPPORTUNITY_COST_HURDLE
+    hurdle_status = (
+        f"Implied growth ({implied*100:.1f}%) exceeds the 8.0% Malkiel/Collins index opportunity cost hurdle."
+        if not hurdle_passed
+        else f"Implied growth ({implied*100:.1f}%) is within or below the 8.0% Malkiel/Collins index hurdle."
+    )
+
+    if gap is not None:
+        if gap <= 0.02:
+            gap_status = "low_expectations"
+        elif gap <= 0.06:
+            gap_status = "moderate_expectations"
+        else:
+            gap_status = "priced_for_perfection"
+    else:
+        gap_status = "unknown_gap"
+
+    return {
+        "hurdle_rate": OPPORTUNITY_COST_HURDLE,
+        "market_implied_growth_10y": implied,
+        "historical_5y_cagr": cagr,
+        "expectations_gap": gap,
+        "hurdle_passed": hurdle_passed,
+        "hurdle_status": hurdle_status,
+        "gap_status": gap_status,
+    }

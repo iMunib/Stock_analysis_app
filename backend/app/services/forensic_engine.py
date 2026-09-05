@@ -59,19 +59,95 @@ def analyze_cfo_ni_decoupling(snaps: list[FinancialSnapshot]) -> dict[str, Any]:
 
 
 def analyze_dso(snaps: list[FinancialSnapshot]) -> dict[str, Any]:
-    """DSO needs accounts receivable — not present in the stored schema today."""
-    has_ar = any(getattr(s, "accounts_receivable", None) is not None for s in snaps)
-    return {"flag": FLAG_DSO_SURGE, "triggered": False, "data_available": has_ar}
+    """Detects accounts receivable growth outstripping revenue growth by > 15%."""
+    rows = sorted(
+        (s for s in snaps if s.fiscal_year is not None and getattr(s, "accounts_receivable", None) is not None and s.revenue is not None),
+        key=lambda s: s.fiscal_year,
+    )
+    if len(rows) < 2:
+        has_ar = any(getattr(s, "accounts_receivable", None) is not None for s in snaps)
+        return {"flag": FLAG_DSO_SURGE, "triggered": False, "data_available": has_ar}
+
+    breaches: list[int] = []
+    for a, b in zip(rows, rows[1:]):
+        ar_a = getattr(a, "accounts_receivable", 0.0) or 0.0
+        ar_b = getattr(b, "accounts_receivable", 0.0) or 0.0
+        rev_a = a.revenue or 0.0
+        rev_b = b.revenue or 0.0
+        if ar_a > 0 and rev_a > 0 and b.fiscal_year:
+            ar_growth = (ar_b - ar_a) / ar_a
+            rev_growth = (rev_b - rev_a) / rev_a
+            if ar_growth > (rev_growth + 0.15):
+                breaches.append(b.fiscal_year)
+
+    return {
+        "flag": FLAG_DSO_SURGE,
+        "triggered": bool(breaches),
+        "data_available": True,
+        "years": breaches,
+    }
 
 
 def analyze_inventory(snaps: list[FinancialSnapshot]) -> dict[str, Any]:
-    has_inv = any(getattr(s, "inventory", None) is not None for s in snaps)
-    return {"flag": FLAG_INVENTORY_BUILDUP, "triggered": False, "data_available": has_inv}
+    """Detects inventory growth outstripping revenue growth by > 15%."""
+    rows = sorted(
+        (s for s in snaps if s.fiscal_year is not None and getattr(s, "inventory", None) is not None and s.revenue is not None),
+        key=lambda s: s.fiscal_year,
+    )
+    if len(rows) < 2:
+        has_inv = any(getattr(s, "inventory", None) is not None for s in snaps)
+        return {"flag": FLAG_INVENTORY_BUILDUP, "triggered": False, "data_available": has_inv}
+
+    breaches: list[int] = []
+    for a, b in zip(rows, rows[1:]):
+        inv_a = getattr(a, "inventory", 0.0) or 0.0
+        inv_b = getattr(b, "inventory", 0.0) or 0.0
+        rev_a = a.revenue or 0.0
+        rev_b = b.revenue or 0.0
+        if inv_a > 0 and rev_a > 0 and b.fiscal_year:
+            inv_growth = (inv_b - inv_a) / inv_a
+            rev_growth = (rev_b - rev_a) / rev_a
+            if inv_growth > (rev_growth + 0.15):
+                breaches.append(b.fiscal_year)
+
+    return {
+        "flag": FLAG_INVENTORY_BUILDUP,
+        "triggered": bool(breaches),
+        "data_available": True,
+        "years": breaches,
+    }
 
 
 def analyze_aqi(snaps: list[FinancialSnapshot]) -> dict[str, Any]:
-    has_ca = any(getattr(s, "current_assets", None) is not None for s in snaps)
-    return {"flag": FLAG_CAPITALIZED_EXPENSES, "triggered": False, "data_available": has_ca}
+    """Asset Quality Index check: Non-current non-PPE assets expanding as % of assets."""
+    rows = sorted(
+        (s for s in snaps if s.fiscal_year is not None and getattr(s, "current_assets", None) is not None and s.total_assets is not None),
+        key=lambda s: s.fiscal_year,
+    )
+    if len(rows) < 2:
+        has_ca = any(getattr(s, "current_assets", None) is not None for s in snaps)
+        return {"flag": FLAG_CAPITALIZED_EXPENSES, "triggered": False, "data_available": has_ca}
+
+    breaches: list[int] = []
+    for a, b in zip(rows, rows[1:]):
+        ta_a = a.total_assets or 1.0
+        ta_b = b.total_assets or 1.0
+        ca_a = getattr(a, "current_assets", None) or 0.0
+        ca_b = getattr(b, "current_assets", None) or 0.0
+        ppe_a = getattr(a, "ppe_net", None) or 0.0
+        ppe_b = getattr(b, "ppe_net", None) or 0.0
+
+        non_ca_a = 1.0 - ((ca_a + ppe_a) / ta_a)
+        non_ca_b = 1.0 - ((ca_b + ppe_b) / ta_b)
+        if non_ca_a > 0 and (non_ca_b / non_ca_a) > 1.25 and b.fiscal_year:
+            breaches.append(b.fiscal_year)
+
+    return {
+        "flag": FLAG_CAPITALIZED_EXPENSES,
+        "triggered": bool(breaches),
+        "data_available": True,
+        "years": breaches,
+    }
 
 
 def earnings_quality_rating(results: list[dict[str, Any]]) -> int | None:
@@ -107,6 +183,60 @@ def analyze_company(db: Session, company_id: str) -> dict[str, Any]:
         "triggered_flags": [r["flag"] for r in results if r.get("triggered")],
         "eqr": earnings_quality_rating(results),
         "periods_evaluated": len([s for s in snaps if s.fiscal_year is not None]),
+    }
+
+
+def synthesize_forensic_health(db: Session, company_id: str) -> dict[str, Any]:
+    """Master Forensic Red Flag Synthesizer (Task 3.3).
+
+    Synthesizes Schilit Shenanigans, Beneish M-Score, and Sloan Accruals into
+    a unified Forensic Health Score (0-100) and risk tier.
+    """
+    from app.services.beneish_engine import compute_beneish_m_score
+    from app.services.sloan_engine import compute_sloan_accruals
+
+    schilit = analyze_company(db, company_id)
+    beneish = compute_beneish_m_score(db, company_id)
+    sloan = compute_sloan_accruals(db, company_id)
+
+    score = 100
+    penalties = []
+
+    # 1. Schilit flags
+    for fl in schilit["flags"]:
+        if fl.get("triggered"):
+            name = fl.get("flag", "UNKNOWN")
+            pts = 20 if name == FLAG_DSO_SURGE else (15 if name == FLAG_INVENTORY_BUILDUP else 25)
+            score -= pts
+            penalties.append(f"{name}: -{pts} pts")
+
+    # 2. Beneish M-Score flag
+    if beneish.get("is_manipulator"):
+        score -= 25
+        penalties.append(f"Beneish M-Score flagged ({beneish.get('m_score')}): -25 pts")
+
+    # 3. Sloan Accruals flag
+    if sloan.get("flag") == "HIGH_ACCRUALS_PAPER_EARNINGS":
+        score -= 15
+        penalties.append(f"Sloan High Accruals ({sloan.get('accrual_ratio')}): -15 pts")
+
+    final_score = max(0, min(100, score))
+
+    if final_score >= 80:
+        tier = "Clean / Low Forensic Risk"
+    elif final_score >= 50:
+        tier = "Moderate Forensic Caution"
+    else:
+        tier = "High Forensic Risk / Red Flags"
+
+    return {
+        "company_id": company_id,
+        "forensic_health_score": final_score,
+        "forensic_risk_tier": tier,
+        "penalties": penalties,
+        "schilit": schilit,
+        "beneish": beneish,
+        "sloan": sloan,
     }
 
 

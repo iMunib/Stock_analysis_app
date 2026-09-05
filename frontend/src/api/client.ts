@@ -72,6 +72,8 @@ export const enc = encodeURIComponent;
 
 export const api = {
   search: (q: string, limit = 20) => get<import("./types").SearchOut>(`/api/v1/search?q=${enc(q)}&limit=${limit}`),
+  suggestions: (q: string, limit = 10) =>
+    get<import("./types").SuggestionsOut>(`/api/v1/search/suggestions?q=${enc(q)}&limit=${limit}`),
   dossier: (companyId: string) => get<import("./types").DossierOut>(`/api/v1/companies/${enc(companyId)}/dossier`),
   compare: (ids: string[]) => get<import("./types").CompareOut>(`/api/v1/compare?ids=${ids.map(enc).join(",")}`),
   similar: (companyId: string, n = 5) => get<import("./types").SimilarOut>(`/api/v1/companies/${enc(companyId)}/similar?n=${n}`),
@@ -96,6 +98,12 @@ export const api = {
     get<import("./types").PractitionerOut>(`/api/v1/companies/${enc(companyId)}/practitioner`),
   commonSize: (companyId: string, years = 5) =>
     get<import("./types").CommonSizeOut>(`/api/v1/companies/${enc(companyId)}/financials/common-size?years=${years}`),
+  statements: (companyId: string, limit = 10) =>
+    get<{ company_id: string; count: number; items: any[] }>(`/api/v1/companies/${enc(companyId)}/statements?limit=${limit}`),
+  derivedMetrics: (companyId: string, limit = 10) =>
+    get<{ company_id: string; count: number; items: any[] }>(`/api/v1/companies/${enc(companyId)}/derived-metrics?limit=${limit}`),
+  benchmarks: (companyId: string) =>
+    get<{ company_id: string; currency: string; count: number; items: any[] }>(`/api/v1/companies/${enc(companyId)}/benchmarks`),
   dossierQuality: (companyId: string) => get<Record<string, unknown>>(`/api/v1/companies/${enc(companyId)}/quality`),
   refreshCompanyPrice: (companyId: string) =>
     post<{ job_id: string; status: string }>(`/api/v1/jobs/backfill`, {

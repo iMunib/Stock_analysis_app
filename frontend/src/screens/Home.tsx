@@ -6,9 +6,10 @@ import { CompanyLink, ErrorBanner, Score, SignalBadge, Spinner } from "../compon
 import { SIGNAL_ORDER, signalTone } from "../api/visuals";
 import { errorCatalogCopy, signalLabel } from "../api/copy";
 import { getOpenedAt, getWatchlist } from "../lib/watchlist";
-import { Card, Grid, Page, StatTile } from "../components/layout";
+import { Card, Grid, Page } from "../components/layout";
 import { CompositeGauge } from "../components/viz";
 import { EmptyState } from "../components/feedback";
+import TickerTypeahead from "../components/common/TickerTypeahead";
 
 const LEGEND =
   "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers — average companies land mid-pack, not at 8.";
@@ -141,10 +142,57 @@ export default function Home() {
       {meta && (
         <section aria-label="Database status" className="space-y-4">
           <Grid cols={4}>
-            <StatTile label="Companies" value={meta.companies} />
-            <StatTile label="Scored" value={meta.scored} tone="positive" />
-            <StatTile label="Insufficient data" value={meta.insufficient_data} tone="warning" />
-            <StatTile label="Growth not scored" value={meta.growth_null} tone="neutral" />
+            <div className="rounded-card border border-border bg-bg-1 p-4 shadow-card">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-ink-2">Total Universe</div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="font-mono text-2xl font-bold text-ink-0">{meta.companies}</span>
+                <span className="font-mono text-[10px] text-accent">US + CA</span>
+              </div>
+              <div className="mt-2 text-[11px] font-mono text-ink-2">S&P 500 & TSX Composite</div>
+            </div>
+
+            <div className="rounded-card border border-border bg-bg-1 p-4 shadow-card">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-ink-2">Scored Coverage</div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="font-mono text-2xl font-bold text-pos">{meta.scored}</span>
+                <span className="font-mono text-[10px] text-pos font-semibold">
+                  {Math.round((meta.scored / (meta.companies || 1)) * 100)}%
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 w-full rounded-full bg-bg-2 overflow-hidden">
+                <div
+                  className="h-full bg-pos rounded-full transition-all duration-500"
+                  style={{ width: `${(meta.scored / (meta.companies || 1)) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-card border border-border bg-bg-1 p-4 shadow-card">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-ink-2">Data Integrity Gaps</div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="font-mono text-2xl font-bold text-warn">{meta.insufficient_data}</span>
+                <span className="font-mono text-[10px] text-warn">
+                  {((meta.insufficient_data / (meta.companies || 1)) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="mt-2 text-[11px] font-mono text-ink-2">Filing ingestion pending</div>
+            </div>
+
+            <div className="rounded-card border border-border bg-bg-1 p-4 shadow-card">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-ink-2">3Y+ Statement Depth</div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="font-mono text-2xl font-bold text-ink-0">{meta.scored - meta.growth_null}</span>
+                <span className="font-mono text-[10px] text-ink-2">
+                  {Math.round(((meta.scored - meta.growth_null) / (meta.scored || 1)) * 100)}%
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 w-full rounded-full bg-bg-2 overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-500"
+                  style={{ width: `${((meta.scored - meta.growth_null) / (meta.scored || 1)) * 100}%` }}
+                />
+              </div>
+            </div>
           </Grid>
 
           {meta.scored === 0 && (
@@ -170,8 +218,8 @@ export default function Home() {
             </p>
           </Card>
 
-          <Card title="Signal Distribution" subtitle="System-wide classification histogram across the active universe">
-            <ul className="space-y-2">
+          <Card title="Signal Distribution & Market Breadth" subtitle="System-wide classification histogram across the active universe (Click any row to view screener cohort)">
+            <ul className="space-y-2.5">
               {SIGNAL_ORDER.map((sig) => {
                 const n = meta.signal_histogram[sig] ?? 0;
                 if (!n) return null;
@@ -184,16 +232,29 @@ export default function Home() {
                       : tone === "bad"
                         ? "bg-neg"
                         : "bg-info";
+                const pct = ((n / (meta.companies || 1)) * 100).toFixed(1);
+                const sigParam = sig === "score_missing" ? "insufficient_data" : sig;
                 return (
-                  <li key={sig} className="flex items-center gap-3 text-xs">
-                    <span className="w-40 shrink-0 text-ink-1 font-medium">{signalLabel(sig === "score_missing" ? null : sig)}</span>
-                    <span className="h-2.5 rounded-sm bg-bg-2 overflow-hidden flex-1 max-w-md">
-                      <span
-                        className={`block h-full rounded-sm ${color} transition-all duration-300`}
-                        style={{ width: `${Math.max(2, (n / meta.companies) * 100)}%` }}
-                      />
-                    </span>
-                    <span className="font-mono tabular-nums font-semibold text-ink-0 text-right w-12">{n}</span>
+                  <li key={sig}>
+                    <Link
+                      to={`/screen?signal=${sigParam}`}
+                      className="group flex items-center gap-3 text-xs p-1 rounded hover:bg-bg-2/60 transition-colors"
+                      title={`Filter screener by ${signalLabel(sig === "score_missing" ? null : sig)}`}
+                    >
+                      <span className="w-36 shrink-0 text-ink-1 font-medium group-hover:text-accent transition-colors flex items-center justify-between">
+                        <span>{signalLabel(sig === "score_missing" ? null : sig)}</span>
+                        <span className="font-mono text-[10px] text-ink-2 mr-2">({pct}%)</span>
+                      </span>
+                      <span className="h-2 rounded-sm bg-bg-2 overflow-hidden flex-1 max-w-md">
+                        <span
+                          className={`block h-full rounded-sm ${color} transition-all duration-300 group-hover:brightness-110`}
+                          style={{ width: `${Math.max(2, (n / meta.companies) * 100)}%` }}
+                        />
+                      </span>
+                      <span className="font-mono tabular-nums font-semibold text-ink-0 text-right w-12 group-hover:text-accent transition-colors">
+                        {n}
+                      </span>
+                    </Link>
                   </li>
                 );
               })}
@@ -229,19 +290,28 @@ export default function Home() {
           </div>
 
           <form
-            className="flex flex-wrap gap-3"
+            className="flex flex-wrap gap-3 items-center"
             onSubmit={(e) => {
               e.preventDefault();
               addTicker();
             }}
           >
-            <input
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value)}
-              placeholder="e.g. AMD, BABA, KITS.TO"
-              aria-label="Ticker to add"
-              className="w-full sm:w-72 rounded-card border border-border bg-bg-0 px-3 py-2 font-mono text-sm placeholder:text-ink-2 text-ink-0"
-            />
+            <div className="w-full sm:w-80">
+              <TickerTypeahead
+                value={ticker}
+                onChange={setTicker}
+                ariaLabel="Ticker to add"
+                onSelect={(item) => {
+                  setTicker(item.ticker);
+                  if (item.in_database) {
+                    nav(`/c/${enc(item.company_id)}`);
+                  } else {
+                    addTicker(item.ticker);
+                  }
+                }}
+                placeholder="Search ticker, name, or exchange…"
+              />
+            </div>
             <button
               type="submit"
               disabled={ingesting || !ticker.trim()}
@@ -252,20 +322,28 @@ export default function Home() {
           </form>
 
           {ingesting && (
-            <div className="space-y-3 rounded-card border border-border bg-bg-2 p-3 text-xs">
-              <div className="flex items-center gap-2 font-mono text-accent">
-                <span className="inline-block h-2 w-2 rounded-full bg-accent animate-ping" />
-                <span>{stepMessage || "Processing ingest job…"}</span>
+            <div className="space-y-3 rounded-card border border-accent/40 bg-accent-weak/20 p-4 text-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5 font-mono text-accent font-medium text-sm">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent"></span>
+                </span>
+                <span>
+                  {stepMessage || "Enriching multi-year SEC/Yahoo statements and computing 3NF financial ratios in background…"}
+                </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="text-[11px] text-ink-1">
+                Fetching filings, pulling market quotes, computing 3NF ratios (ROIC, Altman Z, Beneish M, Reverse DCF), and updating peer percentiles.
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 {INGEST_STEPS.map((s) => {
                   const isCurrent = activeStep === s.key;
                   return (
                     <span
                       key={s.key}
-                      className={`rounded-chip px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                      className={`rounded-chip px-2.5 py-1 font-mono text-[11px] transition-all ${
                         isCurrent
-                          ? "border border-accent bg-accent/20 text-accent font-bold animate-pulse"
+                          ? "border border-accent bg-accent/20 text-accent font-bold shadow-xs"
                           : "border border-border bg-bg-0/60 text-ink-2"
                       }`}
                     >

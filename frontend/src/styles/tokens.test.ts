@@ -47,4 +47,17 @@ describe("Design Tokens System", () => {
     expect(TOKENS.typography.body).toContain("IBM Plex Sans");
     expect(TOKENS.typography.mono).toContain("IBM Plex Mono");
   });
+
+  it("defines light theme alabaster/ivory tokens with WCAG contrast", async () => {
+    const { TOKENS_LIGHT, getThemeTokens } = await import("./tokens");
+    expect(TOKENS_LIGHT.surfaces.bg0).toBe("#f8fafc");
+    expect(TOKENS_LIGHT.surfaces.bg1).toBe("#ffffff");
+    expect(TOKENS_LIGHT.typography.ink0).toBe("#0f172a");
+    expect(TOKENS_LIGHT.accent.gold).toBe("#b47818");
+    expect(TOKENS_LIGHT.functional.pos).toBe("#16a34a");
+    expect(TOKENS_LIGHT.functional.neg).toBe("#dc2626");
+    expect(getThemeTokens("light")).toBe(TOKENS_LIGHT);
+    expect(getThemeTokens("dark")).toBe(TOKENS);
+  });
 });
+

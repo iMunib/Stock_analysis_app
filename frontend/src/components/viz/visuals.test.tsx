@@ -132,4 +132,41 @@ describe("SVG Visualization Primitives", () => {
       expect(screen.getByText(/Bank \/ Insurer Excluded/i)).toBeDefined();
     });
   });
+
+  describe("CashFlowBridge", () => {
+    it("renders waterfall bridge with positive and negative steps", async () => {
+      const { CashFlowBridge } = await import("./CashFlowBridge");
+      render(
+        <CashFlowBridge
+          inputs={{
+            net_income: -5846000000,
+            cfo: 4462000000,
+            capex: 801000000,
+            fcf: 3661000000,
+            currency: "USD",
+          }}
+        />
+      );
+      expect(screen.getByText(/Ittelson Bridge/i)).toBeDefined();
+      expect(screen.getByText(/Currency: USD/i)).toBeDefined();
+      expect(screen.getByText(/Free Cash Flow/i)).toBeDefined();
+      expect(screen.getByText(/Show Waterfall Statement Table/i)).toBeDefined();
+    });
+
+    it("displays missing data message when net income or CFO is missing", async () => {
+      const { CashFlowBridge } = await import("./CashFlowBridge");
+      render(
+        <CashFlowBridge
+          inputs={{
+            net_income: null,
+            cfo: null,
+            capex: null,
+            fcf: null,
+          }}
+        />
+      );
+      expect(screen.getByText(/needs net income and operating cash flow/i)).toBeDefined();
+    });
+  });
 });
+

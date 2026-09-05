@@ -64,6 +64,21 @@ async def lifespan(app: FastAPI):
         worker = JobWorker()
         worker.start()
         app.state.job_worker = worker
+
+        import threading
+
+        def _bg_startup_populate():
+            try:
+                import time
+                time.sleep(1.0)
+                from app.db import SessionLocal
+                from app.services.calculation_pipeline import populate_missing_metrics
+                with SessionLocal() as session:
+                    populate_missing_metrics(session, limit=None)
+            except Exception:
+                pass
+
+        threading.Thread(target=_bg_startup_populate, name="startup-pipeline", daemon=True).start()
     yield
 
 

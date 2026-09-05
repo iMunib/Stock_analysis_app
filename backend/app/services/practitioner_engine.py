@@ -48,6 +48,16 @@ def analyze_fridson(snaps: list[FinancialSnapshot]) -> dict[str, Any]:
             if curr_sp > prev_sp and prev_sp > 0:
                 widening_spread = True
 
+    # Cash drain alert: EBITDA expands while CFO contracts
+    cash_drain_alert = False
+    if len(annuals) >= 2:
+        for i in range(1, len(annuals)):
+            prev = annuals[i - 1]
+            curr = annuals[i]
+            if (curr.ebitda is not None and prev.ebitda is not None and curr.ebitda > prev.ebitda) and \
+               (curr.operating_cash_flow is not None and prev.operating_cash_flow is not None and curr.operating_cash_flow < prev.operating_cash_flow):
+                cash_drain_alert = True
+
     latest = annuals[-1] if annuals else (snaps[0] if snaps else None)
     fixed_charge_coverage = None
     if latest and latest.ebit is not None and latest.interest_expense is not None:
@@ -61,6 +71,8 @@ def analyze_fridson(snaps: list[FinancialSnapshot]) -> dict[str, Any]:
         "widening_spread_flag": widening_spread,
         "flag_warning": "Aggressive accrual capitalization" if widening_spread else None,
         "fixed_charge_coverage": fixed_charge_coverage,
+        "cash_drain_alert": cash_drain_alert,
+        "cash_drain_warning": "Cash drain detected: EBITDA is expanding while CFO contracts across fiscal periods." if cash_drain_alert else None,
     }
 
 

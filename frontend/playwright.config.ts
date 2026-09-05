@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
   retries: 1, // absorb load-order timing flakes (documented in PHASE9_REPORT)
+  workers: 1,
   use: {
     baseURL: "http://localhost:5173",
     headless: true,

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from app.db import get_session
-from app.models import Company, CompanyProfile, HalalFlag, Score
+from app.models import Company, CompanyProfile, DerivedMetric, HalalFlag, Score
 from app.services.scoring import DISCLAIMER, METHOD_VERSION
 from app.services.scoring_service import enrich_with_seed, load_universe
 from app.services.ids import normalize_company_id
@@ -127,6 +127,42 @@ def search(
     return SearchOut(q=term, count=len(items), items=items, method_version=METHOD_VERSION, disclaimer=DISCLAIMER)
 
 
+class SuggestionItem(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    company_id: str
+    ticker: str
+    name: str | None = None
+    exchange: str
+    country: str
+    sector: str | None = None
+    in_database: bool
+    tradingview_symbol: str
+    composite: float | None = None
+    signal: str | None = None
+    universe_tags: list[str] = []
+
+
+class SuggestionsOut(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    q: str
+    count: int
+    items: list[SuggestionItem]
+
+
+@router.get("/search/suggestions", response_model=SuggestionsOut, description="Typeahead suggestions for ticker search with authoritative exchange and TradingView symbols.")
+def search_suggestions(
+    q: str = Query(default="", max_length=64),
+    limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_session),
+):
+    from app.services.exchange_resolver import get_suggestions
+    res = get_suggestions(db, q, limit=limit)
+    items = [SuggestionItem(**item) for item in res]
+    return SuggestionsOut(q=q, count=len(items), items=items)
+
+
 def _sort_key(pair: tuple[Company, Score | None]):
     c, s = pair
     exact = 0
@@ -149,6 +185,14 @@ class DossierOut(BaseModel):
     data_gaps: list[str]
     profile: dict | None = None
     quarterly: list[dict] | None = None
+    # Phase 2 & Phase 5 additions
+    decision_verdict: dict | None = None
+    archetype: dict | None = None
+    moat_rating: dict | None = None
+    expectations_gap: float | None = None
+    level1: dict | None = None
+    level2: dict | None = None
+    level3: dict | None = None
     method_version: str
     disclaimer: str
 
@@ -180,10 +224,183 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
     company = db.get(Company, company_id)
     if company is None:
         raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
+    # Auto-resolve CIK if missing for US tickers
+    if not company.cik and company.country == "US":
+        try:
+            from app.services.mapping import cik_for_unknown_us, _universe_rows
+            by_id, _ = _universe_rows()
+            if company_id in by_id and by_id[company_id].get("cik"):
+                company.cik = by_id[company_id]["cik"]
+                db.flush()
+            else:
+                cik_val, _ = cik_for_unknown_us(company.ticker)
+                if cik_val:
+                    company.cik = cik_val
+                    db.flush()
+        except Exception:
+            pass
+
     entry = next((u for u in load_universe(db) if u["company_id"] == company_id), None)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
+
+    # Dynamic auto-ingest: if dated history is sparse (< 3 years with revenue), fetch filings and ingest
+    # (Disabled during automated test runs to preserve test isolation and offline execution)
+    import os
+    dated_rev_count = len([h for h in entry["history"] if h.get("fiscal_year") is not None and h.get("revenue") is not None])
+    if dated_rev_count < 3 and company.ticker and not os.environ.get("PYTEST_CURRENT_TEST"):
+        try:
+            from app.providers.registry import ProviderRegistry
+            from app.providers.base import CompanyRef
+            from app.services.mapping import yahoo_symbol_for
+            from app.services.ingest import ingest_statements, ingest_price
+            from app.services.scoring_service import recompute
+
+            registry = ProviderRegistry()
+            ref = CompanyRef(
+                company_id=company.company_id,
+                ticker=company.ticker,
+                country=company.country,
+                currency=company.currency,
+                yahoo_symbol=yahoo_symbol_for(company.ticker, company.country),
+                cik=company.cik,
+            )
+            stmts = registry.fetch_annual_statements(ref)
+            if stmts:
+                ingest_statements(db, company, stmts, refresh=True)
+                quote = registry.fetch_price(ref)
+                if quote:
+                    ingest_price(db, company, quote)
+                db.commit()
+                try:
+                    from app.services.calculation_pipeline import run_company_pipeline
+                    run_company_pipeline(db, company_id, refresh=False, fetch_live=False, recompute_score=False)
+                except Exception:
+                    pass
+                recompute(db, company_id)
+                entry = next((u for u in load_universe(db) if u["company_id"] == company_id), entry)
+        except Exception:
+            db.rollback()
+
+    # Dynamic TTM computation: ensure TTM row is always up to date and computed
+    from app.services.ttm_engine import compute_and_store_ttm
+    from app.models import FinancialSnapshotTTM
+    ttm_row = None
+    try:
+        ttm_row = compute_and_store_ttm(db, company_id)
+    except Exception:
+        ttm_row = db.get(FinancialSnapshotTTM, company_id)
+
     enriched = enrich_with_seed(entry["snapshot"], entry.get("seed_snapshot"))
+
+    # Enrich latest_snapshot with 3NF derived metrics (ROIC, Altman Z, Beneish M, CAGRs, etc.)
+    derived_row = db.execute(
+        select(DerivedMetric)
+        .where(DerivedMetric.company_id == company_id)
+        .order_by(DerivedMetric.fiscal_year.desc().nullslast(), DerivedMetric.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if derived_row:
+        for fld in (
+            "altman_z", "beneish_m_score", "sloan_accrual_ratio",
+            "revenue_cagr_3y", "revenue_cagr_5y", "eps_cagr_3y", "eps_cagr_5y", "fcf_cagr_5y",
+            "roic_calc", "grossmargin_calc", "fcfmargin_calc", "roe_calc", "roa_calc",
+            "pe_calc", "pb_calc", "ev_calc", "ev_to_ebitda_calc", "netdebt_calc"
+        ):
+            val = getattr(derived_row, fld, None)
+            if val is not None and enriched.get(fld) is None:
+                enriched[fld] = val
+        if enriched.get("altman_z") is not None and enriched.get("z_score") is None:
+            enriched["z_score"] = enriched["altman_z"]
+        if enriched.get("beneish_m_score") is not None and enriched.get("m_score") is None:
+            enriched["m_score"] = enriched["beneish_m_score"]
+
+    # Enrich latest_snapshot with ROIC, gross margin, PE, price, market_cap
+    if ttm_row and ttm_row.roic is not None:
+        enriched["roic"] = ttm_row.roic
+        if enriched.get("roic_calc") is None:
+            enriched["roic_calc"] = ttm_row.roic
+
+    if enriched.get("grossmargin_calc") is not None:
+        if enriched.get("gross_margin") is None:
+            enriched["gross_margin"] = enriched["grossmargin_calc"]
+    elif enriched.get("gross_profit") is not None and enriched.get("revenue"):
+        enriched["gross_margin"] = enriched["gross_profit"] / enriched["revenue"]
+
+    if enriched.get("pe_calc") is not None and enriched.get("pe") is None:
+        enriched["pe"] = enriched["pe_calc"]
+    elif enriched.get("pe_calc") is None and ttm_row and ttm_row.pe_ratio is not None:
+        enriched["pe_calc"] = ttm_row.pe_ratio
+        enriched["pe"] = ttm_row.pe_ratio
+
+    if enriched.get("pb_calc") is not None and enriched.get("pb") is None:
+        enriched["pb"] = enriched["pb_calc"]
+    elif enriched.get("pb") is None and enriched.get("market_cap") and enriched.get("book_equity") and enriched.get("book_equity") > 0:
+        enriched["pb"] = float(enriched["market_cap"]) / float(enriched["book_equity"])
+        if enriched.get("pb_calc") is None:
+            enriched["pb_calc"] = enriched["pb"]
+
+    if enriched.get("ev_to_ebitda_calc") is not None and enriched.get("ev_to_ebitda") is None:
+        enriched["ev_to_ebitda"] = enriched["ev_to_ebitda_calc"]
+
+
+    # Fallback price, price_currency, market_cap, and shares across all snapshots if missing on latest
+    if enriched.get("price") is None or enriched.get("market_cap") is None:
+        all_snaps = db.execute(
+            select(FinancialSnapshot)
+            .where(FinancialSnapshot.company_id == company_id)
+            .order_by(FinancialSnapshot.fiscal_year.desc().nullslast(), FinancialSnapshot.id.desc())
+        ).scalars().all()
+        for s_row in all_snaps:
+            if enriched.get("price") is None and s_row.price is not None:
+                enriched["price"] = s_row.price
+                if not enriched.get("price_currency"):
+                    enriched["price_currency"] = s_row.price_currency or company.currency or "USD"
+            if enriched.get("market_cap") is None and s_row.market_cap is not None:
+                enriched["market_cap"] = s_row.market_cap
+            if enriched.get("shares_snapshot") is None and s_row.shares_snapshot is not None:
+                enriched["shares_snapshot"] = s_row.shares_snapshot
+    if enriched.get("market_cap") is None and enriched.get("price") is not None and enriched.get("shares_snapshot") is not None:
+        enriched["market_cap"] = float(enriched["price"]) * float(enriched["shares_snapshot"])
+    if enriched.get("roic") is None and enriched.get("roic_calc") is not None:
+        enriched["roic"] = enriched["roic_calc"]
+    elif enriched.get("roic_calc") is None and enriched.get("roic") is not None:
+        enriched["roic_calc"] = enriched["roic"]
+    if enriched.get("net_debt") is None:
+        if enriched.get("netdebt_calc") is not None:
+            enriched["net_debt"] = enriched["netdebt_calc"]
+        elif enriched.get("total_debt") is not None and enriched.get("cash_and_equiv") is not None:
+            enriched["net_debt"] = enriched["total_debt"] - enriched["cash_and_equiv"]
+
+    # Intelligent contextual flags for metrics that cannot be computed
+    is_financial = company.custom_industry_sheet in ("Banks", "Insurance", "Credit_Services") or company.gics_sector == "Financials"
+    if is_financial:
+        enriched["financial_model_flag"] = "Regulatory Capital Model (N/A for Debt/FCF/Gross Margin)"
+        if enriched.get("gross_margin") is None:
+            enriched["gross_margin_flag"] = "N/A: Bank Model"
+        if enriched.get("net_debt") is None:
+            enriched["net_debt_flag"] = "N/A: Bank Model"
+
+    if enriched.get("pb") is None:
+        be = enriched.get("book_equity")
+        if be is not None and be <= 0:
+            enriched["pb_flag"] = "Deficit (Share Buybacks)"
+
+    if enriched.get("pe") is None:
+        eps = enriched.get("diluted_eps")
+        ni = enriched.get("net_income")
+        if (eps is not None and eps < 0) or (ni is not None and ni < 0):
+            enriched["pe_flag"] = "Loss / Deficit"
+        elif eps == 0 or ni == 0:
+            enriched["pe_flag"] = "Break-even"
+
+    if enriched.get("ev_to_ebitda") is None:
+        ebitda = enriched.get("ebitda")
+        if ebitda is not None and ebitda <= 0:
+            enriched["ev_to_ebitda_flag"] = "Negative EBITDA (N/M)"
+        elif is_financial:
+            enriched["ev_to_ebitda_flag"] = "N/A: Bank Model"
+
 
     score = db.get(Score, company_id)
     score_payload = None
@@ -258,7 +475,8 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
     if prof is None and company.ticker:
         try:
             from app.providers.yahoo import fetch_profile_and_quarterly
-            symbol = company.ticker + (".TO" if company.country == "CA" else "")
+            from app.services.mapping import yahoo_symbol_for
+            symbol = yahoo_symbol_for(company.ticker, company.country or "US")
             p_data = fetch_profile_and_quarterly(symbol)
             if p_data.get("summary") or p_data.get("dividend_yield") is not None or p_data.get("quarterly"):
                 prof = CompanyProfile(
@@ -284,12 +502,122 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
     }
     quarterly_payload = prof.quarterly_json if prof else None
 
+    # Phase 2 analytical engines & 3-tier dossier payloads
+    from app.services.verdict_engine import synthesize_safety_verdict
+    from app.services.archetype_engine import classify_archetype
+    from app.services.moat_engine import compute_economic_moat
+    from app.services.valuation_engine import compute_and_store_reverse_dcf
+    from app.services.capital_return_engine import compute_shareholder_yield
+    from app.services.owner_earnings import compute_owner_earnings
+    from app.services.beneish_engine import compute_beneish_m_score
+    from app.services.distress_engine import compute_distress
+    from app.services.penman_engine import latest_penman
+
+    decision_verdict = None
+    archetype = None
+    moat_rating = None
+    expectations_gap = None
+    level1 = None
+    level2 = None
+    level3 = None
+
+    try:
+        decision_verdict = synthesize_safety_verdict(db, company_id)
+    except Exception:
+        decision_verdict = None
+
+    try:
+        archetype = classify_archetype(db, company_id)
+    except Exception:
+        archetype = None
+
+    try:
+        moat_rating = compute_economic_moat(db, company_id)
+    except Exception:
+        moat_rating = None
+
+    try:
+        dcf = compute_and_store_reverse_dcf(db, company_id)
+        expectations_gap = dcf.expectations_gap if dcf else None
+    except Exception:
+        expectations_gap = None
+
+    try:
+        shareholder = compute_shareholder_yield(db, company_id)
+    except Exception:
+        shareholder = None
+
+    try:
+        owner_earn = compute_owner_earnings(db, company_id)
+    except Exception:
+        owner_earn = None
+
+    try:
+        beneish = compute_beneish_m_score(db, company_id)
+    except Exception:
+        beneish = None
+
+    try:
+        distress = compute_distress(db, company_id)
+    except Exception:
+        distress = None
+
+    try:
+        penman = latest_penman(db, company_id)
+    except Exception:
+        penman = None
+
+    level1 = {
+        "identity": {
+            "company_id": company.company_id,
+            "ticker": company.ticker,
+            "name": company.name,
+            "currency": company.currency,
+            "gics_sector": company.gics_sector,
+        },
+        "verdict_badge": decision_verdict.get("verdict_badge") if decision_verdict else None,
+        "traffic_lights": decision_verdict.get("traffic_lights") if decision_verdict else None,
+        "reverse_dcf_rule": decision_verdict.get("reverse_dcf_rule") if decision_verdict else None,
+        "decision_bullets": decision_verdict.get("decision_bullets") if decision_verdict else [],
+        "implied_10y_cagr": round(dcf.market_implied_growth_10y * 100.0, 2) if (dcf and dcf.market_implied_growth_10y is not None) else None,
+        "historical_5y_cagr": round(dcf.historical_5y_cagr * 100.0, 2) if (dcf and dcf.historical_5y_cagr is not None) else None,
+        "expectations_gap": round(dcf.expectations_gap * 100.0, 2) if (dcf and dcf.expectations_gap is not None) else None,
+    }
+
+    level2 = {
+        "four_pillar_radar": score_payload.get("pillars") if score_payload else None,
+        "lynch_archetype": archetype,
+        "true_shareholder_yield": shareholder,
+        "cash_flow_waterfall": owner_earn,
+    }
+
+    level3 = {
+        "beneish_matrix": beneish,
+        "penman_table": {
+            "noa": penman.noa if penman else None,
+            "nfo": penman.nfo if penman else None,
+            "rnoa": penman.rnoa if penman else None,
+            "flev": penman.flev if penman else None,
+            "nbc": penman.nbc if penman else None,
+            "roe_operational_spread": penman.roe_operational_spread if penman else None,
+            "exclusion": penman.exclusion if penman else None,
+        } if penman else None,
+        "altman_breakdown": distress,
+        "statement_history_10y": history_annual,
+    }
+
+    from app.services.exchange_resolver import get_exchange, get_tradingview_symbol
+    resolved_ex = company.exchange if (company.exchange and company.exchange not in ("US", "CA")) else get_exchange(company.ticker or "", country=company.country or "US")
+    tv_symbol = get_tradingview_symbol(company.company_id, company.ticker, exchange=resolved_ex, country=company.country)
+
     return DossierOut(
         identity={
             "company_id": company.company_id,
             "name": company.name,
             "currency": company.currency,
             "country": company.country,
+            "exchange": resolved_ex,
+            "tradingview_symbol": tv_symbol,
             "gics_sector": company.gics_sector,
             "gics_industry": company.gics_industry,
             "custom_industry_sheet": company.custom_industry_sheet,
@@ -309,6 +637,13 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
         data_gaps=_data_gaps(entry, enriched),
         profile=profile_payload,
         quarterly=quarterly_payload,
+        decision_verdict=decision_verdict,
+        archetype=archetype,
+        moat_rating=moat_rating,
+        expectations_gap=expectations_gap,
+        level1=level1,
+        level2=level2,
+        level3=level3,
         method_version=METHOD_VERSION,
         disclaimer=DISCLAIMER,
     )

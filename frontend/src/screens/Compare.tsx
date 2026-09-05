@@ -114,6 +114,7 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
 
   const bestComposite = bestOf("composite", "high");
   const bestRoe = bestOf("roe_calc", "high");
+  const bestRoa = bestOf("roa_calc", "high");
   const bestPe = bestOf("pe_calc", "low");
   const bestPb = bestOf("pb_calc", "low");
   const bestEv = bestOf("ev_to_ebitda_calc", "low");
@@ -176,8 +177,8 @@ function CompareTable({ data, showHalal }: { data: CompareOut; showHalal: boolea
             <td className="px-3 py-3 font-mono text-xs text-info font-medium">{r.currency ?? "—"}</td>
             {compKeys.map(([label, key, , fmt]) => {
               const v = num(r[key] as number | null);
-              const best = { composite: bestComposite, pe_calc: bestPe, pb_calc: bestPb, ev_to_ebitda_calc: bestEv, roe_calc: bestRoe, roa_calc: null, fcfmargin_calc: bestFcf }[
-                key as "composite" | "pe_calc" | "pb_calc" | "ev_to_ebitda_calc" | "roe_calc" | "fcfmargin_calc"
+              const best = { composite: bestComposite, pe_calc: bestPe, pb_calc: bestPb, ev_to_ebitda_calc: bestEv, roe_calc: bestRoe, roa_calc: bestRoa, fcfmargin_calc: bestFcf }[
+                key as "composite" | "pe_calc" | "pb_calc" | "ev_to_ebitda_calc" | "roe_calc" | "roa_calc" | "fcfmargin_calc"
               ];
               const isBest = v !== null && best !== null && v === best;
               return (

@@ -54,6 +54,46 @@
   --shadow-hover: 0 4px 12px -2px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.35);
   --shadow-modal: 0 8px 30px -4px rgba(0, 0, 0, 0.6), 0 4px 10px -2px rgba(0, 0, 0, 0.4);
 
-  /* Max Page Width */
-  --max-page-width: 1280px;
+  /* Max Page Width - expanded for widescreen desk real estate */
+  --max-page-width: 1800px;
 }
+
+/* Institutional Light Theme (Terminal Alabaster / Ivory) */
+:root[data-theme="light"],
+[data-theme="light"] {
+  /* Surface Layers */
+  --bg-0: #f8fafc;
+  --bg-1: #ffffff;
+  --bg-2: #f1f5f9;
+  --bg-3: #e2e8f0;
+
+  /* Typography / Inks */
+  --ink-0: #0f172a;
+  --ink-1: #475569;
+  --ink-2: #64748b;
+
+  /* Accent (Institutional Antique Gold / Bronze) */
+  --accent: #b47818;
+  --accent-weak: rgba(180, 120, 24, 0.10);
+  --accent-strong: #925f0e;
+
+  /* Functional Status (WCAG AAA/AA contrast on light backgrounds) */
+  --pos: #16a34a;
+  --pos-weak: rgba(22, 163, 74, 0.10);
+  --neg: #dc2626;
+  --neg-weak: rgba(220, 38, 38, 0.10);
+  --warn: #d97706;
+  --warn-weak: rgba(217, 119, 6, 0.10);
+  --info: #2563eb;
+  --info-weak: rgba(37, 99, 235, 0.10);
+
+  /* Hairlines & Borders */
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Elevation */
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+  --shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+}
+

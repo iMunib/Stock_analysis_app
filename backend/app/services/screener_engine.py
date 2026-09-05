@@ -75,6 +75,96 @@ SYSTEM_PRESETS = [
             "sloan_accrual_max": 0.05,
         },
     },
+    {
+        "id": "buffett_munger_quality_compounders",
+        "name": "Buffett-Munger Quality Compounders",
+        "criteria": {
+            "roic_min": 0.15,
+            "fcf_yield_min": 0.03,
+            "sloan_accrual_max": 0.05,
+            "eqr_min": 80,
+        },
+    },
+    {
+        "id": "graham_deep_value_net_nets",
+        "name": "Graham Deep Value Net-Nets & Margins",
+        "criteria": {
+            "ev_ebitda_max": 10.0,
+            "expectations_gap_max": 0.0,
+        },
+    },
+    {
+        "id": "cannibal_capital_compounders",
+        "name": "Cannibal Capital Return Compounders",
+        "criteria": {
+            "fcf_yield_min": 0.04,
+            "sloan_accrual_max": 0.05,
+        },
+    },
+    {
+        "id": "dorsey_wide_moat_franchises",
+        "name": "Dorsey Wide Moat Franchises",
+        "criteria": {
+            "roic_min": 0.18,
+            "eqr_min": 80,
+        },
+    },
+    {
+        "id": "forensic_red_flag_warning",
+        "name": "Forensic Red Flag Early Warning / Short Watch",
+        "criteria": {
+            "sloan_accrual_min": 0.10,
+            "eqr_max": 50,
+            "flag_logic": "OR",
+        },
+    },
+    # Certified Literature Presets (Phase 4 Task 4.1):
+    {
+        "id": "greenblatt_magic_formula",
+        "name": "Greenblatt Magic Formula",
+        "criteria": {
+            "quality_pct_min": 85.0,
+            "value_pct_min": 85.0,
+        },
+    },
+    {
+        "id": "graham_net_net_bargains",
+        "name": "Graham Net-Net Bargains",
+        "criteria": {
+            "graham_net_net": True,
+        },
+    },
+    {
+        "id": "peter_lynch_growth_compounders",
+        "name": "Peter Lynch Growth Compounders",
+        "criteria": {
+            "peg_max": 1.0,
+            "roic_min": 0.15,
+            "de_max": 0.5,
+        },
+    },
+    {
+        "id": "piotroski_high_quality_turnarounds",
+        "name": "Piotroski High-Quality Turnarounds",
+        "criteria": {
+            "f_score_min": 8,
+            "altman_zone": "Safe",
+        },
+    },
+    {
+        "id": "true_shareholder_yield_leaders",
+        "name": "True Shareholder Yield Leaders",
+        "criteria": {
+            "tsy_min": 6.0,
+        },
+    },
+    {
+        "id": "aaoifi_halal_candidates",
+        "name": "AAOIFI Halal Candidates",
+        "criteria": {
+            "halal_candidate": True,
+        },
+    },
 ]
 
 
@@ -107,6 +197,15 @@ def run_screener_query(
 ) -> dict[str, Any]:
     """Executes dynamic multi-parameter forensic screener query."""
     ensure_system_presets(db)
+
+    # If preset / preset_id is passed, merge preset criteria
+    preset_id = criteria.get("preset") or criteria.get("preset_id")
+    if preset_id:
+        p_row = next((p for p in SYSTEM_PRESETS if p["id"] == preset_id), None)
+        if p_row:
+            merged = dict(p_row["criteria"])
+            merged.update(criteria)
+            criteria = merged
 
     # Base query: join Company with Score, TTM, and Reverse DCF
     stmt = (
@@ -269,6 +368,31 @@ def run_screener_query(
                 continue
         if criteria.get("quality_pct_min") is not None:
             if qual_pct is None or qual_pct < float(criteria["quality_pct_min"]):
+                continue
+        if criteria.get("halal_candidate"):
+            from app.models import HalalFlag
+            hf = db.get(HalalFlag, r.company_id)
+            if hf is None or hf.status != "halal_candidate":
+                continue
+        if criteria.get("graham_net_net"):
+            from app.services.graham_engine import compute_graham
+            try:
+                g = compute_graham(db, r.company_id)
+                if not (g.get("deep_net_net") or (g.get("graham_margin_of_safety") and g["graham_margin_of_safety"] > 0.20)):
+                    continue
+            except Exception:
+                continue
+        if criteria.get("peg_max") is not None:
+            from app.services.archetype_engine import classify_archetype
+            try:
+                arch = classify_archetype(db, r.company_id)
+                peg = arch.get("metrics", {}).get("peg_ratio")
+                if peg is None or peg > float(criteria["peg_max"]):
+                    continue
+            except Exception:
+                continue
+        if criteria.get("de_max") is not None:
+            if r.flev is not None and r.flev > float(criteria["de_max"]):
                 continue
 
         items.append({

@@ -187,9 +187,20 @@ class JobWorker(threading.Thread):
             company.custom_industry_sheet = company.gics_sector
         db.commit()
 
-        # Step 5: score
-        jobsvc.set_step(db, job_id, step="score", message=f"Computing Math v1 score and peer rankings for {ref.ticker}...", company_id=company_id)
-        recompute(db, company_id=company_id)
+        # Step 5: score & TTM & forensic metrics
+        jobsvc.set_step(db, job_id, step="score", message=f"Computing Math v1 score, TTM, and peer rankings for {ref.ticker}...", company_id=company_id)
+        from app.services.calculation_pipeline import run_company_pipeline
+        try:
+            run_company_pipeline(db, company_id, refresh=refresh, fetch_live=False)
+        except Exception as exc:
+            print(f"[worker] pipeline computation error for {company_id}: {exc}", flush=True)
+            recompute(db, company_id=company_id)
+            try:
+                from app.services.ttm_engine import compute_and_store_ttm
+                compute_and_store_ttm(db, company_id)
+                db.commit()
+            except Exception:
+                pass
         score_row = db.get(Score, company_id)
 
         # Step 6: done / partial check

@@ -41,6 +41,8 @@ class Company(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     snapshots: Mapped[list["FinancialSnapshot"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    statements: Mapped[list["FinancialStatement"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    derived_metrics: Mapped[list["DerivedMetric"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     flags: Mapped[list["DataQualityFlag"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     placements: Mapped[list["Placement"]] = relationship(back_populates="company", cascade="all, delete-orphan")
 
@@ -81,6 +83,16 @@ class FinancialSnapshot(Base):
     interest_expense: Mapped[float | None] = mapped_column(Float, nullable=True)
     topline_alt: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # -- expanded GAAP / IFRS statement items (Phase 1) --
+    accounts_receivable: Mapped[float | None] = mapped_column(Float, nullable=True)
+    inventory: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_assets: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_liabilities: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ppe_net: Mapped[float | None] = mapped_column(Float, nullable=True)
+    retained_earnings: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stock_based_compensation: Mapped[float | None] = mapped_column(Float, nullable=True)
+    interest_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # -- ratios (unitless) --
     fcfmargin_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
     grossmargin_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -120,6 +132,154 @@ class FinancialSnapshot(Base):
     provider_as_of: Mapped[date | None] = mapped_column(Date, nullable=True)      # provider-reported period end for statements
 
     company: Mapped["Company"] = relationship(back_populates="snapshots")
+
+
+class FinancialStatement(Base):
+    """3NF Normalized Financial Statements (Income Statement, Balance Sheet, Cash Flow).
+    Pure accounting line items without calculated ratios or functional dependencies.
+    """
+    __tablename__ = "financial_statements"
+    __table_args__ = (
+        UniqueConstraint("company_id", "fiscal_year", "period_type", name="uq_financial_statements_company_year_period"),
+        Index("ix_financial_statements_company_year", "company_id", "fiscal_year"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=False)
+    fiscal_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_type: Mapped[str] = mapped_column(String(8), nullable=False, default="FY")
+    as_of_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    filing_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    # Income statement
+    revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gross_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ebit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ebitda: Mapped[float | None] = mapped_column(Float, nullable=True)
+    net_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+    diluted_eps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    interest_expense: Mapped[float | None] = mapped_column(Float, nullable=True)
+    interest_income: Mapped[float | None] = mapped_column(Float, nullable=True)
+    topline_alt: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Cash flow statement
+    operating_cash_flow: Mapped[float | None] = mapped_column(Float, nullable=True)
+    capex: Mapped[float | None] = mapped_column(Float, nullable=True)
+    free_cash_flow: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fcf_reported: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stock_based_compensation: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Balance sheet
+    cash_st_investments: Mapped[float | None] = mapped_column(Float, nullable=True)
+    accounts_receivable: Mapped[float | None] = mapped_column(Float, nullable=True)
+    inventory: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_assets: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ppe_net: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_assets: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_liabilities: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_debt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_liabilities: Mapped[float | None] = mapped_column(Float, nullable=True)
+    book_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    retained_earnings: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Bank / Insurer regulatory fields
+    cet1_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cet1_approach: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    cet1_requirement_or_target: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_capital_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    leverage_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nim_fy2025: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nim_q4_2025: Mapped[float | None] = mapped_column(Float, nullable=True)
+    efficiency_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roaa: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Metadata
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    company: Mapped["Company"] = relationship(back_populates="statements")
+
+
+class DerivedMetric(Base):
+    """3NF Normalized Derived Metrics & Valuation Ratios.
+    Separated from raw statement filings to eliminate transitive & functional dependencies.
+    """
+    __tablename__ = "derived_metrics"
+    __table_args__ = (
+        UniqueConstraint("company_id", "fiscal_year", "period_type", name="uq_derived_metrics_company_year_period"),
+        Index("ix_derived_metrics_company_year", "company_id", "fiscal_year"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=False)
+    fiscal_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_type: Mapped[str] = mapped_column(String(8), nullable=False, default="FY")
+    as_of_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # Price and Market Snapshot
+    price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    price_asof: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    shares_snapshot: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Computed Valuation Ratios
+    pe_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pb_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ev_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ev_to_ebitda_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Computed Profitability Ratios
+    grossmargin_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fcfmargin_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roe_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roa_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roic_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Cash & Leverage Derived Metrics
+    fcf_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    netdebt_calc: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Forensic & Growth Metrics
+    altman_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    beneish_m_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sloan_accrual_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue_cagr_3y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue_cagr_5y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    eps_cagr_3y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    eps_cagr_5y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fcf_cagr_5y: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Quality & Provenance
+    extraction_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fill_ok: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    membership_flag: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    company: Mapped["Company"] = relationship(back_populates="derived_metrics")
+
+
+class PeerBenchmark(Base):
+    """3NF Normalized Sector & Industry Peer Group Benchmarks."""
+    __tablename__ = "peer_benchmarks"
+    __table_args__ = (
+        UniqueConstraint("peer_group_name", "currency", "metric_name", name="uq_peer_benchmarks_group_cur_metric"),
+        Index("ix_peer_benchmarks_group", "peer_group_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    peer_group_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    metric_name: Mapped[str] = mapped_column(String(32), nullable=False)  # pe, pb, roe, roic, gross_margin, ev_ebitda, composite
+    p10: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p25: Mapped[float | None] = mapped_column(Float, nullable=True)
+    median: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p75: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p90: Mapped[float | None] = mapped_column(Float, nullable=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class DataQualityFlag(Base):

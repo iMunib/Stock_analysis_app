@@ -33,10 +33,14 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):  # pragma: no cover
         for ddl in [
             "CREATE INDEX IF NOT EXISTS idx_snapshots_comp_fy "
             "ON financial_snapshots(company_id, fiscal_year, period_type)",
+            "CREATE INDEX IF NOT EXISTS idx_snapshots_comp_date "
+            "ON financial_snapshots(company_id, as_of_date)",
             "CREATE INDEX IF NOT EXISTS idx_scores_peer "
             "ON scores(peer_group, composite_score)",
             "CREATE INDEX IF NOT EXISTS idx_placements_comp_sheet "
             "ON placements(company_id, sheet_name)",
+            "CREATE INDEX IF NOT EXISTS idx_companies_sector_cur "
+            "ON companies(gics_sector, currency)",
         ]:
             try:
                 cursor.execute(ddl)

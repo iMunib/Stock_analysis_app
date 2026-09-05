@@ -124,6 +124,13 @@ def peer_values_for(members: list[dict]) -> dict[str, list[float]]:
     )}
     for m in members:
         row = m.get("snapshot") or {}
+        seed = m.get("seed_snapshot") or {}
+        if seed:
+            enriched_row = dict(row)
+            for k, v in seed.items():
+                if enriched_row.get(k) is None and v is not None:
+                    enriched_row[k] = v
+            row = enriched_row
         pe = _f(row.get("pe_calc"))
         if pe is not None and pe > 0:
             out["pe"].append(pe)

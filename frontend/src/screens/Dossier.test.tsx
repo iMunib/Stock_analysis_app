@@ -81,5 +81,20 @@ describe("Dossier Status Ribbon, CIK link, and Dual Currency", () => {
     // Verify actionable gap buttons
     expect(screen.getByRole("button", { name: /Fetch shares from Yahoo/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Retry EDGAR filings/i })).toBeTruthy();
+
+    // Verify Hero split grid with live interactive chart and fundamentals bar
+    expect(screen.getByText(/Live Technical Chart/i)).toBeTruthy();
+    expect(screen.getAllByText("Price").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Market Cap").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Trailing P/E").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("ROIC").length).toBeGreaterThanOrEqual(1);
+
+    // Verify tab navigation renders workspace tabs without horizontal overflow
+    const tablist = screen.getByRole("tablist");
+    expect(tablist).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Overview/i })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Financials/i })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Technicals & Chart/i })).toBeTruthy();
   });
 });
+

@@ -123,11 +123,19 @@ def parse_frames(frames: list, currency: str) -> list:
     return rows
 
 
+def _clean_symbol(symbol: str) -> str:
+    s = (symbol or "").strip()
+    if s.upper().endswith(".TO"):
+        base = s[:-3]
+        return base.replace(".", "-") + ".TO"
+    return s
+
+
 def fetch_annual_statements(symbol: str, currency: str) -> list:
     """Annual statements via yfinance Ticker(symbol) financials/balance/cashflow."""
     yf = _import_yf()
     _polite_wait()
-    tk = yf.Ticker(symbol)
+    tk = yf.Ticker(_clean_symbol(symbol))
     frames = []
     for getter in ("financials", "balance_sheet", "cashflow"):
         try:
@@ -142,7 +150,7 @@ def fetch_price(symbol: str):
 
     yf = _import_yf()
     _polite_wait()
-    tk = yf.Ticker(symbol)
+    tk = yf.Ticker(_clean_symbol(symbol))
     hist = tk.history(period="5d", auto_adjust=False)
     if hist is None or hist.empty:
         return None
@@ -190,7 +198,7 @@ def fetch_profile_and_quarterly(symbol: str) -> dict:
     yf = _import_yf()
     _polite_wait()
     try:
-        tk = yf.Ticker(symbol)
+        tk = yf.Ticker(_clean_symbol(symbol))
     except Exception:
         return {"summary": None, "dividend_yield": None, "dividend_rate": None, "next_earnings_date": None, "quarterly": None}
 
@@ -301,7 +309,7 @@ def fetch_key_stats(symbol: str) -> dict:
     yf = _import_yf()
     _polite_wait()
     try:
-        tk = yf.Ticker(symbol)
+        tk = yf.Ticker(_clean_symbol(symbol))
         info = tk.info or {}
     except Exception:
         return {}

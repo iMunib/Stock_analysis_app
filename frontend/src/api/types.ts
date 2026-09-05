@@ -20,6 +20,26 @@ export interface SearchOut {
   disclaimer: string;
 }
 
+export interface SuggestionItem {
+  company_id: string;
+  ticker: string;
+  name: string | null;
+  exchange: string;
+  country: string;
+  sector: string | null;
+  in_database: boolean;
+  tradingview_symbol: string;
+  composite?: number | null;
+  signal?: string | null;
+  universe_tags?: string[];
+}
+
+export interface SuggestionsOut {
+  q: string;
+  count: number;
+  items: SuggestionItem[];
+}
+
 export interface Snapshot {
   revenue?: number | null;
   net_income?: number | null;
@@ -168,6 +188,8 @@ export interface DossierOut {
     ticker?: string | null;
     reporting_currency?: string | null;
     filing_type?: string | null;
+    exchange?: string | null;
+    tradingview_symbol?: string | null;
   };
   latest_snapshot: Snapshot | null;
   history_annual: HistoryRow[];
@@ -177,6 +199,55 @@ export interface DossierOut {
   data_gaps: string[];
   profile?: CompanyProfile | null;
   quarterly?: QuarterlyRow[] | null;
+  decision_verdict?: {
+    verdict_badge?: string | null;
+    traffic_lights?: Record<string, string> | null;
+    reverse_dcf_rule?: string | null;
+    decision_bullets?: string[] | null;
+    expectations_gap?: number | null;
+    moat_rating?: string | null;
+    archetype?: string | null;
+  } | null;
+  archetype?: {
+    archetype?: string | null;
+    peg_ratio?: number | null;
+    eps_cagr_5y?: number | null;
+  } | null;
+  moat_rating?: {
+    moat_rating?: string | null;
+    score?: number | null;
+  } | null;
+  expectations_gap?: number | null;
+  level1?: {
+    identity?: Record<string, any> | null;
+    verdict_badge?: string | null;
+    traffic_lights?: Record<string, string> | null;
+    reverse_dcf_rule?: string | null;
+    decision_bullets?: string[] | null;
+    implied_10y_cagr?: number | null;
+    historical_5y_cagr?: number | null;
+    expectations_gap?: number | null;
+  } | null;
+  level2?: {
+    four_pillar_radar?: Record<string, any> | null;
+    lynch_archetype?: Record<string, any> | null;
+    true_shareholder_yield?: Record<string, any> | null;
+    cash_flow_waterfall?: Record<string, any> | null;
+  } | null;
+  level3?: {
+    beneish_matrix?: Record<string, any> | null;
+    penman_table?: {
+      noa?: number | null;
+      nfo?: number | null;
+      rnoa?: number | null;
+      flev?: number | null;
+      nbc?: number | null;
+      roe_operational_spread?: number | null;
+      exclusion?: string | null;
+    } | null;
+    altman_breakdown?: Record<string, any> | null;
+    statement_history_10y?: HistoryRow[] | null;
+  } | null;
   method_version: string;
   disclaimer: string;
 }

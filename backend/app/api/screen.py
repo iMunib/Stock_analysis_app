@@ -77,6 +77,7 @@ def screen_universe(
     coverage_min: int | None = Query(default=None, ge=1, le=4, description="Minimum pillars covered (1-4)"),
     has_growth_history: bool | None = Query(default=None, description="Filter for companies with growth history"),
     exclude_banks: bool | None = Query(default=False, description="Exclude banks and financials"),
+    preset: str | None = Query(default=None, description="Certified investment literature preset (Task 4.1)"),
     sort_by: str = Query(default="composite", pattern="^(composite|name|ticker|currency|signal|pe|roe|fcf_margin|peer_rank)$"),
     sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=1000, ge=1, le=1000),
@@ -168,6 +169,43 @@ def screen_universe(
         is_bank_company = _is_bank(c_sec, c_ind)
         if exclude_banks and is_bank_company:
             continue
+
+        # 12. Certified Literature Presets (Phase 4 Task 4.1)
+        if preset:
+            p_lower = preset.strip().lower()
+            if p_lower in ("greenblatt_magic_formula", "greenblatt"):
+                # Top Return on Capital + Top Earnings Yield
+                pcts = s.percentiles_json or {} if s else {}
+                qual_pct = pcts.get("roe") or (roe * 100.0 if roe else None)
+                val_pct = pcts.get("pe_ratio")
+                if qual_pct is not None and qual_pct < 70:
+                    continue
+                if (roe is None or roe < 0.15) or (pe is None or pe <= 0 or pe > 25.0):
+                    continue
+            elif p_lower in ("graham_net_net_bargains", "graham", "graham_net_nets"):
+                ca = enriched.get("current_assets") or 0.0
+                tl = enriched.get("total_liabilities") or 0.0
+                mcap = enriched.get("market_cap") or 0.0
+                ncav = ca - tl
+                if ncav <= 0 or mcap <= 0 or mcap > ncav:
+                    continue
+            elif p_lower in ("peter_lynch_growth_compounders", "peter_lynch", "lynch"):
+                tot_debt = enriched.get("total_debt") or 0.0
+                equity = enriched.get("book_equity") or 0.0
+                de = (tot_debt / equity) if equity > 0 else 1.0
+                if (roe is None or roe < 0.15) or de > 0.5:
+                    continue
+            elif p_lower in ("piotroski_high_quality_turnarounds", "piotroski"):
+                if s is None or s.composite is None or s.composite < 6.0:
+                    continue
+            elif p_lower in ("true_shareholder_yield_leaders", "shareholder_yield", "tsy"):
+                pcts = s.percentiles_json or {} if s else {}
+                tsy = pcts.get("total_shareholder_yield")
+                if tsy is None or tsy < 6.0:
+                    continue
+            elif p_lower in ("aaoifi_halal_candidates", "halal", "spus"):
+                if hf is None or hf.status != "halal_candidate":
+                    continue
 
         # Money columns: hidden when ALL, native when USD or CAD
         money_dict: dict | None = None

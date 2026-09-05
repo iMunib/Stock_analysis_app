@@ -19,9 +19,9 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Company, FinancialSnapshot
+from app.models import Company, FinancialSnapshot, FinancialStatement, DerivedMetric
 from app.providers.base import AnnualStatement
-from app.services.fundamentals import apply_statement_to_snapshot, compute_snapshot_ratios
+from app.services.fundamentals import apply_statement_to_snapshot, compute_snapshot_ratios, sync_snapshot_to_3nf
 
 SEED_SOURCE = "Sector_Financials_Final_Owner.xlsx"
 
@@ -121,6 +121,7 @@ def ingest_statements(
             apply_statement_to_snapshot(snap, stmt)
             compute_snapshot_ratios(snap, company)
             snap.fetched_at = now
+            sync_snapshot_to_3nf(db, snap, company)
             created += 1
         else:
             # Another source already has this fiscal year: FILL NULLS ONLY.
@@ -138,6 +139,7 @@ def ingest_statements(
                     # owner/first-provider value: revert any overwrite attempt
                     setattr(existing, attr, before[attr])
             compute_snapshot_ratios(existing, company)
+            sync_snapshot_to_3nf(db, existing, company)
             if existing.source == SEED_SOURCE:
                 # seed row keeps its identity; provider only filled NULLs
                 filled += touched_fill
@@ -176,6 +178,7 @@ def ingest_statements(
         compute_snapshot_ratios(seed, company)
         # never alter seed provenance
         seed.source = SEED_SOURCE
+        sync_snapshot_to_3nf(db, seed, company)
 
     return {"created": created, "filled_seed_nulls": filled, "updated": updated, "skipped_cached": skipped_cached}
 
@@ -229,4 +232,5 @@ def ingest_price(db: Session, company: Company, quote) -> bool:
         company.custom_industry_sheet = quote.industry
 
     compute_snapshot_ratios(snap, company)
+    sync_snapshot_to_3nf(db, snap, company)
     return changed

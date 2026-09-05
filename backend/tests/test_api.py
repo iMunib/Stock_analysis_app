@@ -88,3 +88,23 @@ def test_no_scoring_endpoints(client):
     assert r.status_code == 404
     r = client.get("/api/v1/scoring")
     assert r.status_code == 404
+
+
+def test_company_statements_3nf(client):
+    r = client.get("/api/v1/companies/US:MMM:US/statements")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["company_id"] == "US:MMM:US"
+    assert body["count"] >= 1
+    assert "revenue" in body["items"][0]
+    assert body["items"][0]["revenue"] == 24_948_000_000.0
+
+
+def test_company_derived_metrics_3nf(client):
+    r = client.get("/api/v1/companies/US:MMM:US/derived-metrics")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["company_id"] == "US:MMM:US"
+    assert body["count"] >= 1
+    assert "pe_calc" in body["items"][0]
+

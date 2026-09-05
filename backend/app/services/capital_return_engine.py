@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.models import Company, CompanyProfile, FinancialSnapshot
 
 
-def compute_shareholder_yield(db: Session, company_id: str) -> dict[str, Any]:
+def compute_shareholder_yield(db: Session, company_id: str, fallback_proxies: bool = False) -> dict[str, Any]:
     """Computes share count dilution trends, SBC drag, net buyback yield, and true shareholder yield."""
     company = db.get(Company, company_id)
     if company is None:
@@ -78,6 +78,17 @@ def compute_shareholder_yield(db: Session, company_id: str) -> dict[str, Any]:
             elif cagr < -2.0 and "ACCELERATED_BUYBACKS" not in flags:
                 flags.append("ACCELERATED_BUYBACKS")
 
+    float_shrink_3y_pct: float | None = round(-cagr_3y_pct, 2) if cagr_3y_pct is not None else None
+    cagr_5y_pct: float | None = None
+    float_shrink_5y_pct: float | None = None
+    if len(share_series) >= 6:
+        curr_fy, curr_shares = share_series[-1]
+        t5_fy, t5_shares = share_series[-6]
+        if t5_shares > 0 and curr_shares > 0:
+            cagr_5 = ((curr_shares / t5_shares) ** (1.0 / 5.0) - 1.0) * 100.0
+            cagr_5y_pct = round(cagr_5, 2)
+            float_shrink_5y_pct = round(-cagr_5, 2)
+
     # Determine Market Cap
     mcap: float | None = None
     if latest_snap and latest_snap.market_cap is not None and latest_snap.market_cap > 0:
@@ -101,22 +112,17 @@ def compute_shareholder_yield(db: Session, company_id: str) -> dict[str, Any]:
     else:
         cash_repurchase = 0.0
 
-    # Stock-Based Compensation (SBC)
+    # Stock-Based Compensation (SBC) - actual filings strictly required (Rule #3: Never invent numbers)
     explicit_sbc = getattr(latest_snap, "stock_based_compensation", None)
+    if explicit_sbc is None and seed_snap is not None:
+        explicit_sbc = getattr(seed_snap, "stock_based_compensation", None)
+
     if explicit_sbc is not None:
         sbc = explicit_sbc
-    elif rev is not None and rev > 0:
-        # Benchmark SBC based on sector intensity: Tech ~4.0%, Others ~2.0%
-        is_tech = (company.gics_sector or "").lower() in ("information technology", "communication services")
-        sbc_factor = 0.040 if is_tech else 0.020
-        # AMD high dilution calibration (acquisitions/equity grants)
-        if company_id == "US:AMD:US":
-            sbc_factor = 0.056
-        elif company_id == "US:AAPL:US":
-            sbc_factor = 0.028
-        sbc = rev * sbc_factor
+        sbc_source = "filing"
     else:
-        sbc = 0.0
+        sbc = None
+        sbc_source = "missing"
 
     # SBC Drag % of Revenue
     sbc_drag_pct: float | None = None
@@ -135,12 +141,13 @@ def compute_shareholder_yield(db: Session, company_id: str) -> dict[str, Any]:
     if mcap is not None and mcap > 0 and sbc is not None:
         sbc_offset_pct = round((sbc / mcap) * 100.0, 2)
 
-    # Net Buyback Yield %
+    # Net Buyback Yield %: max(0, (Cash Repurchases - Actual SBC) / Market Cap * 100)
     net_buyback_yield: float | None = None
-    if mcap is not None and mcap > 0 and cash_repurchase is not None and sbc is not None:
-        net_buyback_yield = round(((cash_repurchase - sbc) / mcap) * 100.0, 2)
+    actual_sbc = sbc if sbc is not None else 0.0
+    if mcap is not None and mcap > 0:
+        net_buyback_yield = round(max(0.0, ((cash_repurchase - actual_sbc) / mcap) * 100.0), 2)
     elif net_repurchase_rate is not None:
-        net_buyback_yield = round(net_repurchase_rate - (sbc_offset_pct or 0.0), 2)
+        net_buyback_yield = round(max(0.0, net_repurchase_rate - (sbc_offset_pct or 0.0)), 2)
 
     # Flags logic
     # DILUTIVE_BUYBACKS: Cash Repurchases > 0 but shares expanded YoY (net_repurchase_rate < 0)
@@ -170,18 +177,49 @@ def compute_shareholder_yield(db: Session, company_id: str) -> dict[str, Any]:
         true_shareholder_yield = round(by_component + dy_component, 2)
         total_shareholder_yield = true_shareholder_yield
 
+    # Dividend Safety Rating & FCF Payout
+    fcf = latest_snap.fcf_calc if latest_snap else (seed_snap.fcf_calc if seed_snap else None)
+    div_rate = profile.dividend_rate if profile else None
+    shares_count = latest_snap.shares_snapshot if latest_snap else (seed_snap.shares_snapshot if seed_snap else None)
+    div_paid = getattr(latest_snap, "dividends_paid", None) or (div_rate * shares_count if (div_rate and shares_count) else None)
+
+    dividend_safety_rating = "No Dividend Paid"
+    fcf_payout_ratio = None
+    if div_paid and div_paid > 0:
+        if fcf is not None and fcf > 0:
+            fcf_payout_ratio = round((div_paid / fcf) * 100.0, 1)
+            if fcf_payout_ratio <= 50.0:
+                dividend_safety_rating = "Very Safe"
+            elif fcf_payout_ratio <= 75.0:
+                dividend_safety_rating = "Safe"
+            elif fcf_payout_ratio <= 100.0:
+                dividend_safety_rating = "Borderline"
+            else:
+                dividend_safety_rating = "Unsafe / High Risk"
+        elif fcf is not None and fcf <= 0:
+            dividend_safety_rating = "Unsafe (Negative FCF)"
+        else:
+            dividend_safety_rating = "Unknown"
+
+    sbc_to_buyback_ratio = round((actual_sbc / cash_repurchase) * 100.0, 1) if (cash_repurchase > 0 and actual_sbc > 0) else None
+
     return {
         "company_id": company_id,
         "currency": company.currency,
         "share_count_history": [{"fiscal_year": fy, "diluted_shares": sh} for fy, sh in share_series[-5:]],
         "share_count_delta_1y_pct": delta_1y_pct,
         "share_count_cagr_3y_pct": cagr_3y_pct,
+        "float_shrink_3y_pct": float_shrink_3y_pct,
+        "float_shrink_5y_pct": float_shrink_5y_pct,
         "net_repurchase_rate_pct": net_repurchase_rate,
         "gross_buyback_yield_pct": gross_buyback_yield_pct,
         "sbc_drag_pct": sbc_drag_pct,
         "sbc_dilution_offset_pct": sbc_offset_pct,
+        "sbc_to_buyback_ratio": sbc_to_buyback_ratio,
         "net_buyback_yield_pct": net_buyback_yield,
         "dividend_yield_pct": div_yield_pct,
+        "dividend_safety_rating": dividend_safety_rating,
+        "fcf_payout_ratio": fcf_payout_ratio,
         "total_shareholder_yield_pct": total_shareholder_yield,
         "true_shareholder_yield_pct": true_shareholder_yield,
         "flags": flags,

@@ -90,8 +90,19 @@ def compute_penman(snap: FinancialSnapshot) -> dict[str, Any] | None:
     if expected_equity != 0:
         identity_ok = abs(expected_equity - equity) <= max(0.05 * ta, 1e6)
 
+    # Buyback Distortion Alert (Task 2.4):
+    # When headline ROIC/ROE > 30% but FLEV > 2.0 and RNOA < 15%:
+    inv_cap = (equity + max(0.0, nfo)) if (equity is not None and nfo is not None) else None
+    calc_roic = (nopat / inv_cap) if (inv_cap is not None and inv_cap > 0) else None
+    headline_roic = getattr(snap, "roic", None) or snap.roe_calc or calc_roic
+    buyback_distortion_alert = None
+    if headline_roic is not None and headline_roic > 0.30:
+        if flev is not None and flev > 2.0 and rnoa is not None and rnoa < 0.15:
+            buyback_distortion_alert = "High ROIC is artificially inflated by debt-funded buybacks."
+
     leverage_distortion = bool(
-        (flev is not None and flev > 3.0)
+        (flev is not None and flev > 2.0 and rnoa is not None and rnoa < 0.15)
+        or (flev is not None and flev > 3.0)
         or (equity is not None and ta > 0 and equity < 0.10 * ta)
     )
 
@@ -107,6 +118,7 @@ def compute_penman(snap: FinancialSnapshot) -> dict[str, Any] | None:
         "roe_operational_spread": roe_operational_spread,
         "identity_ok": identity_ok,
         "leverage_distortion": leverage_distortion,
+        "buyback_distortion_alert": buyback_distortion_alert,
         "tax_rate": tax_rate,
     }
 
