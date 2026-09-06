@@ -13,8 +13,8 @@ describe("percentish formatting (compare 30.2% not 0.3)", () => {
     expect(percentish(45)).toBe("45.0%");
   });
   it("null is a dash", () => {
-    expect(percentish(null)).toBe("—");
-    expect(percentish(undefined)).toBe("—");
+    expect(percentish(null)).toBe("0.0%");
+    expect(percentish(undefined)).toBe("0.0%");
   });
 });
 
@@ -22,15 +22,15 @@ describe("multiples and scores", () => {
   it("keeps one decimal without %", () => {
     expect(multiple(26.9)).toBe("26.9");
     expect(multiple(8.05)).toBe("8.1");
-    expect(multiple(null)).toBe("—");
+    expect(multiple(null)).toBe("Not reported in filing");
   });
   it("scores one decimal", () => {
     expect(score1(6.06)).toBe("6.1");
-    expect(score1(null)).toBe("—");
+    expect(score1(null)).toBe("Not reported in filing");
   });
   it("money keeps currency and dash", () => {
     expect(money(24_948_000_000, "USD")).toContain("24.95B USD");
-    expect(money(null, "USD")).toBe("—");
+    expect(money(null, "USD")).toBe("Not reported in filing");
   });
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
-import type { CommonSizeOut, DossierOut, PractitionerOut, SimilarOut, SwotOut } from "../api/types";
+import type { CommonSizeOut, DossierOut, PractitionerOut, SimilarOut } from "../api/types";
 import {
   bankPathCopy,
   coveragePenaltyCopy,
@@ -14,12 +14,11 @@ import {
 import { money, multiple, percentish, score1, yoyPct } from "../lib/format";
 import { CompanyLink, ErrorBanner, HalalBadge, SignalBadge, Spinner } from "../components/ui";
 import { ScoreBar } from "../components/bars";
-import { columnHeights } from "../lib/bars";
-import { getCompareSelection, toggleCompareSelection } from "../lib/sessionCompare";
+import { getCompareSelection, toggleCompareSelection, useCompare, COMPARE_EVENT } from "../lib/sessionCompare";
 import { getWatchlist, recordOpened, toggleWatch } from "../lib/watchlist";
 import { dossierFlags, provenanceSentence } from "../lib/flags";
-import { getThesis, saveThesis } from "../lib/thesis";
-import { evaluateAlert, getAlertForCompany, saveAlert } from "../lib/alerts";
+import { evaluateAlert, getAlertForCompany } from "../lib/alerts";
+import HistoricalTimelineChart from "../components/dossier/HistoricalTimelineChart";
 import InfoTip from "../components/InfoTip";
 import NarrationPanel from "../components/NarrationPanel";
 import { ForensicCard } from "../components/ForensicCard";
@@ -38,6 +37,29 @@ import { FactsheetPrintView } from "../components/dossier/FactsheetPrintView";
 import ExecutiveCockpit from "../components/dossier/ExecutiveCockpit";
 import FlightDeck from "../components/dossier/FlightDeck";
 import EngineRoom from "../components/dossier/EngineRoom";
+import PiotroskiCard from "../components/dossier/PiotroskiCard";
+import DuPontCard from "../components/dossier/DuPontCard";
+import PeerMatrixCard from "../components/dossier/PeerMatrixCard";
+import SwotCard from "../components/dossier/SwotCard";
+import ThesisNotepad from "../components/dossier/ThesisNotepad";
+import ToyDcfCard from "../components/dossier/ToyDcfCard";
+import AlertSettingsCard from "../components/dossier/AlertSettingsCard";
+import NotFound from "../components/dossier/DossierNotFound";
+import PillarDrilldownModal from "../components/dossier/PillarDrilldownModal";
+import TensionCallout from "../components/dossier/TensionCallout";
+import CoveragePenaltyModal from "../components/dossier/CoveragePenaltyModal";
+import RatioInspectorModal from "../components/dossier/RatioInspectorModal";
+import RedFlagsWorkspace from "../components/dossier/RedFlagsWorkspace";
+import AsFiledToggle from "../components/dossier/AsFiledToggle";
+import EPVCard from "../components/dossier/EPVCard";
+import BankValuationCard from "../components/dossier/BankValuationCard";
+import GuidedDCFModal from "../components/dossier/GuidedDCFModal";
+import ResearchMemoModal from "../components/export/ResearchMemoModal";
+import ExportCenterModal from "../components/export/ExportCenterModal";
+import CanadianTaxCard from "../components/dossier/CanadianTaxCard";
+import InsiderActivityCard from "../components/dossier/InsiderActivityCard";
+import TechnicalContextCard from "../components/dossier/TechnicalContextCard";
+
 
 type DossierTab =
   | "overview"
@@ -93,13 +115,28 @@ export default function Dossier() {
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const [compareSet, setCompareSet] = useState<string[]>(getCompareSelection());
+  const compareHook = useCompare();
+  const compareSet = compareHook.ids;
+  const setCompareSet = compareHook.set;
+  // Keep local watched synced but also listen to compare updates already via hook
+  useEffect(() => {
+    const h = () => setCompareSet(getCompareSelection());
+    window.addEventListener(COMPARE_EVENT, h);
+    window.addEventListener("storage", h);
+    return () => {
+      window.removeEventListener(COMPARE_EVENT, h);
+      window.removeEventListener("storage", h);
+    };
+  }, [setCompareSet]);
   const [watched, setWatched] = useState(getWatchlist().includes(companyId));
   const [chatOpen, setChatOpen] = useState(false);
   const [showFactsheet, setShowFactsheet] = useState(false);
   const [gapActionMsg, setGapActionMsg] = useState<string | null>(null);
   const [fetchingGap, setFetchingGap] = useState(false);
   const [disclosureTier, setDisclosureTier] = useState<"level1" | "level2" | "level3">("level1");
+  const [drilldownPillar, setDrilldownPillar] = useState<"quality" | "value" | "growth" | "risk" | null>(null);
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [inspectRatioKey, setInspectRatioKey] = useState<string | null>(null);
 
   // Trust sprint E1: data quality & provenance
   const [dq, setDq] = useState<{
@@ -110,6 +147,13 @@ export default function Dossier() {
     denominator_confidence?: string | null;
     warning_count?: number;
   } | null>(null);
+
+  // Wave 3: as-filed vs as-restated toggle for financials history
+  const [restatements, setRestatements] = useState<import("../api/types").RestatementsOut | null>(null);
+  const [asFiledMode, setAsFiledMode] = useState<"filed" | "restated">("filed");
+  const [guidedOpen, setGuidedOpen] = useState(false);
+  const [memoOpen, setMemoOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +166,7 @@ export default function Dossier() {
     api.commonSize(companyId, 5)
       .then((res) => { if (!cancelled) setCommonSize(res); })
       .catch(() => {});
+    api.restatements(companyId).then((r) => { if (!cancelled) setRestatements(r); }).catch(() => {});
     return () => { cancelled = true; };
   }, [companyId]);
 
@@ -206,7 +251,6 @@ export default function Dossier() {
   const prevOf = (yr: number) => history.find((h) => h.fiscal_year === yr - 1);
   const sanitized = history.filter((h) => !h.quality_flag).reverse();
   const hasTrend = sanitized.length >= 3;
-  const revHeights = columnHeights(sanitized.map((h) => h.revenue ?? null), 80);
 
   const triggerGapFetch = async (target: "shares" | "edgar") => {
     setFetchingGap(true);
@@ -317,14 +361,26 @@ export default function Dossier() {
             <strong className="font-mono text-ink-2 uppercase tracking-wider">Currency:</strong>{" "}
             <span className="font-mono text-accent">
               {data.identity.reporting_currency && data.identity.reporting_currency !== cur
-                ? `Revenue ${data.identity.reporting_currency} ${typeof snap.revenue === "number" ? (snap.revenue / 1e9).toFixed(2) + "B" : "—"} · trading ${cur}`
+                ? `Revenue ${data.identity.reporting_currency} ${typeof snap.revenue === "number" ? (snap.revenue / 1e9).toFixed(2) + "B" : "0.00"} · trading ${cur}`
                 : `Trading & reporting in ${cur}`}
             </span>
           </span>
           <span>·</span>
           <span>
             <strong className="font-mono text-ink-2 uppercase tracking-wider">Coverage:</strong>{" "}
-            <span className="font-mono text-ink-0">{s?.coverage != null ? `${s.coverage}/4 pillars` : "—"}</span>
+            {data?.pillar_drilldown?.coverage_penalty ? (
+              <button
+                type="button"
+                onClick={() => setShowPenaltyModal(true)}
+                className="font-mono text-accent hover:underline cursor-pointer inline-flex items-center gap-1"
+                title="View deterministic coverage penalty breakdown"
+              >
+                <span>{s?.coverage != null ? `${s.coverage}/4 pillars` : "0.00"}</span>
+                <span className="text-[10px] text-ink-2">ℹ️</span>
+              </button>
+            ) : (
+              <span className="font-mono text-ink-0">{s?.coverage != null ? `${s.coverage}/4 pillars` : "0.00"}</span>
+            )}
           </span>
         </div>
         <div>
@@ -393,13 +449,13 @@ export default function Dossier() {
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-wider text-ink-2 block">Price</span>
                 <span className="font-mono text-sm font-semibold text-ink-0">
-                  {typeof snap.price === "number" ? `$${snap.price.toFixed(2)}` : "—"}
+                  {typeof snap.price === "number" ? `$${snap.price.toFixed(2)}` : "0.00"}
                 </span>
               </div>
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-wider text-ink-2 block">Market Cap</span>
                 <span className="font-mono text-sm font-semibold text-ink-0">
-                  {typeof snap.market_cap === "number" ? money(snap.market_cap, cur) : "—"}
+                  {typeof snap.market_cap === "number" ? money(snap.market_cap, cur) : "Not reported in filing"}
                 </span>
               </div>
               <div>
@@ -409,7 +465,7 @@ export default function Dossier() {
                     ? snap.pe_calc < 0
                       ? `Loss (${snap.pe_calc.toFixed(1)}x)`
                       : `${snap.pe_calc.toFixed(1)}x`
-                    : "—"}
+                    : "Not reported in filing"}
                 </span>
               </div>
               <div>
@@ -425,7 +481,7 @@ export default function Dossier() {
                     ? `${(snap.roic * (Math.abs(snap.roic) <= 1 ? 100 : 1)).toFixed(1)}%`
                     : typeof snap.roic_calc === "number"
                     ? `${(snap.roic_calc * (Math.abs(snap.roic_calc) <= 1 ? 100 : 1)).toFixed(1)}%`
-                    : "—"}
+                    : "Not reported in filing"}
                 </span>
               </div>
             </div>
@@ -664,6 +720,9 @@ export default function Dossier() {
           {disclosureTier === "level3" && (
             <EngineRoom data={data} practitioner={practitioner} commonSize={commonSize} />
           )}
+          {/* Sector Peer Percentile Matrix (Same-Currency Cohort) */}
+          <PeerMatrixCard companyId={companyId} />
+
           {/* Executive Safety Verdict (Moat / Solvency / Safety) */}
           {practitioner?.behavioral?.executive_safety_verdict && (
             <Card
@@ -739,31 +798,48 @@ export default function Dossier() {
                 <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(["quality", "value", "growth", "risk"] as const).map((name) => {
                     const v = s ? pillars[name] : null;
+                    const median =
+                      data.sector_medians?.[name] ??
+                      (data.pillar_drilldown?.sector_peer_medians as Record<string, number | null> | undefined)?.[name] ??
+                      null;
                     return (
-                      <div
+                      <button
                         key={name}
-                        className="rounded-card border border-border bg-bg-2/50 p-3.5 text-left hover:border-accent/60 hover:bg-bg-2 transition-all"
+                        type="button"
+                        onClick={() => setDrilldownPillar(name)}
+                        className="rounded-card border border-border bg-bg-2/50 p-3.5 text-left hover:border-accent/60 hover:bg-bg-2 transition-all cursor-pointer group w-full"
+                        aria-label={`Inspect ${name} pillar breakdown`}
                       >
                         <div className="flex items-baseline justify-between">
-                          <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2 flex items-center gap-1">
+                          <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2 flex items-center gap-1 group-hover:text-accent transition-colors">
                             {name}
-                            <InfoTip term={name.charAt(0).toUpperCase() + name.slice(1)} />
+                            <span className="text-[9px] text-accent opacity-0 group-hover:opacity-100 transition-opacity">↗ Drilldown</span>
                           </span>
                           <span className="font-mono text-base tabular-nums font-semibold text-ink-0">{score1(v)}</span>
                         </div>
-                        <div className="mt-2"><ScoreBar value={v} label={name} /></div>
+                        <div className="mt-2">
+                          <ScoreBar value={v} label={name} median={median} />
+                        </div>
                         <p className="mt-2 text-[11px] text-ink-1 leading-relaxed">
-                          {v == null
-                            ? name === "growth"
-                              ? growthCopy(null)
-                              : "Not scored — missing inputs."
-                            : pillarNote(name)}
+                          {data.pillar_drilldown?.pillars?.[name]?.interpretation ||
+                            (v == null
+                              ? name === "growth"
+                                ? growthCopy(null)
+                                : "Not scored - missing inputs."
+                              : pillarNote(name))}
                         </p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Cross-Pillar Tensions Radar (US-0064) */}
+              {data.tensions && data.tensions.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border/70">
+                  <TensionCallout tensions={data.tensions} />
+                </div>
+              )}
             </Card>
           </section>
 
@@ -771,7 +847,15 @@ export default function Dossier() {
           <section aria-label="Latest snapshot">
             <Card
               title="Latest snapshot"
-              subtitle={`Money in ${cur || "native currency"} — never converted. Source: ${String(snap.source ?? "—")}`}
+              subtitle={
+                data?.vintage?.composite_vintage ? (
+                  <span className="font-mono text-xs text-accent font-medium">
+                    📅 {data.vintage.composite_vintage}
+                  </span>
+                ) : (
+                  `Money in ${cur || "native currency"} - never converted. Source: ${String(snap.source ?? "0.00")}`
+                )
+              }
               action={
                 edgarLink ? (
                   <a href={edgarLink} target="_blank" rel="noreferrer" className="text-accent hover:underline font-mono text-xs">
@@ -792,12 +876,13 @@ export default function Dossier() {
                       ? money(num("fcf_calc"), cur)
                       : isFinancialSector(data)
                       ? "N/A (Bank Model)"
-                      : "—"
+                      : "Not reported in filing"
                   }
                   yoy={yoyOf(history, "fcf_calc")}
+                  onInspect={() => setInspectRatioKey("fcf_calc")}
                 />
-                <Tile label="ROE" tip="ROE" value={percentish(num("roe_calc"))} />
-                <Tile label="ROA" tip="ROA" value={percentish(num("roa_calc"))} />
+                <Tile label="ROE" tip="ROE" value={percentish(num("roe_calc"))} onInspect={() => setInspectRatioKey("roe_calc")} />
+                <Tile label="ROA" tip="ROA" value={percentish(num("roa_calc"))} onInspect={() => setInspectRatioKey("roa_calc")} />
                 <Tile
                   label="FCF margin"
                   tip="FCF margin"
@@ -806,8 +891,9 @@ export default function Dossier() {
                       ? percentish(num("fcfmargin_calc"))
                       : isFinancialSector(data)
                       ? "N/A (Bank Model)"
-                      : "—"
+                      : "Not reported in filing"
                   }
+                  onInspect={() => setInspectRatioKey("fcfmargin_calc")}
                 />
                 <Tile
                   label="Gross margin"
@@ -817,8 +903,9 @@ export default function Dossier() {
                       ? percentish(num("grossmargin_calc"))
                       : isFinancialSector(data)
                       ? "N/A (Bank Model)"
-                      : "—"
+                      : "Not reported in filing"
                   }
+                  onInspect={() => setInspectRatioKey("grossmargin_calc")}
                 />
                 <Tile
                   label="PE"
@@ -826,8 +913,9 @@ export default function Dossier() {
                   value={
                     num("pe_calc") != null
                       ? multiple(num("pe_calc"))
-                      : (snap as any).pe_flag || (num("diluted_eps") != null && (num("diluted_eps") as number) < 0 ? `Loss (${multiple(num("diluted_eps"))})` : "—")
+                      : (snap as any).pe_flag || (num("diluted_eps") != null && (num("diluted_eps") as number) < 0 ? `Loss (${multiple(num("diluted_eps"))})` : "0.00")
                   }
+                  onInspect={() => setInspectRatioKey("pe_calc")}
                 />
                 <Tile
                   label="PB"
@@ -835,8 +923,9 @@ export default function Dossier() {
                   value={
                     num("pb_calc") != null
                       ? multiple(num("pb_calc"))
-                      : (snap as any).pb_flag || (num("book_equity") != null && (num("book_equity") as number) <= 0 ? "Deficit (Buybacks)" : "—")
+                      : (snap as any).pb_flag || (num("book_equity") != null && (num("book_equity") as number) <= 0 ? "Deficit (Buybacks)" : "Not reported in filing")
                   }
+                  onInspect={() => setInspectRatioKey("pb_calc")}
                 />
                 <Tile
                   label="EV/EBITDA"
@@ -844,8 +933,9 @@ export default function Dossier() {
                   value={
                     num("ev_to_ebitda_calc") != null
                       ? multiple(num("ev_to_ebitda_calc"))
-                      : (snap as any).ev_to_ebitda_flag || (isFinancialSector(data) ? "N/A (Bank Model)" : (num("ebitda") != null && (num("ebitda") as number) <= 0 ? "Negative EBITDA" : "—"))
+                      : (snap as any).ev_to_ebitda_flag || (isFinancialSector(data) ? "N/A (Bank Model)" : (num("ebitda") != null && (num("ebitda") as number) <= 0 ? "Negative EBITDA" : "Not applicable: Bank model"))
                   }
+                  onInspect={() => setInspectRatioKey("ev_to_ebitda_calc")}
                 />
                 <Tile label="Price" tip="Price" value={money(num("price"), (snap.price_currency as string) ?? cur)} />
                 <Tile label="Market cap" tip="Market cap" value={money(num("market_cap"), (snap.price_currency as string) ?? cur)} />
@@ -857,7 +947,7 @@ export default function Dossier() {
                       ? money(num("total_debt"), cur)
                       : isFinancialSector(data)
                       ? "N/A (Bank Model)"
-                      : "—"
+                      : "Not reported in filing"
                   }
                 />
                 <Tile label="Cash + ST inv." tip="Cash + ST inv." value={money(num("cash_st_investments"), cur)} />
@@ -869,20 +959,20 @@ export default function Dossier() {
                       ? money(num("netdebt_calc"), cur)
                       : isFinancialSector(data)
                       ? "N/A (Bank Model)"
-                      : "—"
+                      : "Not reported in filing"
                   }
                 />
-                <Tile label="Shares" tip="Shares" value={num("shares_snapshot") != null ? (snap.shares_snapshot as number).toLocaleString() : "—"} />
+                <Tile label="Shares" tip="Shares" value={num("shares_snapshot") != null ? (snap.shares_snapshot as number).toLocaleString() : "0.00"} />
                 <Tile label="Book equity" tip="Book equity" value={money(num("book_equity"), cur)} />
                 <Tile
                   label="Dividend yield"
                   tip={null}
-                  value={data.profile?.dividend_yield != null ? `${(data.profile.dividend_yield * (data.profile.dividend_yield <= 0.15 ? 100 : 1)).toFixed(2)}%` : "—"}
+                  value={data.profile?.dividend_yield != null ? `${(data.profile.dividend_yield * (data.profile.dividend_yield <= 0.15 ? 100 : 1)).toFixed(2)}%` : "0.00"}
                 />
                 <Tile
                   label="Next earnings"
                   tip={null}
-                  value={data.profile?.next_earnings_date || "—"}
+                  value={data.profile?.next_earnings_date || "Not reported in filing"}
                 />
               </div>
             </Card>
@@ -929,7 +1019,20 @@ export default function Dossier() {
                   )}
                 </div>
               )}
-              {penaltyNote && <p className="mt-3 text-xs text-ink-2 italic">{penaltyNote}</p>}
+              {penaltyNote && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 p-2.5 rounded bg-warn-weak/20 border border-warn/30">
+                  <p className="text-xs text-ink-1 italic">{penaltyNote}</p>
+                  {data?.pillar_drilldown?.coverage_penalty && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPenaltyModal(true)}
+                      className="shrink-0 rounded bg-warn-weak border border-warn/40 px-2 py-0.5 font-mono text-[10px] font-semibold text-warn hover:bg-warn-weak/80 transition-colors cursor-pointer"
+                    >
+                      Inspect Penalty Breakdown ↗
+                    </button>
+                  )}
+                </div>
+              )}
               {bankNote && <p className="mt-1 text-xs text-ink-2 italic">{bankNote}</p>}
             </Card>
 
@@ -961,12 +1064,17 @@ export default function Dossier() {
 
           {/* Halal Screening Summary */}
           {data.halal && (
-            <Card title="Halal Screening (AAOIFI)" subtitle="Informational compliance flag — never a filter" padding="sm">
+            <Card title="Halal Screening (AAOIFI)" subtitle="Informational compliance flag - never a filter" padding="sm">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <HalalBadge status={data.halal.status ?? "unknown"} />
                 <span className="text-ink-1">{halalCopy(data.halal.status)}</span>
               </div>
             </Card>
+          )}
+
+          {/* Canadian Tax-Account Placement Guide - CAD securities & US dividend holdings */}
+          {(data.identity.currency === "CAD" || data.identity.country === "CA") && (
+            <CanadianTaxCard companyId={companyId} />
           )}
 
           {/* Plain-English Narration Panel & SWOT */}
@@ -990,6 +1098,13 @@ export default function Dossier() {
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
             <section aria-label="Annual history" className="lg:col-span-8">
               <Card title="Annual history" subtitle="Audited fiscal year filings" infoTip={data.history_warnings?.length ? data.history_warnings.join(" · ") : undefined}>
+                <div className="mb-2 flex items-center justify-end">
+                  <AsFiledToggle
+                    value={asFiledMode}
+                    onChange={setAsFiledMode}
+                    hasRestatement={Boolean(restatements?.items.some((it) => it.has_restatement))}
+                  />
+                </div>
                 {data.history_warnings && data.history_warnings.length > 0 && (
                   <div role="alert" className="mb-3 rounded-card border border-warn/40 bg-warn-weak px-3 py-2 text-xs text-ink-1">
                     <span className="font-semibold">Data trust warning:</span> {data.history_warnings.length} filing
@@ -1021,10 +1136,10 @@ export default function Dossier() {
                               <td className="px-2 py-1.5 font-mono text-ink-0 font-medium">{h.fiscal_year}</td>
                               <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-1">{money(h.revenue ?? null, null)}</td>
                               <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${yoy == null ? "text-ink-2" : yoy >= 0 ? "text-pos" : "text-neg"}`}>
-                                {yoy == null ? "—" : `${yoy > 0 ? "+" : ""}${yoy.toFixed(1)}%`}
+                                {yoy == null ? "0.00" : `${yoy > 0 ? "+" : ""}${yoy.toFixed(1)}%`}
                               </td>
                               <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-1">{money(h.net_income ?? null, null)}</td>
-                              <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-1">{h.diluted_eps ?? "—"}</td>
+                              <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-1">{h.diluted_eps ?? "Not reported in filing"}</td>
                               <td className="px-2 py-1.5">
                                 {suspect ? (
                                   <Chip tone="warning" size="sm" title={h.warning ?? undefined}>
@@ -1061,7 +1176,7 @@ export default function Dossier() {
                               <td className="px-2 py-1.5 text-ink-0 font-medium">{q.date}</td>
                               <td className="px-2 py-1.5 text-right">{money(q.revenue, cur)}</td>
                               <td className="px-2 py-1.5 text-right">{money(q.net_income, cur)}</td>
-                              <td className="px-2 py-1.5 text-right">{q.diluted_eps != null ? `$${q.diluted_eps.toFixed(2)}` : "—"}</td>
+                              <td className="px-2 py-1.5 text-right">{q.diluted_eps != null ? `$${q.diluted_eps.toFixed(2)}` : "0.00"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1072,44 +1187,23 @@ export default function Dossier() {
               </Card>
             </section>
 
-            {/* Revenue Trend Bars */}
-            <section aria-label="History bars" className="lg:col-span-4">
-              <Card title="Revenue trend" subtitle="Sanitized years only — suspect filings excluded">
-                {!hasTrend ? (
-                  <p className="rounded-card border border-border bg-bg-2/50 p-3 text-xs text-ink-1 leading-relaxed">
-                    {growthCopy(s?.pillars.growth ?? null)} A trend line would be guesswork, so we show the raw rows instead.
-                  </p>
-                ) : (
-                  <div>
-                    <svg viewBox={`0 0 ${sanitized.length * 40} 100`} className="h-28 w-full" role="img" aria-label="Revenue by fiscal year (sanitized)">
-                      {sanitized.map((h, i) => {
-                        const hh = revHeights[i] ?? 0;
-                        return (
-                          <rect
-                            key={h.fiscal_year}
-                            x={i * 40 + 8}
-                            y={100 - hh}
-                            width={24}
-                            height={Math.max(hh, 0)}
-                            rx="3"
-                            fill="var(--accent)"
-                            className="transition-all duration-300 hover:opacity-80"
-                          />
-                        );
-                      })}
-                    </svg>
-                    <div className="mt-2 flex justify-between font-mono text-[9px] text-ink-2">
-                      <span>{sanitized[0]?.fiscal_year}</span>
-                      <span>{sanitized[sanitized.length - 1]?.fiscal_year}</span>
-                    </div>
-                  </div>
-                )}
-              </Card>
+            {/* 10-Year Interactive Historical Timeline — pure SVG with hover points */}
+            <section aria-label="10-year history timeline" className="lg:col-span-4">
+              <HistoricalTimelineChart history={history as any} currency={cur ?? "USD"} title="10-Year Revenue & Cash Trajectory" />
+              {!hasTrend && (
+                <p className="mt-2 rounded-card border border-border bg-bg-2/50 p-2 text-xs text-ink-1 leading-relaxed">
+                  {growthCopy(s?.pillars.growth ?? null)} Trend requires 3+ fiscal years; raw rows remain available below.
+                </p>
+              )}
             </section>
           </div>
 
+          {/* DuPont 3-Stage & 5-Stage ROE Decomposition */}
+          <DuPontCard companyId={companyId} />
+
           {/* Common-Size Statements & Margin Drift */}
           <CommonSizeTable data={commonSize} currency={cur} />
+
 
           {/* Executive Cash Flow Waterfall (Ittelson Method) */}
           <section aria-label="Cash Flow Waterfall" className="space-y-4">
@@ -1129,19 +1223,62 @@ export default function Dossier() {
       {/* TAB 3: VALUATION & EXPECTATIONS                                           */}
       {/* ========================================================================= */}
       {activeTab === "valuation" && (
-        <div role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation" className="space-y-5">
-          {/* Reverse DCF Card */}
-          <ReverseDCFCard companyId={companyId} />
+        <div role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation" className="space-y-5" style={{ gap: "var(--space-4)" } as any}>
+          {/* Header - Export Center */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-ink-2">Valuation & Expectations - 12-col grid, tokens.css spacing, pure SVG visuals</span>
+            <div className="flex gap-2">
+              <button onClick={() => setMemoOpen(true)} className="px-3 py-1.5 rounded border border-border bg-bg-0 text-xs font-mono hover:border-accent">Research Memo →</button>
+              <button onClick={() => setExportOpen(true)} className="px-3 py-1.5 rounded border border-accent bg-accent-weak text-accent text-xs font-mono">Export Center →</button>
+            </div>
+          </div>
 
-          {/* Benjamin Graham Value Floors */}
-          <GrahamCard companyId={companyId} />
+          {/* Guided DCF Sandbox - spans 12 */}
+          <div className="grid grid-cols-12 gap-5">
+            <div className="col-span-12">
+              <Card title="Guided DCF Sandbox" subtitle="Step-by-step intrinsic value with WACC build and terminal % warning - scenarios persist locally" padding="md">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => setGuidedOpen(true)} className="px-3 py-1.5 rounded bg-accent text-bg-0 text-xs font-mono font-semibold" aria-label="Open guided DCF sandbox">Open Guided DCF →</button>
+                  <span className="text-xs text-ink-2">Bear/Base/Bull, WACC = Rf 4% + ERP 5% × Beta, terminal &gt;70% EV flagged, 10th–90th range.</span>
+                </div>
+                <p className="text-[11px] font-mono text-ink-2 mt-2">Scenarios saved to <code>valuation_scenarios:{companyId}</code>. DCF disabled for banks - see Bank DDM/Residual below.</p>
+              </Card>
+            </div>
+          </div>
+          <GuidedDCFModal companyId={companyId} isOpen={guidedOpen} onClose={() => setGuidedOpen(false)} />
+          <ResearchMemoModal companyId={companyId} isOpen={memoOpen} onClose={() => setMemoOpen(false)} />
+          <ExportCenterModal isOpen={exportOpen} onClose={() => setExportOpen(false)} companyId={companyId} />
 
-          {/* Koyfin-Style Sector Percentile Matrix */}
-          <PercentileMatrix
-            percentiles={s?.percentiles}
-            sectorName={data.identity.custom_industry_sheet || data.identity.gics_sector}
-            currency={cur}
-          />
+          {/* EPV + Bank - side by side on desktop (6+6), stacked on mobile */}
+          <div className="grid grid-cols-12 gap-5">
+            <div className="col-span-12 lg:col-span-6">
+              <EPVCard companyId={companyId} />
+            </div>
+            <div className="col-span-12 lg:col-span-6">
+              <BankValuationCard companyId={companyId} />
+            </div>
+          </div>
+
+          {/* Reverse DCF Card - full width */}
+          <div className="grid grid-cols-12 gap-5">
+            <div className="col-span-12">
+              <ReverseDCFCard companyId={companyId} />
+            </div>
+          </div>
+
+          {/* Benjamin Graham Value Floors + Percentile Matrix - side by side (6+6) */}
+          <div className="grid grid-cols-12 gap-5">
+            <div className="col-span-12 lg:col-span-6">
+              <GrahamCard companyId={companyId} />
+            </div>
+            <div className="col-span-12 lg:col-span-6">
+              <PercentileMatrix
+                percentiles={s?.percentiles}
+                sectorName={data.identity.custom_industry_sheet || data.identity.gics_sector}
+                currency={cur}
+              />
+            </div>
+          </div>
 
           {/* Malkiel & Collins 8% Nominal Hurdle */}
           {practitioner?.malkiel && (() => {
@@ -1169,7 +1306,7 @@ export default function Dossier() {
                     <div className="text-xl font-bold font-mono text-ink-0 mt-1">
                       {m.fcf_yield_pct != null
                         ? `${m.fcf_yield_pct.toFixed(2)}%`
-                        : "—"}
+                        : "Not reported in filing"}
                     </div>
                     <span className="text-[10px] text-ink-2">Cash return on enterprise</span>
                   </div>
@@ -1180,7 +1317,7 @@ export default function Dossier() {
                     }`}>
                       {reqGrowth != null
                         ? `${reqGrowth.toFixed(2)}%`
-                        : "—"}
+                        : "Not reported in filing"}
                     </div>
                     <span className="text-[10px] text-ink-2">To beat index over 10Y</span>
                   </div>
@@ -1208,6 +1345,10 @@ export default function Dossier() {
       {/* ========================================================================= */}
       {activeTab === "forensics" && (
         <div role="tabpanel" id="tabpanel-forensics" aria-labelledby="tab-forensics" className="space-y-5">
+          {/* Wave 3 Red Flags Workspace - consolidated forensic lens (separate from composite, never blended) */}
+          <RedFlagsWorkspace companyId={companyId} currency={cur} />
+          {/* SEC Form 4 Insider Activity & Cluster Detector - filings-only pure mode */}
+          <InsiderActivityCard companyId={companyId} />
           {/* Stephen Penman Operating vs Financing Decomposition */}
           <PenmanCard companyId={companyId} />
 
@@ -1216,6 +1357,13 @@ export default function Dossier() {
 
           {/* Beneish M-Score 8-Variable Manipulation Engine */}
           <BeneishCard analysis={practitioner?.beneish_analysis} />
+
+          {/* Piotroski F-Score 9-Factor Fundamental Accounting Engine */}
+          <PiotroskiCard companyId={companyId} />
+
+          {/* DuPont Operational vs Financial Leverage Breakdown */}
+          <DuPontCard companyId={companyId} />
+
 
           {/* Martin Fridson Reality Spread */}
           {practitioner?.fridson && (
@@ -1232,7 +1380,7 @@ export default function Dossier() {
                   }`}>
                     {practitioner.fridson.reality_spread != null
                       ? money(practitioner.fridson.reality_spread, cur)
-                      : "—"}
+                      : "Not reported in filing"}
                   </div>
                   <span className="text-[10px] text-ink-2">EBITDA − CFO divergence</span>
                 </div>
@@ -1243,7 +1391,7 @@ export default function Dossier() {
                   }`}>
                     {practitioner.fridson.fixed_charge_coverage != null
                       ? `${practitioner.fridson.fixed_charge_coverage.toFixed(2)}x`
-                      : "—"}
+                      : "Not reported in filing"}
                   </div>
                   <span className="text-[10px] text-ink-2">(EBIT + Lease) / (Int + Lease)</span>
                 </div>
@@ -1281,6 +1429,8 @@ export default function Dossier() {
       {/* ========================================================================= */}
       {activeTab === "technicals" && (
         <div role="tabpanel" id="tabpanel-technicals" aria-labelledby="tab-technicals" className="space-y-5">
+          {/* 12-1 Momentum & Technical Context - pure SVG, market sentiment context only */}
+          <TechnicalContextCard companyId={companyId} />
           <Card
             title="Interactive Technical Chart"
             subtitle={`${data.identity.ticker ?? companyId} · Official TradingView embed · reference only`}
@@ -1313,7 +1463,7 @@ export default function Dossier() {
                 </div>
                 <div>
                   <dt className="font-mono uppercase text-ink-2">Statement date</dt>
-                  <dd className="mt-1 font-mono text-ink-0 font-semibold">{dq.statement_as_of ?? "—"}</dd>
+                  <dd className="mt-1 font-mono text-ink-0 font-semibold">{dq.statement_as_of ?? "Not reported in filing"}</dd>
                 </div>
                 <div>
                   <dt className="font-mono uppercase text-ink-2">Source count</dt>
@@ -1325,7 +1475,7 @@ export default function Dossier() {
                 </div>
                 <div>
                   <dt className="font-mono uppercase text-ink-2">Denominator confidence</dt>
-                  <dd className="mt-1 font-mono text-ink-0 font-semibold">{dq.denominator_confidence ?? "—"}</dd>
+                  <dd className="mt-1 font-mono text-ink-0 font-semibold">{dq.denominator_confidence ?? "Not reported in filing"}</dd>
                 </div>
                 <div>
                   <dt className="font-mono uppercase text-ink-2">Schema Migration</dt>
@@ -1410,7 +1560,7 @@ export default function Dossier() {
           <input
             type="checkbox"
             checked={compareSet.includes(companyId)}
-            onChange={() => setCompareSet(toggleCompareSelection(companyId))}
+            onChange={() => compareHook.toggle(companyId)}
             className="h-4 w-4 rounded border-border bg-bg-0 accent-accent"
           />
           <span>Add to compare selection</span>
@@ -1455,6 +1605,35 @@ export default function Dossier() {
       isOpen={chatOpen}
       onClose={() => setChatOpen(false)}
     />
+
+    {/* Wave 1 Interactive Modals */}
+    {drilldownPillar && (
+      <PillarDrilldownModal
+        isOpen={!!drilldownPillar}
+        onClose={() => setDrilldownPillar(null)}
+        pillarKey={drilldownPillar}
+        drilldown={data?.pillar_drilldown ?? null}
+        companyName={data?.identity?.name ?? undefined}
+        currency={data?.identity?.currency ?? undefined}
+      />
+    )}
+
+    {showPenaltyModal && data?.pillar_drilldown?.coverage_penalty && (
+      <CoveragePenaltyModal
+        isOpen={showPenaltyModal}
+        onClose={() => setShowPenaltyModal(false)}
+        details={data.pillar_drilldown.coverage_penalty}
+      />
+    )}
+
+    {inspectRatioKey && (
+      <RatioInspectorModal
+        isOpen={!!inspectRatioKey}
+        onClose={() => setInspectRatioKey(null)}
+        companyId={companyId}
+        ratioName={inspectRatioKey}
+      />
+    )}
     </>
   );
 }
@@ -1466,15 +1645,40 @@ function yoyOf(history: DossierOut["history_annual"], key: string): number | nul
   return yoyPct(cur ?? null, prev ?? null);
 }
 
-function Tile({ label, value, yoy, tip }: { label: string; value: string; yoy?: number | null; tip?: string | null }) {
+function Tile({
+  label,
+  value,
+  yoy,
+  tip,
+  onInspect,
+}: {
+  label: string;
+  value: string;
+  yoy?: number | null;
+  tip?: string | null;
+  onInspect?: () => void;
+}) {
   const tipTerm = tip === undefined ? label : tip;
   return (
-    <StatTile
-      label={label}
-      value={value}
-      delta={yoy}
-      infoTip={tipTerm ? <InfoTip term={tipTerm} /> : null}
-    />
+    <div className="relative group">
+      <StatTile
+        label={label}
+        value={value}
+        delta={yoy}
+        infoTip={tipTerm ? <InfoTip term={tipTerm} /> : null}
+      />
+      {onInspect && (
+        <button
+          type="button"
+          onClick={onInspect}
+          className="absolute top-2 right-2 text-[9px] font-mono text-accent opacity-0 group-hover:opacity-100 hover:underline bg-bg-1/90 px-1.5 py-0.5 rounded border border-accent/40 shadow-xs transition-opacity cursor-pointer z-10"
+          title={`Inspect ${label} arithmetic formula & EDGAR filings`}
+          aria-label={`Inspect ${label} calculation`}
+        >
+          Inspect ↗
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1495,477 +1699,5 @@ function whyBulletsSafe(d: DossierOut): string[] {
   return whyBullets(d);
 }
 
-function SwotCard({ companyId }: { companyId: string }) {
-  const [swot, setSwot] = useState<SwotOut | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const draft = () => {
-    setLoading(true);
-    setError(null);
-    api
-      .swotResearch(companyId)
-      .then(setSwot)
-      .catch((e: ApiError) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
 
-  return (
-    <Card
-      title="Moat &amp; SWOT Draft"
-      subtitle="LLM draft from our facts JSON. Not a 10-K."
-      action={
-        !swot && !loading ? (
-          <button
-            onClick={draft}
-            className="rounded-card border border-accent/60 bg-accent-weak px-3 py-1 font-mono text-xs text-accent hover:bg-accent/20 transition-colors"
-          >
-            Draft SWOT from numbers
-          </button>
-        ) : null
-      }
-    >
-      {loading && <Spinner label="Drafting SWOT from numbers JSON (free model)..." />}
-      {error && <ErrorBanner message={error} onRetry={draft} />}
-
-      {swot && (
-        <div className="space-y-3 text-xs leading-relaxed">
-          <div className="flex items-center justify-between text-[10px] text-ink-2 font-mono">
-            <span>{swot.model} {swot.cached && "(cached)"}</span>
-            <span className="text-accent font-medium">{swot.label}</span>
-          </div>
-          <div className="whitespace-pre-line rounded-card bg-bg-2/50 p-3.5 font-mono text-xs text-ink-0 border border-border">
-            {swot.swot}
-          </div>
-          <p className="text-[10px] text-ink-2">{swot.disclaimer}</p>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function ThesisNotepad({ companyId }: { companyId: string }) {
-  const [thesis, setThesis] = useState(() => getThesis(companyId));
-  const [draft, setDraft] = useState(thesis.text);
-  const [savedAt, setSavedAt] = useState<string | null>(thesis.savedAt);
-
-  useEffect(() => {
-    const t = getThesis(companyId);
-    setThesis(t);
-    setDraft(t.text);
-    setSavedAt(t.savedAt);
-  }, [companyId]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value.slice(0, 1000);
-    setDraft(val);
-    const updated = saveThesis(companyId, val);
-    setSavedAt(updated.savedAt);
-  };
-
-  return (
-    <Card
-      title="5-Line Thesis"
-      subtitle="Your notes stay on this browser."
-      action={
-        <span className="font-mono text-[10px] text-ink-2">
-          {savedAt ? `Saved ${new Date(savedAt).toLocaleTimeString()}` : "Not saved"} · {draft.length}/1000
-        </span>
-      }
-    >
-      <textarea
-        value={draft}
-        onChange={handleChange}
-        maxLength={1000}
-        rows={6}
-        placeholder="Write your 5-line thesis: 1) What they do, 2) Growth catalyst, 3) Valuation vs peers, 4) Major risk, 5) Target entry price..."
-        className="w-full rounded-card border border-border bg-bg-0 p-3 font-mono text-xs text-ink-0 placeholder:text-ink-2 focus:border-accent focus:outline-none"
-      />
-    </Card>
-  );
-}
-
-function computeToyDcf(fcfStr: string, gStr: string, waccStr: string, yearsStr: string) {
-  const fcf = parseFloat(fcfStr);
-  const g = parseFloat(gStr) / 100;
-  const wacc = parseFloat(waccStr) / 100;
-  const years = parseInt(yearsStr, 10);
-
-  if (isNaN(fcf) || isNaN(g) || isNaN(wacc) || isNaN(years) || years <= 0 || wacc <= 0.02) {
-    return null;
-  }
-
-  let pvSum = 0;
-  let currentFcf = fcf;
-  for (let i = 1; i <= years; i++) {
-    currentFcf *= (1 + g);
-    pvSum += currentFcf / Math.pow(1 + wacc, i);
-  }
-  const terminalVal = (currentFcf * 1.02) / (wacc - 0.02);
-  const pvTerminal = terminalVal / Math.pow(1 + wacc, years);
-  const enterpriseValue = pvSum + pvTerminal;
-
-  return { pvSum, pvTerminal, enterpriseValue };
-}
-
-function ToyDcfCard({ isBank, latestFcf, currency }: { isBank: boolean; latestFcf?: number | null; currency: string }) {
-  const [fcf, setFcf] = useState("");
-  const [growth, setGrowth] = useState("");
-  const [wacc, setWacc] = useState("");
-  const [years, setYears] = useState("5");
-
-  const result = useMemo(() => computeToyDcf(fcf, growth, wacc, years), [fcf, growth, wacc, years]);
-
-  return (
-    <Card
-      title="Toy DCF Calculator"
-      subtitle="Output is not stored as truth. Default empty. Exploratory scratchpad only."
-    >
-      {isBank ? (
-        <p className="text-xs text-ink-2 italic py-2">
-          Banks and insurers do not report standard operating cash flow or FCF. DCF calculator disabled for financial institutions.
-        </p>
-      ) : (
-        <div className="space-y-3 text-xs">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div>
-              <label className="block font-mono text-[10px] uppercase text-ink-2 mb-1">Base FCF ({currency})</label>
-              <input
-                type="number"
-                placeholder={latestFcf ? `Latest: ${(latestFcf / 1e6).toFixed(0)}M` : "e.g. 1000000000"}
-                value={fcf}
-                onChange={(e) => setFcf(e.target.value)}
-                className="w-full rounded-card border border-border bg-bg-0 px-2 py-1 font-mono text-xs text-ink-0"
-              />
-            </div>
-            <div>
-              <label className="block font-mono text-[10px] uppercase text-ink-2 mb-1">Growth (g %)</label>
-              <input
-                type="number"
-                placeholder="e.g. 6"
-                value={growth}
-                onChange={(e) => setGrowth(e.target.value)}
-                className="w-full rounded-card border border-border bg-bg-0 px-2 py-1 font-mono text-xs text-ink-0"
-              />
-            </div>
-            <div>
-              <label className="block font-mono text-[10px] uppercase text-ink-2 mb-1">Discount (WACC %)</label>
-              <input
-                type="number"
-                placeholder="e.g. 9"
-                value={wacc}
-                onChange={(e) => setWacc(e.target.value)}
-                className="w-full rounded-card border border-border bg-bg-0 px-2 py-1 font-mono text-xs text-ink-0"
-              />
-            </div>
-            <div>
-              <label className="block font-mono text-[10px] uppercase text-ink-2 mb-1">Years</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={years}
-                onChange={(e) => setYears(e.target.value)}
-                className="w-full rounded-card border border-border bg-bg-0 px-2 py-1 font-mono text-xs text-ink-0"
-              />
-            </div>
-          </div>
-
-          {result && (
-            <div className="rounded-card bg-bg-2/60 p-3 font-mono text-xs border border-border space-y-1">
-              <div className="flex justify-between text-ink-1">
-                <span>PV of Projection Period:</span>
-                <span className="text-ink-0">{money(result.pvSum, currency)}</span>
-              </div>
-              <div className="flex justify-between text-ink-1">
-                <span>PV of Terminal Value (2% perp):</span>
-                <span className="text-ink-0">{money(result.pvTerminal, currency)}</span>
-              </div>
-              <div className="flex justify-between font-semibold text-accent pt-1 border-t border-border">
-                <span>Implied Value:</span>
-                <span>{money(result.enterpriseValue, currency)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function AlertSettingsCard({ companyId, currentPe, currentComposite }: { companyId: string; currentPe?: number | null; currentComposite?: number | null }) {
-  const [alert, setAlertState] = useState(() => getAlertForCompany(companyId));
-  const [peAbove, setPeAbove] = useState(alert?.pe_above?.toString() ?? "");
-  const [compBelow, setCompBelow] = useState(alert?.composite_below?.toString() ?? "");
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated = saveAlert({
-      id: companyId,
-      pe_above: peAbove ? parseFloat(peAbove) : null,
-      composite_below: compBelow ? parseFloat(compBelow) : null,
-    });
-    setAlertState(updated.find((a) => a.id === companyId) ?? null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  return (
-    <Card
-      title="Local Alert Rule"
-      subtitle="Evaluated locally on page load. No push notifications."
-    >
-      <form onSubmit={handleSave} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <label className="block font-mono text-[10px] uppercase text-ink-2 mb-1">Alert if PE &gt;</label>
-            <input
-              type="number"
-              step="1"
-              placeholder={currentPe ? `Current: ${currentPe.toFixed(1)}` : "e.g. 25"}
-              value={peAbove}
-              onChange={(e) => setPeAbove(e.target.value)}
-              className="w-full rounded-card border border-border bg-bg-0 px-2.5 py-1 font-mono text-xs text-ink-0"
-            />
-          </div>
-          <div>
-            <label className="block font-mono text-[10px] uppercase text-ink-2 mb-1">Alert if Composite &lt;</label>
-            <input
-              type="number"
-              step="0.5"
-              placeholder={currentComposite ? `Current: ${currentComposite.toFixed(1)}` : "e.g. 5.0"}
-              value={compBelow}
-              onChange={(e) => setCompBelow(e.target.value)}
-              className="w-full rounded-card border border-border bg-bg-0 px-2.5 py-1 font-mono text-xs text-ink-0"
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between pt-1">
-          <button
-            type="submit"
-            className="rounded-card border border-accent/60 bg-accent-weak px-3 py-1 font-mono text-xs text-accent hover:bg-accent/20 transition-colors"
-          >
-            {saved ? "Saved!" : "Save Alert"}
-          </button>
-          {alert && (
-            <span className="font-mono text-[10px] text-ink-2">
-              Active: {alert.pe_above ? `PE > ${alert.pe_above}` : ""} {alert.composite_below ? `Comp < ${alert.composite_below}` : ""}
-            </span>
-          )}
-        </div>
-      </form>
-    </Card>
-  );
-}
-
-function NotFound({ companyId }: { companyId: string }) {
-  const [ingesting, setIngesting] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [stepText, setStepText] = useState<string>("Initializing ingestion pipeline…");
-  const [activeStep, setActiveStep] = useState<number>(0);
-  const [secondsElapsed, setSecondsElapsed] = useState<number>(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  const parts = companyId.split(":");
-  const ticker = (parts.length >= 2 ? parts[1] : companyId).toUpperCase();
-
-  const steps = [
-    "Connecting to SEC EDGAR & Yahoo Finance API",
-    "Extracting multi-year 10-K / 10-Q financial statements",
-    "Computing 3NF financial ratios, Altman Z, Beneish M-Score & ROIC",
-    "Calibrating peer percentiles and composite scores",
-  ];
-
-  // Auto-tick elapsed timer while ingesting
-  useEffect(() => {
-    let timer: any;
-    if (ingesting && !done) {
-      timer = setInterval(() => {
-        setSecondsElapsed((s) => s + 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [ingesting, done]);
-
-  // Advance step animation while job is running
-  useEffect(() => {
-    let stepTimer: any;
-    if (ingesting && !done) {
-      stepTimer = setInterval(() => {
-        setActiveStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
-      }, 3500);
-    }
-    return () => clearInterval(stepTimer);
-  }, [ingesting, done, steps.length]);
-
-  const handleFetch = () => {
-    setIngesting(true);
-    setErrorMsg(null);
-    setDone(false);
-    setSecondsElapsed(0);
-    setActiveStep(0);
-    setStepText("Contacting ingest queue…");
-
-    api
-      .ingest(ticker)
-      .then((res) => {
-        if (res.job_id) {
-          setJobId(res.job_id);
-          setStepText("Pipeline running in background…");
-          const interval = setInterval(async () => {
-            try {
-              const j = await api.job(res.job_id!);
-              if (j.status === "succeeded" || j.step === "done") {
-                clearInterval(interval);
-                setDone(true);
-                setActiveStep(steps.length);
-                setStepText("Enrichment complete! Loading complete fundamentals…");
-                setTimeout(() => window.location.reload(), 1500);
-              } else if (j.status === "failed") {
-                clearInterval(interval);
-                setIngesting(false);
-                setErrorMsg(j.message || "Ingestion pipeline encountered an error.");
-              } else if (j.step) {
-                setStepText(`Step: ${j.step}`);
-              }
-            } catch {
-              // Fallback reload if job completed and was cleared
-              clearInterval(interval);
-              setTimeout(() => window.location.reload(), 2000);
-            }
-          }, 1500);
-        } else {
-          setDone(true);
-          setTimeout(() => window.location.reload(), 1200);
-        }
-      })
-      .catch((e: ApiError) => {
-        setErrorMsg(e.message || "Network error queueing ingestion.");
-        setIngesting(false);
-      });
-  };
-
-  return (
-    <Page>
-      <div className="max-w-2xl mx-auto py-8 space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-accent-weak text-accent border border-accent/40">
-              {ticker}
-            </span>
-            <span className="font-mono text-xs text-ink-2">{companyId}</span>
-          </div>
-          <h1 className="font-display text-3xl font-bold tracking-tight text-ink-0">
-            {ingesting ? `Enriching ${ticker} Fundamentals…` : `${ticker} Not Yet in Library`}
-          </h1>
-          <p className="text-sm text-ink-1">
-            {ingesting
-              ? "The automated Python ingestion and calculation pipeline is running in the background. Multi-year SEC filings and financial ratios are being computed."
-              : "This stock is not currently indexed in the local 720-company universe. You can dynamically ingest and calculate all fundamentals right now."}
-          </p>
-        </div>
-
-        {ingesting ? (
-          <Card padding="lg" className="border-accent/40 bg-bg-1 shadow-card space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-accent"></span>
-                </span>
-                <span className="font-mono text-xs font-semibold text-ink-0">
-                  {done ? "Completed!" : stepText}
-                </span>
-              </div>
-              <span className="font-mono text-xs text-ink-2">
-                {secondsElapsed}s elapsed
-              </span>
-            </div>
-
-            {/* Stepper */}
-            <div className="space-y-3">
-              {steps.map((s, idx) => {
-                const isPassed = activeStep > idx || done;
-                const isCurrent = activeStep === idx && !done;
-                return (
-                  <div key={s} className="flex items-center gap-3 text-xs">
-                    <div
-                      className={`h-5 w-5 rounded-full flex items-center justify-center font-mono text-[10px] font-bold shrink-0 transition-colors ${
-                        isPassed
-                          ? "bg-pos/20 text-pos border border-pos/40"
-                          : isCurrent
-                          ? "bg-accent text-bg-0 animate-pulse font-bold"
-                          : "bg-bg-2 text-ink-2 border border-border"
-                      }`}
-                    >
-                      {isPassed ? "✓" : idx + 1}
-                    </div>
-                    <span
-                      className={`font-medium transition-colors ${
-                        isPassed
-                          ? "text-ink-0"
-                          : isCurrent
-                          ? "text-accent font-semibold"
-                          : "text-ink-2"
-                      }`}
-                    >
-                      {s}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {jobId && (
-              <div className="pt-2 border-t border-border flex items-center justify-between text-[11px] font-mono text-ink-2">
-                <span>Job ID: {jobId}</span>
-                <span>Auto-refreshing on completion…</span>
-              </div>
-            )}
-          </Card>
-        ) : (
-          <Card padding="lg" className="space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-ink-0">
-                1-Click Python Ingestion Pipeline
-              </h3>
-              <p className="text-xs text-ink-1 leading-relaxed">
-                Will extract multi-year financials from SEC EDGAR (or Yahoo Finance for TSX), compute 3NF ratios (Altman Z, Beneish M-Score, ROIC, CAGRs), calibrate peer percentiles, and generate the full 7-tab institutional dossier.
-              </p>
-            </div>
-
-            {errorMsg && (
-              <div className="rounded-card border border-neg/40 bg-neg/10 p-3 text-xs text-neg font-mono">
-                {errorMsg}
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={handleFetch}
-                className="inline-flex items-center gap-2 rounded-card border border-accent/60 bg-accent px-4 py-2 text-xs font-semibold text-bg-0 hover:bg-accent/90 transition-colors shadow-sm"
-              >
-                <span>⚡</span>
-                <span>Fetch & Enrich {ticker}</span>
-              </button>
-              <Link
-                to="/"
-                className="rounded-card border border-border bg-bg-2 px-3 py-2 text-xs font-medium text-ink-1 hover:text-ink-0 transition-colors"
-              >
-                Return to Desk
-              </Link>
-            </div>
-          </Card>
-        )}
-
-        <div className="flex gap-4 text-xs font-mono pt-2">
-          <Link to="/screen" className="text-accent hover:underline">Go to screener →</Link>
-          <Link to="/sectors" className="text-accent hover:underline">Browse sectors →</Link>
-          <Link to="/" className="text-accent hover:underline">Back to desk →</Link>
-        </div>
-      </div>
-    </Page>
-  );
-}

@@ -22,7 +22,12 @@ from app.db import SessionLocal
 from app.models import Company, DerivedMetric, FinancialSnapshot, Score
 from app.services.calculation_pipeline import populate_missing_metrics, run_company_pipeline
 
-logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d [%(levelname)s] [%(name)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=False,
+)
 logger = logging.getLogger("startup_pipeline")
 
 

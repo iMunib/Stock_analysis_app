@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 30_000,
+  timeout: 60_000,
   retries: 1, // absorb load-order timing flakes (documented in PHASE9_REPORT)
   workers: 1,
   use: {

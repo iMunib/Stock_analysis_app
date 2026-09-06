@@ -2,7 +2,7 @@
 
 /** Ratios that are conceptually percents: 0.302 → "30.2%", 30.2 → "30.2%" (never 0.3). */
 export function percentish(v: number | null | undefined, digits = 1): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "0.0%";
   const abs = Math.abs(v);
   const frac = abs <= 5.0 ? v * 100 : v;
   return `${frac.toFixed(digits)}%`;
@@ -10,13 +10,13 @@ export function percentish(v: number | null | undefined, digits = 1): string {
 
 /** Multiples: one decimal, no % (26.9, 8.1, 20.4). */
 export function multiple(v: number | null | undefined, digits = 1): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "Not reported in filing";
   return v.toFixed(digits);
 }
 
-/** Money with currency suffix; null → "—". Does not prefix non-dollar currencies (e.g. CNY) with $. */
+/** Money with currency suffix; null → "0.00". Does not prefix non-dollar currencies (e.g. CNY) with $. */
 export function money(v: number | null | undefined, currency: string | null | undefined): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "Not reported in filing";
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
   const cur = (currency ?? "").trim().toUpperCase();
@@ -31,7 +31,7 @@ export function money(v: number | null | undefined, currency: string | null | un
 
 /** Composite/pillars: one decimal. */
 export function score1(v: number | null | undefined): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "Not reported in filing";
   return v.toFixed(1);
 }
 

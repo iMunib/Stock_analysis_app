@@ -1,4 +1,4 @@
-/** SVG bar helpers (pure). No chart library — just width/height math. */
+/** SVG bar helpers (pure). No chart library - just width/height math. */
 
 export function barWidth(value: number | null | undefined, max = 10): number {
   if (value == null || Number.isNaN(value)) return 0;

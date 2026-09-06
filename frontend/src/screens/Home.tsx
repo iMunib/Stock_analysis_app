@@ -12,7 +12,7 @@ import { EmptyState } from "../components/feedback";
 import TickerTypeahead from "../components/common/TickerTypeahead";
 
 const LEGEND =
-  "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers — average companies land mid-pack, not at 8.";
+  "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers - average companies land mid-pack, not at 8.";
 
 const INGEST_STEPS: { key: string; label: string }[] = [
   { key: "resolve", label: "Resolve" },
@@ -197,7 +197,7 @@ export default function Home() {
 
           {meta.scored === 0 && (
             <div className="rounded-card border border-warn/50 bg-warn-weak px-4 py-3 text-sm text-ink-0">
-              No scores yet — run a recompute (POST /api/v1/scores/recompute) or add a ticker below.
+              No scores yet - run a recompute (POST /api/v1/scores/recompute) or add a ticker below.
             </div>
           )}
 
@@ -373,8 +373,8 @@ export default function Home() {
       </Card>
 
       <Grid cols={2}>
-        <TopTable title="Top 10 — USD" rows={rankUsd?.items ?? []} />
-        <TopTable title="Top 10 — CAD" rows={rankCad?.items ?? []} />
+        <TopTable title="Top 10 - USD" rows={rankUsd?.items ?? []} />
+        <TopTable title="Top 10 - CAD" rows={rankCad?.items ?? []} />
       </Grid>
 
       <TopTableAll />
@@ -494,7 +494,7 @@ function TopTableAll() {
   }, []);
   return (
     <Card
-      title="Top 10 — All Universe"
+      title="Top 10 - All Universe"
       subtitle="Score-only top 10 across both USD & CAD (strictly ratio/math signals, no FX conversion)"
     >
       {!rows || rows.items.length === 0 ? (
@@ -536,19 +536,19 @@ function ETFCohortsSection() {
   const cohortsMeta = [
     {
       key: "SPUS",
-      title: "SPUS — Sharia Core",
+      title: "SPUS - Sharia Core",
       subtitle: "Top 5 S&P 500 Halal Compounders",
       universe: "SPUS",
     },
     {
       key: "QQQ",
-      title: "QQQ — Nasdaq 100",
+      title: "QQQ - Nasdaq 100",
       subtitle: "Top 5 Non-Financial Tech Leaders",
       universe: "QQQ",
     },
     {
       key: "VONV",
-      title: "VONV — Value Floor",
+      title: "VONV - Value Floor",
       subtitle: "Top 5 Russell 1000 Deep Value",
       universe: "VONV",
     },

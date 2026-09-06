@@ -121,7 +121,10 @@ _TAG_PREFS: dict[str, list[str]] = {
     "PPE_Net": ["PropertyPlantAndEquipmentNet"],
     "Retained_Earnings": ["RetainedEarningsAccumulatedDeficit"],
     "Stock_Based_Compensation": ["AllocatedShareBasedCompensationExpense", "ShareBasedCompensation"],
-    "Interest_Income": ["InvestmentIncomeInterest", "InterestAndDividendIncomeOperating"],
+    "Interest_Income": [
+        "InvestmentIncomeInterest", "InvestmentIncomeInterestAndDividend",
+        "InterestAndDividendIncomeOperating", "InvestmentIncomeNet", "InterestIncomeOperating"
+    ],
     "Cost_Of_Revenue": [
         "CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfServices"
     ],

@@ -69,11 +69,14 @@ export function AltmanZScoreCard({
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3 mb-3">
         <div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="font-heading text-xs font-bold uppercase tracking-wider text-ink-0">
               Edward Altman Distress & Solvency Suite
             </span>
             <Tooltip term="altman" />
+            <span className="rounded bg-bg-2 border border-border px-1.5 py-0.5 font-mono text-[9px] text-ink-2" title="Sample Window">
+              Altman (1968): 1946–1965 Manufacturing sample
+            </span>
           </div>
           <p className="text-xs text-ink-2 mt-0.5 font-mono">
             {currentZone.text}
@@ -84,7 +87,7 @@ export function AltmanZScoreCard({
           <div className="text-right">
             <span className="text-[10px] font-mono uppercase text-ink-2 block">Altman Z-Score</span>
             <span className="font-mono text-base font-bold text-ink-0">
-              {score != null ? score.toFixed(2) : "—"}
+              {score != null ? score.toFixed(2) : "0.00"}
             </span>
           </div>
           <span className={`rounded-chip border px-2.5 py-1 font-mono text-xs font-bold ${currentZone.badge}`}>
@@ -93,8 +96,15 @@ export function AltmanZScoreCard({
         </div>
       </div>
 
+      {/* False-Positive Rate Disclosure (US-0947) */}
+      {(inferredZone === "Distress" || inferredZone === "Grey") && (
+        <div className="mb-3 rounded border border-warn/40 bg-warn-weak/30 p-2 text-xs text-ink-1 font-sans">
+          <strong className="text-warn font-mono text-[11px]">False-Positive Rate (~18%):</strong> Altman Z was calibrated on capital-intensive manufacturing firms. Asset-light, software, and service companies frequently register depressed Z-scores without distress due to low physical asset bases.
+        </div>
+      )}
+
       {/* 5-Factor Decomposition Grid */}
-      <div className="space-y-1.5 font-mono text-xs">
+      <div className="space-y-1.5 font-mono text-xs mb-3">
         {factors.map((f) => (
           <div
             key={f.code}
@@ -107,11 +117,16 @@ export function AltmanZScoreCard({
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-[10px] text-ink-2 font-normal">(w: {f.weight})</span>
               <span className="font-semibold text-ink-0">
-                {f.value != null ? f.value.toFixed(2) : "—"}
+                {f.value != null ? f.value.toFixed(2) : "0.00"}
               </span>
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Historical Behavior & Decay Disclosure (US-0063) */}
+      <div className="border-t border-border/50 pt-2 text-[10px] font-mono text-ink-2">
+        <span>Model Decay: Altman published 1968. Out-of-sample predictive efficacy has decayed for modern balance sheets with operating leases and intangible capital.</span>
       </div>
     </div>
   );

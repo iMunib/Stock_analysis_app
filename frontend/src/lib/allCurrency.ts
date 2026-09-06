@@ -8,7 +8,7 @@ export interface ComposedAll {
   scored: number;
   /** Unitless median composite across both currencies (allowed: unitless). */
   median_composite: number | null;
-  /** Money medians stay split per currency — never averaged. */
+  /** Money medians stay split per currency - never averaged. */
   money_by_currency: {
     USD: { median_pe: number | null; median_pb: number | null; median_roe: number | null; companies: number } | null;
     CAD: { median_pe: number | null; median_pb: number | null; median_roe: number | null; companies: number } | null;
@@ -23,18 +23,23 @@ function median(vals: number[]): number | null {
   return v[n >> 1] ?? null;
 }
 
-export function composeAll(usd: SectorSnapshotOut, cad: SectorSnapshotOut): ComposedAll {
+export function composeAll(usd: SectorSnapshotOut, cad: SectorSnapshotOut): ComposedAll;
+export function composeAll(usd?: SectorSnapshotOut | null, cad?: SectorSnapshotOut | null): ComposedAll | null;
+export function composeAll(usd?: SectorSnapshotOut | null, cad?: SectorSnapshotOut | null): ComposedAll | null {
+  if (!usd && !cad) return null;
+  const u = usd ?? { companies: 0, scored: 0, median_composite: null, median_pe: null, median_pb: null, median_roe: null, signal_histogram: {} };
+  const c = cad ?? { companies: 0, scored: 0, median_composite: null, median_pe: null, median_pb: null, median_roe: null, signal_histogram: {} };
   const hist: Record<string, number> = {};
-  for (const [k, n] of Object.entries(usd.signal_histogram ?? {})) hist[k] = (hist[k] ?? 0) + n;
-  for (const [k, n] of Object.entries(cad.signal_histogram ?? {})) hist[k] = (hist[k] ?? 0) + n;
-  const comps = [usd.median_composite, cad.median_composite].filter((x): x is number => x != null);
+  for (const [k, n] of Object.entries(u.signal_histogram ?? {})) hist[k] = (hist[k] ?? 0) + n;
+  for (const [k, n] of Object.entries(c.signal_histogram ?? {})) hist[k] = (hist[k] ?? 0) + n;
+  const comps = [u.median_composite, c.median_composite].filter((x): x is number => x != null);
   return {
-    companies: usd.companies + cad.companies,
-    scored: usd.scored + cad.scored,
+    companies: u.companies + c.companies,
+    scored: u.scored + c.scored,
     median_composite: median(comps),
     money_by_currency: {
-      USD: { median_pe: usd.median_pe, median_pb: usd.median_pb, median_roe: usd.median_roe, companies: usd.companies },
-      CAD: { median_pe: cad.median_pe, median_pb: cad.median_pb, median_roe: cad.median_roe, companies: cad.companies },
+      USD: u.companies > 0 ? { median_pe: u.median_pe, median_pb: u.median_pb, median_roe: u.median_roe, companies: u.companies } : null,
+      CAD: c.companies > 0 ? { median_pe: c.median_pe, median_pb: c.median_pb, median_roe: c.median_roe, companies: c.companies } : null,
     },
     signal_histogram: hist,
   };

@@ -35,9 +35,16 @@ describe("sector card keys are unique", () => {
 describe("nav routes", () => {
   it("always includes Screen, Forensic screener and Jobs", () => {
     const labels = navItems(false).map((i) => i.label);
-    expect(labels).toEqual(["Desk", "Screen", "Forensic", "Sectors", "Compare", "Jobs", "Learn"]);
+    expect(labels).toEqual(["Desk", "Screen", "Forensics", "Sectors", "Compare", "Jobs", "Learn", "Curriculum", "Rotation", "Governance", "Ops"]);
   });
   it("shows Jobs when available", () => {
     expect(navItems(true).map((i) => i.label)).toContain("Jobs");
+  });
+  it("includes Wave 8 capstone routes", () => {
+    const labels = navItems(false).map((i) => i.label);
+    expect(labels).toContain("Curriculum");
+    expect(labels).toContain("Rotation");
+    expect(labels).toContain("Governance");
+    expect(labels).toContain("Ops");
   });
 });

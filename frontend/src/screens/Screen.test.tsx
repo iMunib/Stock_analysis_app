@@ -98,7 +98,7 @@ describe("Screener component", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("No names match — loosen PE or coverage.")).toBeTruthy();
+      expect(screen.getByText("No names match - loosen PE or coverage.")).toBeTruthy();
     });
   });
 });

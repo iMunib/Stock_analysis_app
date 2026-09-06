@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../lib/theme";
 
 /**
- * TradingViewChart — zero-npm TradingView iframe embed (Workstream 4).
+ * TradingViewChart - zero-npm TradingView iframe embed (Workstream 4).
  *
  * Symbol mapping rules (mirrors backend mapping.py):
  *   US:AMD:US  → NASDAQ:AMD   (or NYSE prefix if in NYSE set)
@@ -106,7 +106,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const tvSymbol = toTVSymbol(companyId, ticker, exchange, tradingviewSymbol);
   const isLight = theme === "light";
 
-  // TradingView widget embed URL (no API key required — it's a free public embed).
+  // TradingView widget embed URL (no API key required - it's a free public embed).
   const tvUrl = [
     "https://www.tradingview.com/widgetembed/?",
     `symbol=${encodeURIComponent(tvSymbol)}`,
@@ -169,7 +169,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       <iframe
         ref={iframeRef}
         src={tvUrl}
-        title={`TradingView chart — ${tvSymbol}`}
+        title={`TradingView chart - ${tvSymbol}`}
         width="100%"
         height={height}
         frameBorder="0"

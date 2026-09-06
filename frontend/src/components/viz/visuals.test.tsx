@@ -20,7 +20,7 @@ describe("SVG Visualization Primitives", () => {
 
     it("handles null value gracefully", () => {
       render(<CompositeGauge value={null} size="sm" />);
-      expect(screen.getByText("—")).toBeDefined();
+      expect(screen.getByText("0.00")).toBeDefined();
     });
   });
 
@@ -58,7 +58,7 @@ describe("SVG Visualization Primitives", () => {
 
     it("handles empty or insufficient data without crashing", () => {
       render(<Sparkline data={[]} />);
-      expect(screen.getByText("—")).toBeDefined();
+      expect(screen.getByText("Requires 3+ fiscal years")).toBeDefined();
     });
   });
 
@@ -69,7 +69,7 @@ describe("SVG Visualization Primitives", () => {
       expect(screen.getByText("V")).toBeDefined();
       expect(screen.getByText("G")).toBeDefined();
       expect(screen.getByText("R")).toBeDefined();
-      expect(screen.getByRole("img", { name: /Pillars: Q 7\.0, V 8\.0, G —, R 6\.0/i })).toBeDefined();
+      expect(screen.getByRole("img", { name: /Pillars: Q 7\.0, V 8\.0, G 0\.00, R 6\.0/i })).toBeDefined();
     });
   });
 
@@ -169,4 +169,3 @@ describe("SVG Visualization Primitives", () => {
     });
   });
 });
-

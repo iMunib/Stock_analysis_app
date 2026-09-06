@@ -22,7 +22,7 @@ export function MiniPillarBars({
     ["R", risk],
   ];
 
-  const ariaLabel = `Pillars: Q ${quality != null ? quality.toFixed(1) : "—"}, V ${value != null ? value.toFixed(1) : "—"}, G ${growth != null ? growth.toFixed(1) : "—"}, R ${risk != null ? risk.toFixed(1) : "—"}`;
+  const ariaLabel = `Pillars: Q ${quality != null ? quality.toFixed(1) : "0.00"}, V ${value != null ? value.toFixed(1) : "0.00"}, G ${growth != null ? growth.toFixed(1) : "0.00"}, R ${risk != null ? risk.toFixed(1) : "0.00"}`;
 
   return (
     <div

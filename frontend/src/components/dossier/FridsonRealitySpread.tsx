@@ -39,21 +39,21 @@ export function FridsonRealitySpread({
         <div className="flex items-center justify-between">
           <span className="text-ink-1">EBITDA (Accounting Earnings):</span>
           <span className="font-semibold text-ink-0">
-            {ebitda != null ? money(ebitda, currency) : "—"}
+            {ebitda != null ? money(ebitda, currency) : "Not reported in filing"}
           </span>
         </div>
 
         <div className="flex items-center justify-between">
           <span className="text-ink-1">Cash Flow from Operations (CFO):</span>
           <span className="font-semibold text-pos">
-            {cfo != null ? money(cfo, currency) : "—"}
+            {cfo != null ? money(cfo, currency) : "Not reported in filing"}
           </span>
         </div>
 
         <div className="flex items-center justify-between border-t border-border/60 pt-2 font-bold">
           <span>Spread (EBITDA - CFO):</span>
           <span className={isHealthy ? "text-pos" : "text-warn"}>
-            {spread != null ? money(spread, currency) : "—"}
+            {spread != null ? money(spread, currency) : "Not reported in filing"}
           </span>
         </div>
       </div>

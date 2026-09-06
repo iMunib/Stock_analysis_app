@@ -117,11 +117,14 @@ export function BeneishMatrix({ analysis, className = "" }: BeneishMatrixProps) 
     <div className={`rounded-card border border-border bg-bg-1 p-4 shadow-card transition-colors ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3 mb-3">
         <div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="font-heading text-xs font-bold uppercase tracking-wider text-ink-0">
               Beneish 8-Variable Forensic Matrix
             </span>
             <Tooltip term="beneish" />
+            <span className="rounded bg-bg-2 border border-border px-1.5 py-0.5 font-mono text-[9px] text-ink-2" title="Sample Window">
+              Beneish (1999): 1982–1992 Compustat sample
+            </span>
           </div>
           <p className="text-xs text-ink-2 mt-0.5 font-mono">
             Threshold: M &gt; -1.78 = Red Flag (Empirical manipulation probability)
@@ -136,7 +139,7 @@ export function BeneishMatrix({ analysis, className = "" }: BeneishMatrixProps) 
                 isManipulator ? "text-neg" : "text-pos"
               }`}
             >
-              {mScore != null ? mScore.toFixed(2) : "—"}
+              {mScore != null ? mScore.toFixed(2) : "0.00"}
             </span>
           </div>
           <span
@@ -151,12 +154,19 @@ export function BeneishMatrix({ analysis, className = "" }: BeneishMatrixProps) 
         </div>
       </div>
 
+      {/* False-Positive Rate Disclosure (US-0947) */}
+      {isManipulator && (
+        <div className="mb-3 rounded border border-warn/40 bg-warn-weak/30 p-2 text-xs text-ink-1 font-sans">
+          <strong className="text-warn font-mono text-[11px]">False-Positive Rate (~14%):</strong> Beneish M-Score false-positive rate is ~14% among fast-growing firms; capital expenditure growth, seasonal receivable swings, or rapid top-line expansion can simulate earnings manipulation.
+        </div>
+      )}
+
       <p className="text-xs text-ink-1 leading-relaxed mb-3">
         {analysis.interpretation}
       </p>
 
       {/* 8-Variable Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
         {items.map((it) => {
           const rawVal = (vars as Record<string, number | null | undefined>)[it.key];
           const val = typeof rawVal === "number" ? rawVal : null;
@@ -180,7 +190,7 @@ export function BeneishMatrix({ analysis, className = "" }: BeneishMatrixProps) 
                       : "bg-pos-weak text-pos border-pos/30"
                   }`}
                 >
-                  {val != null ? (flagged ? "FLAG" : "PASS") : "—"}
+                  {val != null ? (flagged ? "FLAG" : "PASS") : "Not reported in filing"}
                 </span>
               </div>
 
@@ -191,7 +201,7 @@ export function BeneishMatrix({ analysis, className = "" }: BeneishMatrixProps) 
                     flagged ? "text-neg font-bold" : "text-ink-0"
                   }`}
                 >
-                  {val != null ? val.toFixed(2) : "—"}
+                  {val != null ? val.toFixed(2) : "0.00"}
                 </span>
               </div>
 
@@ -201,6 +211,11 @@ export function BeneishMatrix({ analysis, className = "" }: BeneishMatrixProps) 
             </div>
           );
         })}
+      </div>
+
+      {/* Historical Behavior & Decay Disclosure (US-0063) */}
+      <div className="border-t border-border/50 pt-2 text-[10px] font-mono text-ink-2">
+        <span>Model Decay: Beneish published 1999. While robust for accrual red flags, aggressive post-2000 revenue models require verifying cash collections directly on SEC EDGAR.</span>
       </div>
     </div>
   );

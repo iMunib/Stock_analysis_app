@@ -93,6 +93,10 @@ def yahoo_symbol_for(ticker: str, country: str) -> str:
         return rec["yahoo"]
     if country == "US":
         return bare
+    if bare == "TOI":
+        return "TOI.V"
+    if bare == "IIP.UN":
+        return "IIP-UN.TO"
     return bare.replace(".", "-") + ".TO"
 
 
@@ -108,7 +112,7 @@ _PATTERNS = [
 _EXCHANGE_CA = re.compile(r"^(?:TSE|TSX|TSV|NEO|CSE)\s*:\s*([A-Za-z0-9.\-^]{1,16})$", re.I)
 _EXCHANGE_US = re.compile(r"^(?:NASDAQ|NYSE|AMEX|NYSEARCA|CBOE)\s*:\s*([A-Za-z0-9.\-^]{1,16})$", re.I)
 
-# Tickers that are definitively Canadian (CA universe) — avoid defaulting to US
+# Tickers that are definitively Canadian (CA universe) - avoid defaulting to US
 _CA_BARE_TICKERS: set[str] | None = None
 
 
@@ -232,13 +236,26 @@ def _sec_tickers() -> dict:
     return _SEC_CACHE
 
 
+_KNOWN_OVERRIDE_CIKS: dict[str, tuple[int, str]] = {
+    "SQ": (1512673, "Block, Inc."),
+    "CFLT": (1699838, "CONFLUENT, INC."),
+    "EXAS": (1124140, "EXACT SCIENCES CORP"),
+    "HOLX": (859737, "HOLOGIC INC"),
+    "SPR": (1364885, "Spirit AeroSystems Holdings, Inc."),
+    "BITF": (1853097, "Bitfarms Ltd."),
+    "SKX": (1065837, "Skechers U.S.A., Inc."),
+}
+
+
 def cik_for_unknown_us(ticker: str) -> tuple[int | None, str | None]:
     """SEC company_tickers.json lookup for tickers outside the 720 universe."""
+    t = ticker.upper()
+    if t in _KNOWN_OVERRIDE_CIKS:
+        return _KNOWN_OVERRIDE_CIKS[t]
     try:
         data = _sec_tickers()
     except Exception:
         return None, None
-    t = ticker.upper()
     for entry in data.values():
         if str(entry.get("ticker", "")).upper() == t:
             cik = entry.get("cik_str")

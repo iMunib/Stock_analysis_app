@@ -55,7 +55,7 @@ export function ReverseDcfRuleBox({
           </strong>
           , {companyName} must grow its free cash flow by{" "}
           <strong className="font-semibold font-mono text-accent not-italic">
-            {impliedFormatted ?? "—"}
+            {impliedFormatted ?? "Not reported in filing"}
           </strong>{" "}
           every year for the next 10 years.
           {historicalCagr != null && (

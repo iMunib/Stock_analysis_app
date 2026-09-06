@@ -44,9 +44,9 @@ def sanitize_history(rows: list[dict]) -> dict:
     Returns {rows_for_table, rows_for_growth, warnings}.
 
     - Table keeps every year, newest first; suspect years carry
-      warning="excluded from growth — possible filing tag error".
+      warning="excluded from growth - possible filing tag error".
     - Growth/bars use only non-suspect years.
-    - A real hole (year with revenue NULL) stays a hole — never invented.
+    - A real hole (year with revenue NULL) stays a hole - never invented.
     """
     revs = [v for v in (_revenue(r) for r in rows) if v is not None]
     baseline = _baseline(revs)
@@ -68,11 +68,11 @@ def sanitize_history(rows: list[dict]) -> dict:
                 suspect = True
         if suspect:
             out["quality_flag"] = SUSPECT_CODE
-            out["warning"] = "excluded from growth — possible filing tag error"
+            out["warning"] = "excluded from growth - possible filing tag error"
             warnings.append({"fiscal_year": _fy(r), "revenue": rev, "code": SUSPECT_CODE, "baseline": baseline})
         elif rev is None:
             # a real hole stays a hole in growth rows too (never invented),
-            # but no warning chip — it is simply not on file.
+            # but no warning chip - it is simply not on file.
             pass
         else:
             rows_for_growth.append(out)

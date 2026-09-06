@@ -63,7 +63,7 @@ export function StatTile({
 
       <div className="flex items-baseline justify-between gap-2 mt-1">
         <div className={`font-mono tabular-nums text-lg sm:text-xl font-semibold ${valueToneClass}`}>
-          {value ?? "—"}
+          {value ?? "Not reported in filing"}
         </div>
         {deltaNode}
       </div>

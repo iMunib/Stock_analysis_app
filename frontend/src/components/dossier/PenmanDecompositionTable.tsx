@@ -49,7 +49,7 @@ export function PenmanDecompositionTable({
         <div className="flex items-center justify-between py-1 border-b border-border/40">
           <span className="text-ink-1">RNOA (Core Operating Return):</span>
           <span className="font-bold text-ink-0">
-            {rnoa != null ? `${(rnoa * (rnoa < 1 ? 100 : 1)).toFixed(1)}%` : "—"}
+            {rnoa != null ? `${(rnoa * (rnoa < 1 ? 100 : 1)).toFixed(1)}%` : "0.00"}
           </span>
         </div>
 
@@ -60,14 +60,14 @@ export function PenmanDecompositionTable({
               isLeverageDangerous ? "text-warn" : "text-ink-0"
             }`}
           >
-            {flev != null ? `${flev.toFixed(2)}x` : "—"}
+            {flev != null ? `${flev.toFixed(2)}x` : "0.00"}
           </span>
         </div>
 
         <div className="flex items-center justify-between py-1 border-b border-border/40">
           <span className="text-ink-1">NBC (Net Borrowing Cost):</span>
           <span className="text-ink-0">
-            {nbc != null ? `${(nbc * (nbc < 1 ? 100 : 1)).toFixed(1)}%` : "—"}
+            {nbc != null ? `${(nbc * (nbc < 1 ? 100 : 1)).toFixed(1)}%` : "0.00"}
           </span>
         </div>
 
@@ -78,7 +78,7 @@ export function PenmanDecompositionTable({
               isHealthySpread ? "text-pos" : "text-neg"
             }`}
           >
-            {calcSpread != null ? `${(calcSpread * (calcSpread < 1 ? 100 : 1)).toFixed(1)}%` : "—"}
+            {calcSpread != null ? `${(calcSpread * (calcSpread < 1 ? 100 : 1)).toFixed(1)}%` : "0.00"}
           </span>
         </div>
 

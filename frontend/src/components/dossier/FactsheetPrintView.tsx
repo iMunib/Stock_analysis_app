@@ -79,7 +79,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
               {score?.signal || "NEUTRAL"}
             </div>
             <div className="text-xs font-mono font-semibold text-slate-600">
-              Composite: {score?.composite != null ? score.composite.toFixed(1) : "—"} / 10.0
+              Composite: {score?.composite != null ? score.composite.toFixed(1) : "0.00"} / 10.0
             </div>
           </div>
         </div>
@@ -119,7 +119,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
               <div key={p.name} className="p-2.5 rounded border border-slate-200 bg-white">
                 <div className="text-[11px] font-semibold text-slate-600">{p.name}</div>
                 <div className="text-lg font-bold font-mono text-slate-900 mt-0.5">
-                  {p.val != null ? `${p.val.toFixed(1)} / 10` : "—"}
+                  {p.val != null ? `${p.val.toFixed(1)} / 10` : "0.00"}
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
                   <div
@@ -178,7 +178,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
             <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
               <span className="text-[10px] uppercase font-bold text-slate-500">Altman Z-Score</span>
               <div className="text-sm font-bold font-mono text-slate-900 mt-0.5">
-                {altman?.z_score != null ? altman.z_score.toFixed(2) : "—"}
+                {altman?.z_score != null ? altman.z_score.toFixed(2) : "0.00"}
               </div>
               <span className={`text-[10px] font-semibold ${altman?.zone === "Safe" ? "text-green-600" : "text-amber-600"}`}>
                 {altman?.zone || "Unrated"}
@@ -188,7 +188,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
             <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
               <span className="text-[10px] uppercase font-bold text-slate-500">Beneish M-Score</span>
               <div className="text-sm font-bold font-mono text-slate-900 mt-0.5">
-                {beneish?.m_score != null ? beneish.m_score.toFixed(2) : "—"}
+                {beneish?.m_score != null ? beneish.m_score.toFixed(2) : "0.00"}
               </div>
               <span className={`text-[10px] font-semibold ${beneish?.is_manipulator ? "text-red-600" : "text-green-600"}`}>
                 {beneish?.zone || "Normal"}
@@ -198,20 +198,20 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
             <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
               <span className="text-[10px] uppercase font-bold text-slate-500">Penman RNOA</span>
               <div className="text-sm font-bold font-mono text-slate-900 mt-0.5">
-                {penman?.rnoa != null ? `${(penman.rnoa * 100).toFixed(1)}%` : "—"}
+                {penman?.rnoa != null ? `${(penman.rnoa * 100).toFixed(1)}%` : "0.00"}
               </div>
               <span className="text-[10px] text-slate-500 font-mono">
-                FLEV: {penman?.flev != null ? penman.flev.toFixed(2) : "—"}
+                FLEV: {penman?.flev != null ? penman.flev.toFixed(2) : "0.00"}
               </span>
             </div>
 
             <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
               <span className="text-[10px] uppercase font-bold text-slate-500">True Shareholder Yield</span>
               <div className="text-sm font-bold font-mono text-slate-900 mt-0.5">
-                {sy?.true_shareholder_yield_pct != null ? `${sy.true_shareholder_yield_pct.toFixed(2)}%` : "—"}
+                {sy?.true_shareholder_yield_pct != null ? `${sy.true_shareholder_yield_pct.toFixed(2)}%` : "0.00"}
               </div>
               <span className="text-[10px] text-slate-500">
-                SBC Drag: {sy?.sbc_drag_pct != null ? `${sy.sbc_drag_pct.toFixed(1)}%` : "—"}
+                SBC Drag: {sy?.sbc_drag_pct != null ? `${sy.sbc_drag_pct.toFixed(1)}%` : "0.00"}
               </span>
             </div>
           </div>
@@ -253,7 +253,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
                     <td className="py-1 font-semibold text-slate-700">Gross Margin</td>
                     {commonSize.income_statement_common_size.map((col) => (
                       <td key={col.fiscal_year} className="py-1 text-right font-mono">
-                        {col.gross_profit?.pct != null ? `${col.gross_profit.pct.toFixed(1)}%` : "—"}
+                        {col.gross_profit?.pct != null ? `${col.gross_profit.pct.toFixed(1)}%` : "0.00"}
                       </td>
                     ))}
                   </tr>
@@ -261,7 +261,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
                     <td className="py-1 font-semibold text-slate-700">Operating Margin (EBIT)</td>
                     {commonSize.income_statement_common_size.map((col) => (
                       <td key={col.fiscal_year} className="py-1 text-right font-mono">
-                        {col.ebit?.pct != null ? `${col.ebit.pct.toFixed(1)}%` : "—"}
+                        {col.ebit?.pct != null ? `${col.ebit.pct.toFixed(1)}%` : "0.00"}
                       </td>
                     ))}
                   </tr>
@@ -269,7 +269,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
                     <td className="py-1 font-semibold text-slate-700">Net Profit Margin</td>
                     {commonSize.income_statement_common_size.map((col) => (
                       <td key={col.fiscal_year} className="py-1 text-right font-mono">
-                        {col.net_income?.pct != null ? `${col.net_income.pct.toFixed(1)}%` : "—"}
+                        {col.net_income?.pct != null ? `${col.net_income.pct.toFixed(1)}%` : "0.00"}
                       </td>
                     ))}
                   </tr>
@@ -277,7 +277,7 @@ export const FactsheetPrintView: React.FC<FactsheetPrintViewProps> = ({
                     <td className="py-1 font-semibold text-slate-700">FCF Conversion %</td>
                     {commonSize.income_statement_common_size.map((col) => (
                       <td key={col.fiscal_year} className="py-1 text-right font-mono">
-                        {col.fcf?.pct != null ? `${col.fcf.pct.toFixed(1)}%` : "—"}
+                        {col.fcf?.pct != null ? `${col.fcf.pct.toFixed(1)}%` : "0.00"}
                       </td>
                     ))}
                   </tr>

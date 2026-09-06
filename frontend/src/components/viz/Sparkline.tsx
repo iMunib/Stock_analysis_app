@@ -26,8 +26,10 @@ export function Sparkline({
       <div
         style={{ width, height }}
         className={`inline-flex items-center justify-center text-[10px] font-mono text-ink-2 ${className}`}
+        role="img"
+        aria-label="Insufficient history"
       >
-        —
+        Requires 3+ fiscal years
       </div>
     );
   }

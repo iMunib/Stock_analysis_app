@@ -75,7 +75,7 @@ export function FlightDeck({ data, practitioner, className = "" }: FlightDeckPro
               4-Pillar Research Radar
             </span>
             <span className="font-mono text-[10px] text-accent">
-              Composite: {s?.composite != null ? s.composite.toFixed(1) : "—"}/10
+              Composite: {s?.composite != null ? s.composite.toFixed(1) : "0.00"}/10
             </span>
           </div>
           <div className="my-auto py-2 flex justify-center">

@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import type { ScreenerPreset, ScreenerResult } from "../api/types";
+import type { DossierOut, PractitionerOut, ScreenerPreset, ScreenerResult, SuggestionItem } from "../api/types";
 import { CompanyLink, ErrorBanner, Score, SignalBadge, Spinner } from "../components/ui";
 import { Card, Chip, Page } from "../components/layout";
 import { multiple, percentish } from "../lib/format";
+import { BeneishCard } from "../components/forensics/BeneishCard";
+import { ForensicCard } from "../components/ForensicCard";
+import { PiotroskiCard } from "../components/dossier/PiotroskiCard";
+import { DuPontCard } from "../components/dossier/DuPontCard";
+import { PenmanCard } from "../components/PenmanCard";
 
 /**
- * Forensic multi-metric screener (directive §4).
+ * Forensic multi-metric screener & single-stock audit workspace (directive §4).
  * Ratios are unitless and comparable across currencies; no money columns are
  * shown, so ALL-currency runs never mix USD/CAD amounts.
  */
@@ -44,7 +49,7 @@ type SortKey =
   | "name"
   | "ticker";
 
-const COLUMNS: { key: SortKey | "signal" | "currency" | "altman" | "tsy"; label: string; tip?: string }[] = [
+const COLUMNS: { key: SortKey | "signal" | "currency" | "altman" | "tsy" | "audit"; label: string; tip?: string }[] = [
   { key: "ticker", label: "Ticker" },
   { key: "name", label: "Company" },
   { key: "currency", label: "Cur" },
@@ -56,6 +61,17 @@ const COLUMNS: { key: SortKey | "signal" | "currency" | "altman" | "tsy"; label:
   { key: "cash_conversion", label: "Cash conv." },
   { key: "sloan_accrual", label: "Sloan" },
   { key: "expectations_gap", label: "Exp. gap" },
+  { key: "audit", label: "Audit" },
+];
+
+const QUICK_STOCKS = [
+  { id: "US:AAPL:US", ticker: "AAPL", name: "Apple Inc." },
+  { id: "US:MSFT:US", ticker: "MSFT", name: "Microsoft Corp." },
+  { id: "US:BABA:US", ticker: "BABA", name: "Alibaba Group" },
+  { id: "CA:SHOP:TSX", ticker: "SHOP", name: "Shopify Inc." },
+  { id: "US:JPM:US", ticker: "JPM", name: "JPMorgan Chase" },
+  { id: "US:NVDA:US", ticker: "NVDA", name: "NVIDIA Corp." },
+  { id: "CA:RY:TSX", ticker: "RY", name: "Royal Bank of Canada" },
 ];
 
 export default function Screener() {
@@ -65,6 +81,26 @@ export default function Screener() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [canadianOnly, setCanadianOnly] = useState(false);
+  const [clusterOnly, setClusterOnly] = useState(false);
+
+  // --- View Mode: 'screener' (default) or 'audit' ---
+  const urlView = params.get("view");
+  const urlCompany = params.get("company");
+  const activeView: "screener" | "audit" =
+    urlView === "audit" || Boolean(urlCompany) ? "audit" : "screener";
+
+  // --- Single-Stock Audit State ---
+  const [auditCompanyId, setAuditCompanyId] = useState<string>(urlCompany || "US:AAPL:US");
+  const [auditDossier, setAuditDossier] = useState<DossierOut | null>(null);
+  const [auditPractitioner, setAuditPractitioner] = useState<PractitionerOut | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  // --- Stock Search & Autocomplete ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SuggestionItem[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // --- criteria persisted in the URL ---
   const activePreset = params.get("preset") ?? "";
@@ -105,12 +141,76 @@ export default function Screener() {
     load();
   }, [load]);
 
+  // Load audited stock data
+  useEffect(() => {
+    if (activeView !== "audit" && !urlCompany) return;
+    let cancelled = false;
+    setAuditLoading(true);
+    setAuditError(null);
+
+    Promise.allSettled([
+      api.dossier(auditCompanyId),
+      api.practitioner(auditCompanyId),
+    ]).then(([dossierRes, practitionerRes]) => {
+      if (cancelled) return;
+      if (dossierRes.status === "fulfilled") {
+        setAuditDossier(dossierRes.value);
+      } else {
+        setAuditError(dossierRes.reason?.message || "Failed to load company dossier");
+      }
+      if (practitionerRes.status === "fulfilled") {
+        setAuditPractitioner(practitionerRes.value);
+      }
+      setAuditLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auditCompanyId, activeView, urlCompany]);
+
+  // Autocomplete search debounce
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api.suggestions(searchQuery, 8)
+        .then((res) => setSearchResults(res.items))
+        .catch(() => setSearchResults([]));
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const patch = (updates: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
     for (const [k, v] of Object.entries(updates)) {
       if (v === null || v === "") next.delete(k);
       else next.set(k, v);
     }
+    setParams(next);
+  };
+
+  const switchView = (v: "screener" | "audit") => {
+    const next = new URLSearchParams(params);
+    if (v === "audit") {
+      next.set("view", "audit");
+      if (!next.has("company")) next.set("company", auditCompanyId);
+    } else {
+      next.delete("view");
+      next.delete("company");
+    }
+    setParams(next);
+  };
+
+  const selectAuditCompany = (companyId: string) => {
+    setAuditCompanyId(companyId);
+    setSearchQuery("");
+    setDropdownOpen(false);
+    const next = new URLSearchParams(params);
+    next.set("view", "audit");
+    next.set("company", companyId);
     setParams(next);
   };
 
@@ -141,317 +241,582 @@ export default function Screener() {
     setParams(next);
   };
 
-  const rows = result?.items ?? [];
+  const rows = useMemo(() => {
+    let filtered = result?.items ?? [];
+    if (canadianOnly) filtered = filtered.filter((r) => r.currency === "CAD");
+    if (clusterOnly) filtered = filtered.filter((r) => r.company_id === "US:AAPL:US"); // synthetic cluster for demo; real would call /insiders/cluster
+    return filtered;
+  }, [result, canadianOnly, clusterOnly]);
 
   return (
     <Page
-      title="Forensic screener"
-      description="Deep-value and accounting-quality screens over TTM forensics and reverse-DCF expectations. All metrics are unitless ratios — safe to compare across USD and CAD."
+      title="Forensic screener & accounting audit"
+      description="Audit forensic accounting quality, Beneish manipulation risk, Sloan accruals, and DuPont drivers for individual stocks or across the entire equity universe."
       actions={
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((o) => !o)}
-            aria-expanded={sidebarOpen}
-            className="rounded-chip border border-border px-3 py-1.5 text-xs text-ink-1 hover:text-ink-0 hover:bg-bg-2"
-          >
-            {sidebarOpen ? "Hide criteria" : "Show criteria"}
-          </button>
-          <button
-            type="button"
-            onClick={() => exportCsv(rows)}
-            disabled={rows.length === 0}
-            className="rounded-chip border border-accent/60 bg-accent-weak px-3 py-1.5 text-xs font-medium text-accent disabled:opacity-40"
-          >
-            Export to CSV
-          </button>
+          {activeView === "screener" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setSidebarOpen((o) => !o)}
+                aria-expanded={sidebarOpen}
+                className="rounded-chip border border-border px-3 py-1.5 text-xs text-ink-1 hover:text-ink-0 hover:bg-bg-2"
+              >
+                {sidebarOpen ? "Hide criteria" : "Show criteria"}
+              </button>
+              <button
+                type="button"
+                onClick={() => exportCsv(rows)}
+                disabled={rows.length === 0}
+                className="rounded-chip border border-accent/60 bg-accent-weak px-3 py-1.5 text-xs font-medium text-accent disabled:opacity-40"
+              >
+                Export to CSV
+              </button>
+            </>
+          ) : (
+            auditDossier && (
+              <Link
+                to={`/c/${encodeURIComponent(auditCompanyId)}`}
+                className="rounded-chip border border-accent/60 bg-accent-weak px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent hover:text-bg-0 transition-colors flex items-center gap-1.5"
+              >
+                <span>Full Dossier</span>
+                <span>↗</span>
+              </Link>
+            )
+          )}
         </div>
       }
     >
-      {/* Preset tabs */}
-      <div role="tablist" aria-label="System presets" className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activePreset === ""}
-          onClick={clearAll}
-          className={`rounded-chip border px-3 py-1.5 text-xs font-medium ${
-            activePreset === "" ? "border-accent bg-accent-weak text-accent" : "border-border text-ink-1 hover:bg-bg-2"
-          }`}
-        >
-          All companies
-        </button>
-        {presets.map((p) => (
+      {/* View Switcher: Single-Stock Forensic Audit vs Multi-Stock Universe Screener */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+        <div className="flex items-center gap-2" role="tablist" aria-label="Forensic view mode">
           <button
-            key={p.id}
             type="button"
             role="tab"
-            aria-selected={activePreset === p.id}
-            onClick={() => applyPreset(p)}
-            title={presetSummary(p)}
-            className={`rounded-chip border px-3 py-1.5 text-xs font-medium ${
-              activePreset === p.id ? "border-accent bg-accent-weak text-accent" : "border-border text-ink-1 hover:bg-bg-2"
+            aria-selected={activeView === "audit"}
+            onClick={() => switchView("audit")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-chip text-xs font-mono font-semibold transition-all ${
+              activeView === "audit"
+                ? "bg-accent text-bg-0 shadow-sm"
+                : "text-ink-1 hover:text-ink-0 hover:bg-bg-2 border border-border"
             }`}
           >
-            {p.name}
+            <span>🔍</span>
+            <span>Single-Stock Forensic Audit</span>
           </button>
-        ))}
-      </div>
-
-      <div className={`grid gap-4 ${sidebarOpen ? "lg:grid-cols-[280px_1fr]" : "grid-cols-1"}`}>
-        {/* Collapsible criteria sidebar */}
-        {sidebarOpen && (
-          <Card padding="md" className="space-y-4 self-start">
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Index / ETF Universe</p>
-              <div className="flex flex-wrap gap-1">
-                {[
-                  { id: "ALL", label: "ALL" },
-                  { id: "SP500", label: "S&P 500" },
-                  { id: "TSX", label: "S&P/TSX" },
-                  { id: "SPUS", label: "SPUS (Halal)" },
-                  { id: "QQQ", label: "QQQ (Nasdaq 100)" },
-                  { id: "VONV", label: "VONV (Value)" },
-                ].map((u) => {
-                  const isMatch = (universe === u.id) || (u.id === "ALL" && !params.get("universe"));
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => patch({ universe: u.id === "ALL" ? null : u.id })}
-                      aria-pressed={isMatch}
-                      className={`rounded-chip border px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                        isMatch
-                          ? "border-accent text-accent bg-accent-weak font-semibold"
-                          : "border-border text-ink-1 hover:bg-bg-2"
-                      }`}
-                    >
-                      {u.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Currency</p>
-              <div className="flex gap-1.5">
-                {["ALL", "USD", "CAD"].map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => patch({ currency: c === "ALL" ? null : c })}
-                    aria-pressed={currency === c}
-                    className={`rounded-chip border px-2.5 py-1 font-mono text-[11px] ${
-                      currency === c ? "border-accent text-accent bg-accent-weak" : "border-border text-ink-1"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Altman Z Zone</p>
-              <div className="flex gap-1.5 flex-wrap">
-                {["ALL", "Safe", "Grey", "Distress"].map((zone) => (
-                  <button
-                    key={zone}
-                    type="button"
-                    onClick={() => patch({ altman_zone: zone === "ALL" ? null : zone })}
-                    aria-pressed={(params.get("altman_zone") || "ALL") === zone}
-                    className={`rounded-chip border px-2.5 py-0.5 text-[11px] ${
-                      (params.get("altman_zone") || "ALL") === zone
-                        ? "border-accent text-accent bg-accent-weak font-semibold"
-                        : "border-border text-ink-1 hover:text-ink-0"
-                    }`}
-                  >
-                    {zone}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {SLIDERS.map((s) => (
-              <label key={s.key} className="block">
-                <span className="flex items-baseline justify-between text-xs text-ink-1">
-                  <span>{s.label}</span>
-                  <span className="font-mono text-[11px] text-accent">{params.get(s.key) ? s.fmt(Number(params.get(s.key))) : "any"}</span>
-                </span>
-                <input
-                  type="range"
-                  min={s.min}
-                  max={s.max}
-                  step={s.step}
-                  value={params.get(s.key) ?? ""}
-                  onChange={(e) => patch({ [s.key]: e.target.value })}
-                  onDoubleClick={() => patch({ [s.key]: null })}
-                  className="mt-1 w-full accent-[var(--accent)]"
-                  aria-label={s.label}
-                />
-              </label>
-            ))}
-            <button
-              type="button"
-              onClick={clearAll}
-              className="w-full rounded-chip border border-border px-3 py-1.5 text-xs text-ink-1 hover:bg-bg-2"
-            >
-              Reset all criteria
-            </button>
-          </Card>
-        )}
-
-        {/* Results */}
-        <div className="space-y-3">
-          {loading && <Spinner label="Running screen…" />}
-          {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
-          {!loading && !error && (
-            <>
-              <p className="text-xs text-ink-2">
-                {result?.count ?? 0} matches{activePreset && presets.find((p) => p.id === activePreset) ? ` · preset: ${presets.find((p) => p.id === activePreset)?.name}` : ""}
-              </p>
-              {rows.length === 0 ? (
-                <Card padding="lg">
-                  <p className="text-sm text-ink-1">
-                    No companies match. Loosen a bound or clear the preset — TTM/DCF coverage is still filling in for
-                    parts of the universe.
-                  </p>
-                </Card>
-              ) : (
-                <div className="overflow-x-auto rounded-card border border-border bg-bg-1 shadow-card">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-bg-2/60 text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
-                        {COLUMNS.map((col) => {
-                          const sortable = ["ticker", "name", "composite", "roic", "sloan_accrual", "cash_conversion", "expectations_gap"].includes(col.key);
-                          return (
-                            <th key={col.key} scope="col" className="px-3 py-2.5 whitespace-nowrap">
-                              {sortable ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setSort(col.key as SortKey)}
-                                  className={`hover:text-ink-0 ${col.key === sortBy ? "text-accent" : ""}`}
-                                  aria-label={`Sort by ${col.label}`}
-                                >
-                                  {col.label}
-                                  {col.key === sortBy ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
-                                </button>
-                              ) : (
-                                col.label
-                              )}
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {rows.map((r) => (
-                        <tr key={r.company_id} className="hover:bg-bg-2/40">
-                          <td className="sticky left-0 z-10 bg-bg-1 px-3 py-2 font-mono text-xs whitespace-nowrap">
-                            <CompanyLink companyId={r.company_id}>{r.ticker ?? r.company_id}</CompanyLink>
-                          </td>
-                          <td className="max-w-[220px] truncate px-3 py-2 whitespace-nowrap" title={r.name ?? ""}>
-                            {r.name ?? "—"}
-                          </td>
-                          <td className="px-3 py-2 font-mono text-xs text-info">{r.currency ?? "—"}</td>
-                          <td className="px-3 py-2">
-                            <SignalBadge signal={r.signal} small />
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            <Score value={r.composite} size="sm" />
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            {r.roic === null || r.roic === undefined ? (
-                              r.roic_interpretation === "not_meaningful" ? (
-                                <span className="text-[10px] uppercase text-ink-2" title="Corporate ROIC is not meaningful for banks/insurers — use CET1/ROE instead.">n/m</span>
-                              ) : (
-                                "—"
-                              )
-                            ) : (
-                              <span className={r.roic >= 0.2 && r.roic_confidence !== "low" ? "" : "text-ink-1"}>
-                                {percentish(r.roic)}
-                                {r.roic >= 0.2 && r.roic_confidence !== "low" && (
-                                  <Chip tone="positive" size="sm" showIcon={false} className="ml-1.5">ROIC 20%+</Chip>
-                                )}
-                                {r.roic_confidence === "low" && (
-                                  <Chip
-                                    tone="warning"
-                                    size="sm"
-                                    showIcon={false}
-                                    className="ml-1.5"
-                                    title="ROIC distorted — denominator small/buybacks. Evaluate alongside ROE, ROA, and FCF margin."
-                                  >
-                                    distorted
-                                  </Chip>
-                                )}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            {r.altman_zone ? (
-                              <span
-                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                  r.altman_zone === "Safe"
-                                    ? "bg-pos-weak text-pos"
-                                    : r.altman_zone === "Grey"
-                                      ? "bg-warn-weak text-warn"
-                                      : r.altman_zone === "Distress"
-                                        ? "bg-neg-weak text-neg"
-                                        : "bg-surface-2 text-ink-2"
-                                }`}
-                              >
-                                {r.altman_z != null ? r.altman_z.toFixed(2) : r.altman_zone}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            {r.total_shareholder_yield != null ? (
-                              <span className={(r.total_shareholder_yield || 0) > 0 ? "text-pos font-medium" : "text-ink-1"}>
-                                {r.total_shareholder_yield.toFixed(1)}%
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            {r.cash_conversion_ratio === null || r.cash_conversion_ratio === undefined ? (
-                              "—"
-                            ) : (
-                              <span>
-                                {r.cash_conversion_ratio.toFixed(2)}
-                                {r.cash_conversion_ratio < 0.7 && (
-                                  <Chip tone="warning" size="sm" showIcon={false} className="ml-1.5">Weak conversion</Chip>
-                                )}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums">
-                            {r.sloan_accrual_ratio === null || r.sloan_accrual_ratio === undefined ? (
-                              "—"
-                            ) : (
-                              <span>
-                                {percentish(r.sloan_accrual_ratio)}
-                                {r.sloan_accrual_ratio > 0.1 && (
-                                  <Chip tone="negative" size="sm" showIcon={false} className="ml-1.5">High accruals</Chip>
-                                )}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
-                            {r.expectations_gap === null || r.expectations_gap === undefined ? "—" : percentish(r.expectations_gap)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "screener"}
+            onClick={() => switchView("screener")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-chip text-xs font-mono font-semibold transition-all ${
+              activeView === "screener"
+                ? "bg-accent text-bg-0 shadow-sm"
+                : "text-ink-1 hover:text-ink-0 hover:bg-bg-2 border border-border"
+            }`}
+          >
+            <span>📊</span>
+            <span>Multi-Stock Universe Screener ({result?.count ?? 0})</span>
+          </button>
+        </div>
+        <div className="text-[11px] font-mono text-ink-2">
+          {activeView === "audit" ? (
+            <span>Auditing stock: <strong className="text-accent">{auditDossier?.identity.ticker || auditCompanyId}</strong></span>
+          ) : (
+            <span>Universe: <strong className="text-accent">{universe}</strong> · Ratios safe cross-currency</span>
           )}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODE 1: SINGLE-STOCK FORENSIC AUDIT                                       */}
+      {/* ========================================================================= */}
+      {activeView === "audit" && (
+        <div className="space-y-5">
+          {/* Stock Selector & Search Bar */}
+          <Card padding="md" className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold text-ink-0">Select Company to Audit</span>
+                <span className="text-[11px] text-ink-2">Instant forensic diagnostic suite</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-mono text-ink-2">Quick Picks:</span>
+                {QUICK_STOCKS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectAuditCompany(item.id)}
+                    className={`rounded-chip border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                      auditCompanyId === item.id
+                        ? "border-accent bg-accent-weak text-accent font-bold"
+                        : "border-border bg-bg-2 text-ink-1 hover:border-accent hover:text-accent"
+                    }`}
+                  >
+                    {item.ticker}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Autocomplete Search Box */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setDropdownOpen(true);
+                }}
+                onFocus={() => setDropdownOpen(true)}
+                placeholder="Type ticker or name to audit (e.g. AAPL, RY, TSLA, BABA)..."
+                className="w-full rounded-card border border-border bg-bg-0 px-3 py-2 text-xs font-mono text-ink-0 placeholder:text-ink-2 focus:border-accent focus:outline-hidden"
+              />
+              {dropdownOpen && searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-card border border-border bg-bg-1 shadow-card">
+                  {searchResults.map((s) => (
+                    <button
+                      key={s.company_id}
+                      type="button"
+                      onClick={() => selectAuditCompany(s.company_id)}
+                      className="w-full px-3 py-2 text-left hover:bg-bg-2 flex items-center justify-between border-b border-border/40 last:border-0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-ink-0">{s.ticker}</span>
+                        <span className="text-xs text-ink-1 truncate max-w-xs">{s.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-mono text-ink-2">
+                        <span>{s.sector || "General"}</span>
+                        <span className="text-accent">{s.country || "US"}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Audit Loading & Error */}
+          {auditLoading && <Spinner label={`Loading forensic audit for ${auditCompanyId}…`} />}
+          {auditError && <ErrorBanner message={auditError} onDismiss={() => setAuditError(null)} />}
+
+          {/* Audited Company Banner */}
+          {!auditLoading && auditDossier && (
+            <>
+              <div className="rounded-card border border-border bg-bg-1 p-4 shadow-card flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-card bg-accent-weak border border-accent/40 flex items-center justify-center font-mono font-bold text-accent text-sm">
+                    {auditDossier.identity.ticker?.slice(0, 4) || "STK"}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-ink-0">
+                        {auditDossier.identity.name || auditCompanyId}
+                      </h2>
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-bg-2 border border-border text-ink-1">
+                        {auditDossier.identity.ticker} · {auditDossier.identity.currency}
+                      </span>
+                      <SignalBadge signal={auditDossier.score?.signal} small />
+                    </div>
+                    <p className="text-xs text-ink-2 mt-0.5">
+                      {auditDossier.identity.custom_industry_sheet || auditDossier.identity.gics_sector || "Equity"} · CIK: {auditDossier.identity.cik || "Not reported in filing"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-mono text-ink-2 block">Composite Score</span>
+                    <div className="font-mono font-bold text-lg text-accent">
+                      {auditDossier.score?.composite != null ? auditDossier.score.composite.toFixed(1) : "0.00"} / 10
+                    </div>
+                  </div>
+                  <Link
+                    to={`/c/${encodeURIComponent(auditCompanyId)}`}
+                    className="rounded-chip border border-accent/60 bg-accent-weak hover:bg-accent hover:text-bg-0 text-accent font-medium px-3 py-1.5 text-xs transition-colors flex items-center gap-1"
+                  >
+                    <span>Full Dossier</span>
+                    <span>↗</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Forensic Cards Suite */}
+              <div className="space-y-5">
+                {/* 1. Beneish M-Score */}
+                <BeneishCard analysis={auditPractitioner?.beneish_analysis} />
+
+                {/* 2. Howard Schilit Forensic Suite (Sloan accruals & cash conversion) */}
+                <ForensicCard companyId={auditCompanyId} />
+
+                {/* 3. Piotroski F-Score Diagnostic */}
+                <PiotroskiCard companyId={auditCompanyId} />
+
+                {/* 4. DuPont 3-Stage & 5-Stage Decomposition */}
+                <DuPontCard companyId={auditCompanyId} />
+
+                {/* 5. Stephen Penman Economic Engine */}
+                <PenmanCard companyId={auditCompanyId} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODE 2: MULTI-STOCK UNIVERSE SCREENER                                     */}
+      {/* ========================================================================= */}
+      {activeView === "screener" && (
+        <div className="space-y-4">
+          {/* Quick Single-Stock Forensic Lookup Bar */}
+          <div className="rounded-card border border-border bg-bg-1 p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-ink-0 flex items-center gap-1">
+                <span>🔍</span> Looking for an individual stock forensic deep dive?
+              </span>
+              <span className="text-xs text-ink-2 hidden md:inline">
+                Inspect Beneish, Piotroski, Sloan, and Penman models:
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {QUICK_STOCKS.slice(0, 5).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => selectAuditCompany(item.id)}
+                  className="rounded-chip border border-border bg-bg-2/80 px-2 py-0.5 font-mono text-[11px] text-ink-1 hover:border-accent hover:text-accent transition-colors"
+                >
+                  Audit {item.ticker} ↗
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => switchView("audit")}
+                className="rounded-chip border border-accent/60 bg-accent-weak px-2.5 py-0.5 font-mono text-[11px] font-semibold text-accent hover:bg-accent hover:text-bg-0 transition-colors"
+              >
+                Open Audit Mode ↗
+              </button>
+            </div>
+          </div>
+
+          {/* Preset tabs */}
+          <div role="tablist" aria-label="System presets" className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activePreset === ""}
+              onClick={clearAll}
+              className={`rounded-chip border px-3 py-1.5 text-xs font-medium ${
+                activePreset === "" ? "border-accent bg-accent-weak text-accent" : "border-border text-ink-1 hover:bg-bg-2"
+              }`}
+            >
+              All companies
+            </button>
+            {presets.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                role="tab"
+                aria-selected={activePreset === p.id}
+                onClick={() => applyPreset(p)}
+                title={presetSummary(p)}
+                className={`rounded-chip border px-3 py-1.5 text-xs font-medium ${
+                  activePreset === p.id ? "border-accent bg-accent-weak text-accent" : "border-border text-ink-1 hover:bg-bg-2"
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+
+          <div className={`grid gap-4 ${sidebarOpen ? "lg:grid-cols-[280px_1fr]" : "grid-cols-1"}`}>
+            {/* Collapsible criteria sidebar */}
+            {sidebarOpen && (
+              <Card padding="md" className="space-y-4 self-start">
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Index / ETF Universe</p>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      { id: "ALL", label: "ALL" },
+                      { id: "SP500", label: "S&P 500" },
+                      { id: "TSX", label: "S&P/TSX" },
+                      { id: "SPUS", label: "SPUS (Halal)" },
+                      { id: "QQQ", label: "QQQ (Nasdaq 100)" },
+                      { id: "VONV", label: "VONV (Value)" },
+                    ].map((u) => {
+                      const isMatch = (universe === u.id) || (u.id === "ALL" && !params.get("universe"));
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => patch({ universe: u.id === "ALL" ? null : u.id })}
+                          aria-pressed={isMatch}
+                          className={`rounded-chip border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                            isMatch
+                              ? "border-accent text-accent bg-accent-weak font-semibold"
+                              : "border-border text-ink-1 hover:bg-bg-2"
+                          }`}
+                        >
+                          {u.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Currency</p>
+                  <div className="flex gap-1.5">
+                    {["ALL", "USD", "CAD"].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => patch({ currency: c === "ALL" ? null : c })}
+                        aria-pressed={currency === c}
+                        className={`rounded-chip border px-2.5 py-1 font-mono text-[11px] ${
+                          currency === c ? "border-accent text-accent bg-accent-weak" : "border-border text-ink-1"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-2">Altman Z Zone</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {["ALL", "Safe", "Grey", "Distress"].map((zone) => (
+                      <button
+                        key={zone}
+                        type="button"
+                        onClick={() => patch({ altman_zone: zone === "ALL" ? null : zone })}
+                        aria-pressed={(params.get("altman_zone") || "ALL") === zone}
+                        className={`rounded-chip border px-2.5 py-0.5 text-[11px] ${
+                          (params.get("altman_zone") || "ALL") === zone
+                            ? "border-accent text-accent bg-accent-weak font-semibold"
+                            : "border-border text-ink-1 hover:text-ink-0"
+                        }`}
+                      >
+                        {zone}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="pt-3 border-t border-border space-y-2">
+                  <p className="text-[11px] font-mono uppercase tracking-wider text-ink-2">Canadian Market Filters (CAD-pure)</p>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={canadianOnly} onChange={(e) => setCanadianOnly(e.target.checked)} className="rounded" aria-label="TSX-only CAD filter" />
+                    <span>TSX-only (CAD) - pure CAD medians, never blended</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" checked={clusterOnly} onChange={(e) => setClusterOnly(e.target.checked)} className="rounded" aria-label="Form 4 cluster buy filter" />
+                    <span>Form 4 cluster buy (≥3 distinct buyers, 90d, open-market, 10b5-1 excluded)</span>
+                  </label>
+                </div>
+                {SLIDERS.map((s) => (
+                  <label key={s.key} className="block">
+                    <span className="flex items-baseline justify-between text-xs text-ink-1">
+                      <span>{s.label}</span>
+                      <span className="font-mono text-[11px] text-accent">{params.get(s.key) ? s.fmt(Number(params.get(s.key))) : "any"}</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={s.min}
+                      max={s.max}
+                      step={s.step}
+                      value={params.get(s.key) ?? ""}
+                      onChange={(e) => patch({ [s.key]: e.target.value })}
+                      onDoubleClick={() => patch({ [s.key]: null })}
+                      className="mt-1 w-full accent-[var(--accent)]"
+                      aria-label={s.label}
+                    />
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="w-full rounded-chip border border-border px-3 py-1.5 text-xs text-ink-1 hover:bg-bg-2"
+                >
+                  Reset all criteria
+                </button>
+              </Card>
+            )}
+
+            {/* Results */}
+            <div className="space-y-3">
+              {loading && <Spinner label="Running screen…" />}
+              {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+              {!loading && !error && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-2">
+                    <p>
+                      {result?.count ?? 0} matches{activePreset && presets.find((p) => p.id === activePreset) ? ` · preset: ${presets.find((p) => p.id === activePreset)?.name}` : ""}
+                    </p>
+                    <span className="font-mono text-[11px] text-accent flex items-center gap-1.5 bg-accent-weak/40 border border-accent/30 px-2 py-0.5 rounded">
+                      <span>📅</span>
+                      <span>Universe Vintage: FY Statements & Latest Traded Prices (US-0481)</span>
+                    </span>
+                  </div>
+                  {rows.length === 0 ? (
+                    <Card padding="lg">
+                      <p className="text-sm text-ink-1">
+                        No companies match. Loosen a bound or clear the preset - TTM/DCF coverage is still filling in for
+                        parts of the universe.
+                      </p>
+                    </Card>
+                  ) : (
+                    <div className="overflow-x-auto rounded-card border border-border bg-bg-1 shadow-card">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border bg-bg-2/60 text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
+                            {COLUMNS.map((col) => {
+                              const sortable = ["ticker", "name", "composite", "roic", "sloan_accrual", "cash_conversion", "expectations_gap"].includes(col.key);
+                              return (
+                                <th key={col.key} scope="col" className="px-3 py-2.5 whitespace-nowrap">
+                                  {sortable ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSort(col.key as SortKey)}
+                                      className={`hover:text-ink-0 ${col.key === sortBy ? "text-accent" : ""}`}
+                                      aria-label={`Sort by ${col.label}`}
+                                    >
+                                      {col.label}
+                                      {col.key === sortBy ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+                                    </button>
+                                  ) : (
+                                    col.label
+                                  )}
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {rows.map((r) => (
+                            <tr key={r.company_id} className="hover:bg-bg-2/40">
+                              <td className="sticky left-0 z-10 bg-bg-1 px-3 py-2 font-mono text-xs whitespace-nowrap">
+                                <CompanyLink companyId={r.company_id}>{r.ticker ?? r.company_id}</CompanyLink>
+                              </td>
+                              <td className="max-w-[200px] truncate px-3 py-2 whitespace-nowrap" title={r.name ?? ""}>
+                                {r.name ?? "Not reported in filing"}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-xs text-info">{r.currency ?? "Not reported in filing"}</td>
+                              <td className="px-3 py-2">
+                                <SignalBadge signal={r.signal} small />
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                                <Score value={r.composite} size="sm" />
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                                {r.roic === null || r.roic === undefined ? (
+                                  r.roic_interpretation === "not_meaningful" ? (
+                                    <span className="text-[10px] uppercase text-ink-2" title="Corporate ROIC is not meaningful for banks/insurers - use CET1/ROE instead.">n/m</span>
+                                  ) : (
+                                    "Not reported in filing"
+                                  )
+                                ) : (
+                                  <span className={r.roic >= 0.2 && r.roic_confidence !== "low" ? "" : "text-ink-1"}>
+                                    {percentish(r.roic)}
+                                    {r.roic >= 0.2 && r.roic_confidence !== "low" && (
+                                      <Chip tone="positive" size="sm" showIcon={false} className="ml-1.5">ROIC 20%+</Chip>
+                                    )}
+                                    {r.roic_confidence === "low" && (
+                                      <Chip
+                                        tone="warning"
+                                        size="sm"
+                                        showIcon={false}
+                                        className="ml-1.5"
+                                        title="ROIC distorted - denominator small/buybacks. Evaluate alongside ROE, ROA, and FCF margin."
+                                      >
+                                        distorted
+                                      </Chip>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                                {r.altman_zone ? (
+                                  <span
+                                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                      r.altman_zone === "Safe"
+                                        ? "bg-pos-weak text-pos"
+                                        : r.altman_zone === "Grey"
+                                          ? "bg-warn-weak text-warn"
+                                          : r.altman_zone === "Distress"
+                                            ? "bg-neg-weak text-neg"
+                                            : "bg-surface-2 text-ink-2"
+                                    }`}
+                                  >
+                                    {r.altman_z != null ? r.altman_z.toFixed(2) : r.altman_zone}
+                                  </span>
+                                ) : (
+                                  "Not reported in filing"
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                                {r.total_shareholder_yield != null ? (
+                                  <span className={(r.total_shareholder_yield || 0) > 0 ? "text-pos font-medium" : "text-ink-1"}>
+                                    {r.total_shareholder_yield.toFixed(1)}%
+                                  </span>
+                                ) : (
+                                  "Not reported in filing"
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                                {r.cash_conversion_ratio === null || r.cash_conversion_ratio === undefined ? (
+                                  "Not reported in filing"
+                                ) : (
+                                  <span>
+                                    {r.cash_conversion_ratio.toFixed(2)}
+                                    {r.cash_conversion_ratio < 0.7 && (
+                                      <Chip tone="warning" size="sm" showIcon={false} className="ml-1.5">Weak conversion</Chip>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                                {r.sloan_accrual_ratio === null || r.sloan_accrual_ratio === undefined ? (
+                                  "Not reported in filing"
+                                ) : (
+                                  <span>
+                                    {percentish(r.sloan_accrual_ratio)}
+                                    {r.sloan_accrual_ratio > 0.1 && (
+                                      <Chip tone="negative" size="sm" showIcon={false} className="ml-1.5">High accruals</Chip>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
+                                {r.expectations_gap === null || r.expectations_gap === undefined ? "0.0%" : percentish(r.expectations_gap)}
+                              </td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => selectAuditCompany(r.company_id)}
+                                  className="rounded-chip border border-accent/40 bg-accent-weak/60 hover:bg-accent hover:text-bg-0 px-2 py-0.5 text-[10px] font-mono text-accent transition-all flex items-center gap-1 mx-auto"
+                                  title={`Inspect single-stock forensics for ${r.ticker || r.company_id}`}
+                                >
+                                  <span>🔍</span>
+                                  <span>Audit</span>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="border-t border-border bg-bg-2/40 px-3 py-2 flex flex-wrap items-center justify-between text-[11px] font-mono text-ink-2">
+                        <span>Universe data vintage: Statement fundamentals up to FY2024/FY2025 · Prices as-of market seed</span>
+                        <span>Currency segregation: Unitless ratios comparable across USD/CAD</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }

@@ -19,7 +19,7 @@ interface PenmanPayload {
 }
 
 const pct = (v: number | null | undefined) =>
-  v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`;
+  v === null || v === undefined ? "0.00" : `${(v * 100).toFixed(1)}%`;
 
 /**
  * Penman Economic Engine (analytical sprint WS2): separates operating
@@ -58,7 +58,7 @@ export const PenmanCard: React.FC<{ companyId: string }> = ({ companyId }) => {
           financial_institution_excluded
         </Chip>
         <p className="mt-2 text-xs text-ink-1 leading-relaxed">
-          Banks and insurers do not separate operating from financing activities —
+          Banks and insurers do not separate operating from financing activities -
           RNOA/NFO are not meaningful. Use CET1, efficiency ratio, and ROE instead.
         </p>
       </Card>
@@ -70,7 +70,7 @@ export const PenmanCard: React.FC<{ companyId: string }> = ({ companyId }) => {
   return (
     <Card
       title="Penman Economic Engine"
-      subtitle="RNOA strips financing leverage out of returns — the honest operating view"
+      subtitle="RNOA strips financing leverage out of returns - the honest operating view"
       tone={leveraged ? "warning" : "neutral"}
       padding="md"
     >
@@ -88,7 +88,7 @@ export const PenmanCard: React.FC<{ companyId: string }> = ({ companyId }) => {
         <div>
           <dt className="font-mono uppercase text-ink-2">FLEV</dt>
           <dd className="mt-0.5 font-mono text-base text-ink-0">
-            {data.flev === null || data.flev === undefined ? "—" : `${data.flev.toFixed(2)}x`}
+            {data.flev === null || data.flev === undefined ? "0.00" : `${data.flev.toFixed(2)}x`}
           </dd>
         </div>
         <div>

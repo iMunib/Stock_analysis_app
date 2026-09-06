@@ -119,7 +119,7 @@ export function CompositeGauge({
           className={`font-mono tabular-nums font-bold text-ink-0 ${cfg.text}`}
           style={{ color: hasValue ? color : "var(--ink-2)" }}
         >
-          {hasValue ? value.toFixed(1) : "—"}
+          {hasValue ? value.toFixed(1) : "0.00"}
         </span>
         {showLabel && signal && (
           <div className={`font-mono uppercase tracking-wider text-ink-1 ${cfg.labelText} truncate max-w-[120px]`}>

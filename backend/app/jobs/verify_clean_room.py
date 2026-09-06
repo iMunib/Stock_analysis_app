@@ -1,7 +1,7 @@
 """Clean-room verification runner (Trust sprint, Workstream A3).
 
 Proves the repository can go from ZERO to a served research API using only
-Alembic migrations + the real importer — no create_all, no shortcuts.
+Alembic migrations + the real importer - no create_all, no shortcuts.
 
 Usage:
     python -m app.jobs.verify_clean_room

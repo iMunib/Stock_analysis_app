@@ -1,24 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 
-/**
- * StockChatDrawer — Fact-grounded AI chat for a single company (Workstream 6).
- *
- * Rules (enforced by backend):
- * - LLM can only reference facts from deterministic DB columns.
- * - LLM cannot alter fundamentals, scores, or any numerical value.
- * - Scores are labelled as "deterministic math" in the system prompt.
- * - CAD/USD money is never mixed.
- * - Final disclaimer is appended to every response.
- *
- * UI: slide-over drawer from the right side, 4 starter chips, markdown-style
- * response rendering (bold/italic/code), no third-party chat library.
- */
-
 interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
+  citations?: Array<{ key: string; value: string; source: string }>;
   error?: boolean;
 }
 
@@ -30,9 +17,8 @@ const STARTER_CHIPS = [
 ];
 
 const DISCLAIMER =
-  "AI draft grounded in verified local facts. Not investment advice.";
+  "AI Narration (not the score) - Personal research software, not investment advice. AI narration is an interpretation of local facts, not a financial endorsement.";
 
-/** Simple inline markdown renderer: **bold**, *italic*, `code`, newlines. */
 function renderMarkdown(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\n)/g);
   return parts.map((part, i) => {
@@ -56,6 +42,24 @@ function renderMarkdown(text: string): React.ReactNode {
   });
 }
 
+function CitationChips({ citations }: { citations?: Array<{ key: string; value: string; source: string }> }) {
+  if (!citations || citations.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {citations.slice(0, 6).map((c, i) => (
+        <span
+          key={i}
+          title={`${c.key}: ${c.value} - source: ${c.source}`}
+          className="inline-flex items-center gap-1 rounded-chip border border-accent/30 bg-accent-weak px-1.5 py-0.5 text-[10px] font-mono text-accent hover:bg-accent/20 cursor-help"
+          aria-label={`Citation ${c.key} ${c.value}`}
+        >
+          {c.key}: {c.value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 interface StockChatDrawerProps {
   companyId: string;
   companyName?: string;
@@ -73,24 +77,22 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"default" | "100w" | "bullets" | "memo">("default");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Scroll to bottom on new messages.
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Focus input when drawer opens.
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen]);
 
-  // Reset when company changes.
   useEffect(() => {
     setMessages([]);
     setInput("");
@@ -101,7 +103,13 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
     const trimmed = text.trim();
     if (!trimmed || loading) return;
 
-    const userMsg: Message = { role: "user", content: trimmed };
+    // Apply view mode suffix for multi-format toggles (US-0702/US-0716)
+    let promptText = trimmed;
+    if (viewMode === "100w") promptText = `${trimmed} - Please respond in exactly 100 words, as a 100-word executive summary.`;
+    if (viewMode === "bullets") promptText = `${trimmed} - Please respond with bullet points, 50/50 bull/bear.`;
+    if (viewMode === "memo") promptText = `${trimmed} - Please respond as a formal board memo with headings.`;
+
+    const userMsg: Message = { role: "user", content: promptText };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setInput("");
@@ -109,7 +117,6 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
     setError(null);
 
     try {
-      // Pass conversation history (excluding error messages).
       const apiMessages = nextMessages
         .filter((m) => !m.error)
         .map((m) => ({ role: m.role, content: m.content }));
@@ -119,6 +126,7 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
         role: "assistant",
         content: resp.content,
         model: resp.model_used,
+        citations: (resp as any).citations ?? undefined,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (e: unknown) {
@@ -155,7 +163,6 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
 
   return (
     <>
-      {/* Backdrop */}
       {isOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] no-print"
@@ -164,7 +171,6 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
         />
       )}
 
-      {/* Drawer panel */}
       <aside
         role="dialog"
         aria-modal="true"
@@ -175,7 +181,6 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
           isOpen ? "translate-x-0" : "translate-x-full pointer-events-none invisible",
         ].join(" ")}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0">
           <div>
             <p className="text-xs font-mono uppercase tracking-wider text-ink-2">
@@ -184,6 +189,7 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
             <p className="text-sm font-semibold text-ink-0 mt-0.5">
               {companyName ?? companyId}
             </p>
+            <p className="text-[10px] font-mono text-accent mt-0.5">AI Narration (not the score) - minimax/minimax-m3:free</p>
           </div>
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
@@ -216,12 +222,16 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
           </div>
         </div>
 
-        {/* Disclaimer chip */}
         <div className="border-b border-border bg-bg-1 px-4 py-2 shrink-0">
           <p className="text-[10px] text-ink-2 leading-relaxed">{DISCLAIMER}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5" role="tablist" aria-label="Narration format">
+            <button role="tab" aria-selected={viewMode === "default"} onClick={() => setViewMode("default")} className={`px-2 py-1 rounded-chip text-[10px] font-mono border ${viewMode === "default" ? "bg-accent text-bg-0 border-accent" : "bg-bg-0 text-ink-2 border-border"}`}>Default</button>
+            <button role="tab" aria-selected={viewMode === "100w"} onClick={() => setViewMode("100w")} className={`px-2 py-1 rounded-chip text-[10px] font-mono border ${viewMode === "100w" ? "bg-accent text-bg-0 border-accent" : "bg-bg-0 text-ink-2 border-border"}`}>100-word</button>
+            <button role="tab" aria-selected={viewMode === "bullets"} onClick={() => setViewMode("bullets")} className={`px-2 py-1 rounded-chip text-[10px] font-mono border ${viewMode === "bullets" ? "bg-accent text-bg-0 border-accent" : "bg-bg-0 text-ink-2 border-border"}`}>Bullets</button>
+            <button role="tab" aria-selected={viewMode === "memo"} onClick={() => setViewMode("memo")} className={`px-2 py-1 rounded-chip text-[10px] font-mono border ${viewMode === "memo" ? "bg-accent text-bg-0 border-accent" : "bg-bg-0 text-ink-2 border-border"}`}>Board Memo</button>
+          </div>
         </div>
 
-        {/* Messages */}
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-smooth"
@@ -254,12 +264,11 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
           {loading && (
             <div className="flex items-center gap-2 text-xs text-ink-2">
               <LoadingDots />
-              <span>Analysing facts…</span>
+              <span>Analysing facts… (minimax/minimax-m3:free, 45s timeout)</span>
             </div>
           )}
         </div>
 
-        {/* Input bar */}
         <div className="border-t border-border px-4 py-3 shrink-0">
           <div className="flex items-center gap-2">
             <input
@@ -296,6 +305,7 @@ const StockChatDrawer: React.FC<StockChatDrawerProps> = ({
           {error && (
             <p className="mt-2 text-[10px] text-red-400">{error}</p>
           )}
+          <p className="mt-2 text-[10px] font-mono text-ink-2">Model: minimax/minimax-m3:free → mistralai/mistral-small-24b-instruct-2501:free (fallback), 45s timeout, llm_cache.</p>
         </div>
       </aside>
     </>
@@ -317,9 +327,10 @@ const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
         ].join(" ")}
       >
         <div className="text-[13px]">{renderMarkdown(message.content)}</div>
+        {!isUser && message.citations && <CitationChips citations={message.citations} />}
         {!isUser && message.model && !message.error && (
           <p className="mt-1.5 text-[9px] text-ink-2 font-mono truncate">
-            {message.model} · deterministic facts
+            {message.model} · deterministic facts · <span className="text-accent">AI Narration (not the score)</span>
           </p>
         )}
       </div>
@@ -327,7 +338,6 @@ const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
   );
 };
 
-/** Three-dot loading animation. */
 const LoadingDots: React.FC = () => (
   <div className="flex items-center gap-1" aria-hidden="true">
     {[0, 1, 2].map((i) => (

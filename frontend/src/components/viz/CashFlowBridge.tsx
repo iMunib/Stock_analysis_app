@@ -97,7 +97,7 @@ export const CashFlowBridge: React.FC<{ inputs: CashFlowBridgeInputs; className?
   if (!steps) {
     return (
       <div className="rounded-card border border-border bg-bg-1 p-4 text-xs text-ink-2 font-mono">
-        Cash-flow bridge needs net income and operating cash flow — not on file yet.
+        Cash-flow bridge needs net income and operating cash flow - not on file yet.
       </div>
     );
   }

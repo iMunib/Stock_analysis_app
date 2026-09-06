@@ -120,7 +120,7 @@ export function PillarRadar({
           textAnchor="middle"
           className="font-mono text-[10px] uppercase font-semibold fill-ink-1"
         >
-          Quality {quality !== null && quality !== undefined ? quality.toFixed(1) : "—"}
+          Quality {quality !== null && quality !== undefined ? quality.toFixed(1) : "0.00"}
         </text>
 
         <text
@@ -129,7 +129,7 @@ export function PillarRadar({
           textAnchor="start"
           className="font-mono text-[10px] uppercase font-semibold fill-ink-1"
         >
-          Value {value !== null && value !== undefined ? value.toFixed(1) : "—"}
+          Value {value !== null && value !== undefined ? value.toFixed(1) : "0.00"}
         </text>
 
         <text
@@ -138,7 +138,7 @@ export function PillarRadar({
           textAnchor="middle"
           className="font-mono text-[10px] uppercase font-semibold fill-ink-1"
         >
-          Growth {growth !== null && growth !== undefined ? growth.toFixed(1) : "—"}
+          Growth {growth !== null && growth !== undefined ? growth.toFixed(1) : "0.00"}
         </text>
 
         <text
@@ -147,7 +147,7 @@ export function PillarRadar({
           textAnchor="end"
           className="font-mono text-[10px] uppercase font-semibold fill-ink-1"
         >
-          Risk {risk !== null && risk !== undefined ? risk.toFixed(1) : "—"}
+          Risk {risk !== null && risk !== undefined ? risk.toFixed(1) : "0.00"}
         </text>
       </svg>
     </div>

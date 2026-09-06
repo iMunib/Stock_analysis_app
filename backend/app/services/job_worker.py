@@ -1,11 +1,12 @@
 """Background job worker: one daemon thread, claims one queued job at a time.
 
 Owns its own SQLAlchemy session (never shares a request session). Never raises
-out of the thread — failures land in status=failed with the error text.
+out of the thread - failures land in status=failed with the error text.
 Progress is updated per ticker during backfills.
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import traceback
@@ -20,6 +21,14 @@ from app.jobs.backfill import ingest_ticker
 from app.models import Company, Job
 from app.services import jobs as jobsvc
 from app.providers.edgar import bucket_state
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d [%(levelname)s] [%(name)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=False,
+)
+logger = logging.getLogger("job_worker")
 
 _POLL_SECONDS = 1.0
 
@@ -64,7 +73,7 @@ class JobWorker(threading.Thread):
             active = jobsvc.has_active(db, "refresh_universe")
             if not recent and not active:
                 jobsvc.enqueue(db, "refresh_universe", {"mode": "sample", "limit": 5, "recompute": True})
-                print("[worker] periodic refresh_universe enqueued", flush=True)
+                logger.info("periodic refresh_universe enqueued")
         except Exception:  # noqa: BLE001
             traceback.print_exc()
         finally:
@@ -177,7 +186,7 @@ class JobWorker(threading.Thread):
             ingest_price(db, company, quote)
             db.commit()
         except Exception as exc:
-            print(f"[worker] price fetch error for {ref.ticker}: {exc}", flush=True)
+            logger.warning("price fetch error for %s: %s", ref.ticker, exc)
 
         # Step 4: sector_peers
         jobsvc.set_step(db, job_id, step="sector_peers", message=f"Finding peers and assigning sector for {ref.ticker}...", company_id=company_id)
@@ -193,7 +202,7 @@ class JobWorker(threading.Thread):
         try:
             run_company_pipeline(db, company_id, refresh=refresh, fetch_live=False)
         except Exception as exc:
-            print(f"[worker] pipeline computation error for {company_id}: {exc}", flush=True)
+            logger.warning("pipeline computation error for %s: %s", company_id, exc)
             recompute(db, company_id=company_id)
             try:
                 from app.services.ttm_engine import compute_and_store_ttm
@@ -254,5 +263,5 @@ class JobWorker(threading.Thread):
                 ingest_ticker(db, ticker, registry, refresh=refresh)
             except Exception as exc:  # noqa: BLE001 - one bad ticker must not fail the job
                 db.rollback()
-                print(f"[job {job_id}] ticker {ticker} failed: {exc}", flush=True)
+                logger.warning("[job %s] ticker %s failed: %s", job_id, ticker, exc)
             jobsvc.set_progress(db, job_id, i, len(targets))

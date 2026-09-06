@@ -119,7 +119,7 @@ export const BeneishCard: React.FC<BeneishCardProps> = ({ analysis }) => {
                       isAbnormal ? "text-[var(--color-signal-bearish)]" : "text-[var(--color-text-primary)]"
                     }`}
                   >
-                    {val !== null && val !== undefined ? val.toFixed(2) : "—"}
+                    {val !== null && val !== undefined ? val.toFixed(2) : "0.00"}
                   </span>
                 </div>
                 <div className="mt-1 text-[10px] text-[var(--color-text-muted)] line-clamp-1" title={item.desc}>

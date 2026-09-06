@@ -76,13 +76,13 @@ export function LynchArchetypeCard({
           <div>
             <span className="text-[10px] font-mono text-ink-2 block">5Y EPS CAGR</span>
             <span className="font-mono text-xs font-semibold text-ink-0">
-              {epsGrowth5y != null ? `${epsGrowth5y > 0 ? "+" : ""}${epsGrowth5y.toFixed(1)}%` : "—"}
+              {epsGrowth5y != null ? `${epsGrowth5y > 0 ? "+" : ""}${epsGrowth5y.toFixed(1)}%` : "0.00"}
             </span>
           </div>
           <div>
             <span className="text-[10px] font-mono text-ink-2 block">Trailing P/E</span>
             <span className="font-mono text-xs font-semibold text-ink-0">
-              {peRatio != null ? `${peRatio.toFixed(1)}x` : "—"}
+              {peRatio != null ? `${peRatio.toFixed(1)}x` : "0.00"}
             </span>
           </div>
           <div>
@@ -96,7 +96,7 @@ export function LynchArchetypeCard({
                   : "text-ink-0"
               }`}
             >
-              {pegRatio != null ? pegRatio.toFixed(2) : "—"}
+              {pegRatio != null ? pegRatio.toFixed(2) : "0.00"}
             </span>
           </div>
         </div>
@@ -121,7 +121,7 @@ export function LynchArchetypeCard({
             <div className="flex justify-between">
               <span>Net Income:</span>
               <span className="text-ink-0 font-medium">
-                {netIncome != null ? money(netIncome, currency) : "—"}
+                {netIncome != null ? money(netIncome, currency) : "Not reported in filing"}
               </span>
             </div>
             {capex != null && (
@@ -137,7 +137,7 @@ export function LynchArchetypeCard({
               <span className="text-accent">
                 {calcOwnerEarnings != null
                   ? money(calcOwnerEarnings, currency)
-                  : "—"}
+                  : "Not reported in filing"}
               </span>
             </div>
           </div>

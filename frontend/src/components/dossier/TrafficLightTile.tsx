@@ -81,7 +81,7 @@ export function TrafficLightTile({
                 {m.label}
               </span>
               <span className="font-mono text-xs font-semibold text-ink-0">
-                {m.value != null ? m.value : "—"}
+                {m.value != null ? m.value : "Not reported in filing"}
               </span>
             </div>
           ))}

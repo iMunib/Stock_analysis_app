@@ -4,7 +4,7 @@ Detects earnings manipulation / cash-flow distortion across multi-year FY rows.
 
 Available metrics given the stored schema (no AR/inventory breakdowns on
 FinancialSnapshot): the engine computes every flag whose inputs exist and
-returns `insufficient_data` markers for the rest — it never fabricates inputs.
+returns `insufficient_data` markers for the rest - it never fabricates inputs.
 
 Flags:
 - RED_FLAG_CFO_EARNINGS_DECOUPLING: CFO < NI for 2 consecutive FY periods.

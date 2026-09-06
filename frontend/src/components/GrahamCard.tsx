@@ -19,10 +19,10 @@ interface GrahamPayload {
 }
 
 const money = (v: number | null | undefined) =>
-  v === null || v === undefined ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  v === null || v === undefined ? "0.00" : v.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 const mos = (v: number | null | undefined) =>
-  v === null || v === undefined ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
+  v === null || v === undefined ? "0.00" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
 
 /**
  * Graham Value Floor (analytical sprint WS4): absolute margin-of-safety meters.
@@ -131,7 +131,7 @@ export const GrahamCard: React.FC<{ companyId: string }> = ({ companyId }) => {
       </table>
 
       <p className="mt-3 text-[11px] text-ink-2 leading-relaxed">
-        Graham Number = √(22.5 × EPS × BVPS). {data.proxy ? "NCAV/NNWC use a documented conservative proxy (35% of non-cash assets treated as current) — AR/inventory detail is not on file. " : ""}
+        Graham Number = √(22.5 × EPS × BVPS). {data.proxy ? "NCAV/NNWC use a documented conservative proxy (35% of non-cash assets treated as current) - AR/inventory detail is not on file. " : ""}
         Basis: {data.basis_fiscal_year ? `FY${data.basis_fiscal_year}` : data.basis_note ?? "latest filings"}
         {data.currency ? ` · ${data.currency}` : ""}.
       </p>

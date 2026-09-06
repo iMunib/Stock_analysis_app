@@ -1,4 +1,4 @@
-"""Full-history backfill CLI — Workstream 1.
+"""Full-history backfill CLI - Workstream 1.
 
 Usage:
     python -m app.jobs.run_full_backfill [options]
@@ -243,7 +243,7 @@ def run_full_backfill(
         "error_list": errors[:20],
     }
     print(
-        f"\n[backfill] done — ok={ok}, errors={len(errors)}/{len(targets)}",
+        f"\n[backfill] done - ok={ok}, errors={len(errors)}/{len(targets)}",
         flush=True,
     )
     return summary

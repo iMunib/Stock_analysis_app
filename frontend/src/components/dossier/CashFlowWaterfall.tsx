@@ -67,9 +67,9 @@ export function CashFlowWaterfall({
   const cfoNiRatio = opCash != null && ni != null && Math.abs(ni) > 0 ? opCash / ni : null;
   const fcfConversionPct = freeCash != null && rev > 0 ? (freeCash / rev) * 100 : null;
 
-  const fmtVal = (val: number | null) => (val != null ? money(val, currency) : "—");
+  const fmtVal = (val: number | null) => (val != null ? money(val, currency) : "Not reported in filing");
   const fmtDelta = (val: number | null) => {
-    if (val == null) return "—";
+    if (val == null) return "Not reported in filing";
     const sign = val > 0 ? "+" : "";
     return `${sign}${money(val, currency)}`;
   };
@@ -100,7 +100,7 @@ export function CashFlowWaterfall({
       type: "pillar",
       val: gp,
       pctOfRev: grossMarginPct,
-      subtext: `Retained margin: ${grossMarginPct != null ? grossMarginPct.toFixed(1) : "—"}%`,
+      subtext: `Retained margin: ${grossMarginPct != null ? grossMarginPct.toFixed(1) : "0.00"}%`,
       tone: "info",
     },
     {
@@ -118,7 +118,7 @@ export function CashFlowWaterfall({
       type: "pillar",
       val: ni,
       pctOfRev: netMarginPct,
-      subtext: `Accounting profit: ${netMarginPct != null ? netMarginPct.toFixed(1) : "—"}% net margin`,
+      subtext: `Accounting profit: ${netMarginPct != null ? netMarginPct.toFixed(1) : "0.00"}% net margin`,
       tone: ni != null && ni >= 0 ? "pos" : "neg",
     },
     {
@@ -139,7 +139,7 @@ export function CashFlowWaterfall({
       type: "pillar",
       val: opCash,
       pctOfRev: opCash != null ? (opCash / rev) * 100 : null,
-      subtext: `Cash generation: ${cfoNiRatio != null ? cfoNiRatio.toFixed(2) + "x CFO/NI" : "—"}`,
+      subtext: `Cash generation: ${cfoNiRatio != null ? cfoNiRatio.toFixed(2) + "x CFO/NI" : "0.00"}`,
       tone: cfoNiRatio != null && cfoNiRatio >= 1.0 ? "pos" : "warn",
     },
     {
@@ -157,7 +157,7 @@ export function CashFlowWaterfall({
       type: "pillar",
       val: freeCash,
       pctOfRev: fcfConversionPct,
-      subtext: `Cash to shareholders: ${fcfConversionPct != null ? fcfConversionPct.toFixed(1) : "—"}% of revenue`,
+      subtext: `Cash to shareholders: ${fcfConversionPct != null ? fcfConversionPct.toFixed(1) : "0.00"}% of revenue`,
       tone: freeCash != null && freeCash >= 0 ? "pos" : "neg",
     },
   ];
@@ -216,7 +216,7 @@ export function CashFlowWaterfall({
             Gross Margin
           </span>
           <span className="text-sm font-mono font-bold text-ink-0">
-            {grossMarginPct != null ? `${grossMarginPct.toFixed(1)}%` : "—"}
+            {grossMarginPct != null ? `${grossMarginPct.toFixed(1)}%` : "0.00"}
           </span>
         </div>
         <div className="rounded-card border border-border/70 bg-bg-2/40 p-2.5">
@@ -224,7 +224,7 @@ export function CashFlowWaterfall({
             Net Margin
           </span>
           <span className={`text-sm font-mono font-bold ${netMarginPct != null && netMarginPct < 0 ? "text-neg" : "text-ink-0"}`}>
-            {netMarginPct != null ? `${netMarginPct.toFixed(1)}%` : "—"}
+            {netMarginPct != null ? `${netMarginPct.toFixed(1)}%` : "0.00"}
           </span>
         </div>
         <div className="rounded-card border border-border/70 bg-bg-2/40 p-2.5">
@@ -232,7 +232,7 @@ export function CashFlowWaterfall({
             Cash Conversion (CFO/NI)
           </span>
           <span className={`text-sm font-mono font-bold ${cfoNiRatio != null && cfoNiRatio >= 1.0 ? "text-pos" : "text-warn"}`}>
-            {cfoNiRatio != null ? `${cfoNiRatio.toFixed(2)}x` : "—"}
+            {cfoNiRatio != null ? `${cfoNiRatio.toFixed(2)}x` : "0.00"}
           </span>
         </div>
         <div className="rounded-card border border-border/70 bg-bg-2/40 p-2.5">
@@ -240,7 +240,7 @@ export function CashFlowWaterfall({
             FCF Conversion Rate
           </span>
           <span className={`text-sm font-mono font-bold ${freeCash != null && freeCash >= 0 ? "text-pos" : "text-neg"}`}>
-            {fcfConversionPct != null ? `${fcfConversionPct.toFixed(1)}%` : "—"}
+            {fcfConversionPct != null ? `${fcfConversionPct.toFixed(1)}%` : "0.00"}
           </span>
         </div>
       </div>
@@ -364,7 +364,7 @@ export function CashFlowWaterfall({
                     {step.type === "pillar" ? fmtVal(step.val) : fmtDelta(step.val)}
                   </td>
                   <td className="py-2 px-3 text-right text-ink-1">
-                    {step.pctOfRev != null ? `${step.pctOfRev.toFixed(1)}%` : "—"}
+                    {step.pctOfRev != null ? `${step.pctOfRev.toFixed(1)}%` : "0.00"}
                   </td>
                   <td className="py-2 px-3 text-[11px] text-ink-2">
                     {step.subtext}
@@ -382,7 +382,7 @@ export function CashFlowWaterfall({
           Quality Check: {cfoNiRatio != null && cfoNiRatio >= 1.0 ? "✓ High Quality (CFO > NI)" : "⚠ Working capital or accrual drag detected"}
         </span>
         <span>
-          Net Realization: {fcfConversionPct != null ? `${fcfConversionPct.toFixed(1)}¢ per $1 revenue retained` : "—"}
+          Net Realization: {fcfConversionPct != null ? `${fcfConversionPct.toFixed(1)}¢ per $1 revenue retained` : "0.00"}
         </span>
       </div>
     </div>

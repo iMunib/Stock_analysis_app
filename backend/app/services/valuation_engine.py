@@ -330,6 +330,340 @@ def compute_and_store_reverse_dcf(db: Session, company_id: str) -> ValuationReve
 OPPORTUNITY_COST_HURDLE = 0.08  # Burton Malkiel & J.L. Collins 8.0% nominal index hurdle
 
 
+def compute_normalized_earnings(db: Session, company_id: str) -> dict[str, Any]:
+    """Mid-cycle normalized earnings (US-0117/US-0142).
+
+    For cyclical sectors (Energy, Materials, Industrials) with ≥5 FY EBIT,
+    returns 5-yr median EBIT and compares to current/peak. Otherwise returns
+    latest EBIT as fallback with `is_normalized=False`.
+    """
+    from statistics import median as _median
+
+    company = db.get(Company, company_id)
+    snaps = db.execute(
+        select(FinancialSnapshot).where(FinancialSnapshot.company_id == company_id, FinancialSnapshot.period_type == "FY").order_by(FinancialSnapshot.fiscal_year.asc().nullslast())
+    ).scalars().all()
+    dated = [s for s in snaps if s.fiscal_year is not None and s.ebit is not None]
+    if not dated:
+        seed = next((s for s in snaps if s.fiscal_year is None), None)
+        if seed and seed.ebit is not None:
+            return {
+                "company_id": company_id,
+                "normalized_ebit": float(seed.ebit),
+                "is_normalized": False,
+                "reason": "only_seed_ebit",
+                "current_ebit": float(seed.ebit),
+                "median_5y": None,
+                "peak_ebit": float(seed.ebit),
+                "delta_vs_peak_pct": 0.0,
+            }
+        return {"company_id": company_id, "normalized_ebit": None, "is_normalized": False, "reason": "ebit_missing"}
+
+    # Cyclical check
+    cyclical_sectors = {"energy", "materials", "industrials"}
+    is_cyclical = (company.gics_sector or "").lower() in cyclical_sectors if company else False
+
+    ebits = [float(s.ebit) for s in dated[-10:]]
+    median_5y = float(_median(ebits[-5:])) if len(ebits) >= 5 else None
+    current = ebits[-1]
+    peak = max(ebits)
+
+    # Only normalize if cyclical or if current is >20% above median (peak bias guard)
+    if median_5y is not None and (is_cyclical or (current > median_5y * 1.2)):
+        norm = median_5y
+        is_norm = True
+    else:
+        norm = current
+        is_norm = False
+
+    delta_vs_peak = round((norm - peak) / abs(peak) * 100.0, 1) if peak else 0.0
+
+    # 10-yr range for context (US-0142)
+    min_ebit = min(ebits) if ebits else None
+    max_ebit = max(ebits) if ebits else None
+
+    return {
+        "company_id": company_id,
+        "normalized_ebit": round(norm, 2) if norm is not None else None,
+        "is_normalized": is_norm,
+        "is_cyclical": is_cyclical,
+        "median_5y": round(median_5y, 2) if median_5y is not None else None,
+        "current_ebit": round(current, 2),
+        "peak_ebit": round(peak, 2) if peak is not None else None,
+        "min_10y": round(min_ebit, 2) if min_ebit is not None else None,
+        "max_10y": round(max_ebit, 2) if max_ebit is not None else None,
+        "delta_vs_peak_pct": delta_vs_peak,
+    }
+
+
+def decompose_implied_growth(db: Session, company_id: str, implied_g: float | None = None) -> dict[str, Any]:
+    """Decompose implied 10-yr growth into volume/price/margin components where data allows (US-0122).
+
+    Volume ≈ revenue CAGR, Price ≈ implied from CPI/producer proxy (not stored → insufficient),
+    Margin recovery ≈ (current margin vs 5-yr median) contribution. Honest about missing price.
+    """
+    if implied_g is None:
+        dcf = compute_and_store_reverse_dcf(db, company_id)
+        implied_g = dcf.market_implied_growth_10y
+    if implied_g is None:
+        return {"status": "insufficient_data", "reason": "market_implied_growth_unavailable"}
+
+    snaps = db.execute(
+        select(FinancialSnapshot).where(FinancialSnapshot.company_id == company_id, FinancialSnapshot.period_type == "FY").order_by(FinancialSnapshot.fiscal_year.asc().nullslast())
+    ).scalars().all()
+    dated = [s for s in snaps if s.fiscal_year is not None and s.revenue is not None and s.revenue > 0]
+    if len(dated) < 3:
+        return {"status": "insufficient_data", "reason": "requires_3_fy_revenue_for_decomposition"}
+
+    # Volume: revenue CAGR
+    start = dated[0].revenue
+    end = dated[-1].revenue
+    span = dated[-1].fiscal_year - dated[0].fiscal_year if dated[-1].fiscal_year and dated[0].fiscal_year else 1
+    vol = ( (end / start) ** (1.0 / span) - 1.0) if start and span else 0.0
+
+    # Margin recovery: compare current operating margin vs 5-yr median
+    from statistics import median as _median
+
+    margins = []
+    for s in dated[-5:]:
+        if s.ebit is not None and s.revenue not in (None, 0):
+            margins.append(float(s.ebit) / float(s.revenue))
+    median_margin = float(_median(margins)) if margins else None
+    cur_margin = float(dated[-1].ebit) / float(dated[-1].revenue) if (dated[-1].ebit is not None and dated[-1].revenue) else None
+    margin_recovery = None
+    if median_margin is not None and cur_margin is not None and median_margin != 0:
+        # If current margin below median, market may price margin recovery
+        margin_recovery = round(cur_margin - median_margin, 4)
+
+    # Price component: not locally stored (requires price-level deflators) → insufficient
+    price_component = None
+
+    return {
+        "status": "computed",
+        "implied_growth": round(implied_g, 4),
+        "volume_component": round(vol, 4),
+        "price_component": price_component,
+        "price_note": "Price (inflation) component requires external deflator feed - not in local scope.",
+        "margin_recovery_component": margin_recovery,
+        "median_margin_5y": round(median_margin, 4) if median_margin is not None else None,
+        "current_margin": round(cur_margin, 4) if cur_margin is not None else None,
+    }
+
+
+def compute_guided_dcf(
+    db: Session,
+    company_id: str,
+    revenue_growth: float | None = None,
+    operating_margin: float | None = None,
+    wacc: float | None = None,
+    terminal_g: float | None = None,
+    years: int = 5,
+    risk_free: float = 0.04,
+    erp: float = 0.05,
+    beta: float | None = None,
+) -> dict[str, Any]:
+    """Guided DCF sandbox (US-0101/US-0108/US-0125/US-0126/US-0145).
+
+    Steps: Revenue → EBIT → NOPAT → FCF → Discount → Terminal → EV → Equity → per-share.
+    Returns arithmetic resolution, WACC build, terminal %, and uncertainty range.
+    """
+    from app.services.penman_engine import is_financial_institution
+
+    company = db.get(Company, company_id)
+    if company is None:
+        raise ValueError(f"Company {company_id} not found")
+
+    if is_financial_institution(company):
+        return {
+            "company_id": company_id,
+            "status": "financial_institution_excluded",
+            "reason": "FCF DCF not meaningful for banks/insurers - use DDM/Residual Income.",
+            "is_financial": True,
+            "disclaimer": "Personal research software, not investment advice. Intrinsic value estimates are hypothetical model outputs based on user assumptions.",
+        }
+
+    snaps = db.execute(
+        select(FinancialSnapshot).where(FinancialSnapshot.company_id == company_id, FinancialSnapshot.period_type == "FY").order_by(FinancialSnapshot.fiscal_year.asc().nullslast())
+    ).scalars().all()
+    dated = [s for s in snaps if s.fiscal_year is not None]
+    seed = next((s for s in snaps if s.fiscal_year is None), None)
+    latest = dated[-1] if dated else seed
+    if latest is None:
+        return {"company_id": company_id, "status": "insufficient_data", "reason": "no_snapshot"}
+
+    # Defaults from history where user didn't override
+    rev0 = float(latest.revenue) if latest and latest.revenue else (float(seed.revenue) if seed and seed.revenue else None)
+    if rev0 is None or rev0 <= 0:
+        return {"company_id": company_id, "status": "insufficient_data", "reason": "revenue_missing"}
+
+    # Derive default growth/margin from history if not supplied
+    if revenue_growth is None:
+        # 3-yr revenue CAGR
+        revs = [float(s.revenue) for s in dated[-4:] if s.revenue and s.revenue > 0]
+        if len(revs) >= 2:
+            span = (dated[-1].fiscal_year - dated[-len(revs)].fiscal_year) if dated[-1].fiscal_year and dated[-len(revs)].fiscal_year else 1
+            revenue_growth = ( (revs[-1] / revs[0]) ** (1.0 / max(1, span)) - 1.0) if revs[0] > 0 else 0.05
+            revenue_growth = max(-0.1, min(0.25, float(revenue_growth)))
+        else:
+            revenue_growth = 0.05
+            thin_history = True
+        # Will set thin flag below
+    if operating_margin is None:
+        # median operating margin last 5
+        margins = [float(s.ebit) / float(s.revenue) for s in dated[-5:] if s.ebit is not None and s.revenue not in (None, 0)]
+        if margins:
+            from statistics import median as _median
+
+            operating_margin = float(_median(margins))
+        else:
+            operating_margin = 0.15
+
+    # WACC build
+    # Try to fetch beta from key stats
+    if beta is None:
+        from app.models import CompanyKeyStats
+
+        beta_row = db.execute(select(CompanyKeyStats).where(CompanyKeyStats.company_id == company_id, CompanyKeyStats.metric_name == "beta")).scalar_one_or_none()
+        beta = float(beta_row.value) if beta_row and beta_row.value is not None else 1.0
+
+    if wacc is None:
+        wacc = risk_free + erp * float(beta)
+    terminal_g = terminal_g if terminal_g is not None else DEFAULT_G_TERMINAL
+
+    # Thin history warning
+    thin_history = len(dated) < 3
+
+    # Tax
+    tax = 0.21
+    if latest.ebit is not None and latest.net_income is not None and latest.ebit != 0:
+        try:
+            eff = 1.0 - float(latest.net_income) / float(latest.ebit)
+            if 0 <= eff <= 0.5:
+                tax = max(0.15, min(0.30, eff))
+        except Exception:
+            pass
+
+    # Project
+    rev = rev0
+    pv_sum = 0.0
+    steps: list[dict[str, Any]] = []
+    fcf_series: list[float] = []
+    for t in range(1, years + 1):
+        rev *= (1.0 + revenue_growth)
+        ebit = rev * operating_margin
+        nopat = ebit * (1.0 - tax)
+        # FCF proxy: NOPAT (simplified; capex/ΔWC not modeled per spec's plain-English sandbox)
+        fcf = nopat
+        pv = fcf / ((1.0 + wacc) ** t)
+        pv_sum += pv
+        fcf_series.append(fcf)
+        steps.append({
+            "year": t,
+            "revenue": round(rev, 2),
+            "ebit": round(ebit, 2),
+            "nopat": round(nopat, 2),
+            "fcf": round(fcf, 2),
+            "discount_factor": round(1.0 / ((1.0 + wacc) ** t), 4),
+            "pv_fcf": round(pv, 2),
+            "formula": f"Year {t}: FCF {round(fcf,2)} / (1+{wacc:.3f})^{t} = {round(pv,2)}",
+        })
+
+    # Terminal value (Gordon)
+    fcf_n = fcf_series[-1] if fcf_series else rev0 * operating_margin * (1.0 - tax)
+    if wacc <= terminal_g:
+        terminal_g = wacc - 0.02
+    tv = fcf_n * (1.0 + terminal_g) / (wacc - terminal_g)
+    pv_tv = tv / ((1.0 + wacc) ** years)
+    ev = pv_sum + pv_tv
+
+    # Equity value
+    total_debt = float(latest.total_debt or 0) if latest else 0.0
+    cash = float(latest.cash_st_investments or 0) if latest else 0.0
+    net_debt = total_debt - cash
+    equity_value = ev - net_debt
+    shares = float(latest.shares_snapshot) if latest and latest.shares_snapshot else (float(seed.shares_snapshot) if seed and seed.shares_snapshot else None)
+    per_share = (equity_value / shares) if (shares and shares > 0) else None
+
+    # Terminal % warning
+    terminal_pct = (pv_tv / ev * 100.0) if ev else 0.0
+    terminal_heavy = terminal_pct > 70.0
+
+    # Price comparison
+    price = float(latest.price) if latest and latest.price else (float(seed.price) if seed and seed.price else None)
+    premium_discount = None
+    if price is not None and per_share not in (None, 0):
+        premium_discount = round((price - per_share) / per_share * 100.0, 1)
+
+    # Uncertainty range: 10th/50th/90th via ± growth/WACC shocks
+    # 10th: growth -1.5pp, WACC +1pp; 90th: growth +1.5pp, WACC -1pp
+    def _ev_at(g: float, w: float) -> float:
+        r = rev0
+        pv = 0.0
+        for t in range(1, years + 1):
+            r *= (1.0 + g)
+            e = r * operating_margin * (1.0 - tax)
+            pv += e / ((1.0 + w) ** t)
+        fcf_last = r * operating_margin * (1.0 - tax)
+        tg = terminal_g
+        if w <= tg:
+            tg = w - 0.02
+        tv2 = fcf_last * (1.0 + tg) / (w - tg)
+        return pv + tv2 / ((1.0 + w) ** years)
+
+    ev_p10 = _ev_at(revenue_growth - 0.015, wacc + 0.01)
+    ev_p90 = _ev_at(revenue_growth + 0.015, wacc - 0.01)
+    eq_p10 = ev_p10 - net_debt
+    eq_p90 = ev_p90 - net_debt
+    ps_p10 = (eq_p10 / shares) if shares else None
+    ps_p90 = (eq_p90 / shares) if shares else None
+
+    return {
+        "company_id": company_id,
+        "currency": company.currency,
+        "status": "computed",
+        "inputs": {
+            "revenue_growth": round(revenue_growth, 4),
+            "operating_margin": round(operating_margin, 4),
+            "wacc": round(wacc, 4),
+            "terminal_g": round(terminal_g, 4),
+            "years": years,
+            "risk_free": risk_free,
+            "erp": erp,
+            "beta": round(float(beta), 2),
+            "tax_rate": round(tax, 4),
+            "thin_history": thin_history,
+        },
+        "wacc_build": {
+            "risk_free": risk_free,
+            "erp": erp,
+            "beta": round(float(beta), 2),
+            "formula": f"WACC = Rf ({risk_free:.2%}) + ERP ({erp:.2%}) × Beta ({float(beta):.2f}) = {wacc:.2%}",
+            "wacc": round(wacc, 4),
+        },
+        "steps": steps,
+        "fcf_series": [round(v, 2) for v in fcf_series],
+        "pv_sum": round(pv_sum, 2),
+        "terminal_value": round(tv, 2),
+        "pv_terminal": round(pv_tv, 2),
+        "enterprise_value": round(ev, 2),
+        "net_debt": round(net_debt, 2),
+        "equity_value": round(equity_value, 2),
+        "shares": shares,
+        "per_share": round(per_share, 2) if per_share is not None else None,
+        "price": price,
+        "premium_discount_pct": premium_discount,
+        "terminal_pct": round(terminal_pct, 1),
+        "terminal_heavy": terminal_heavy,
+        "uncertainty_range": {
+            "p10_per_share": round(ps_p10, 2) if ps_p10 is not None else None,
+            "p50_per_share": round(per_share, 2) if per_share is not None else None,
+            "p90_per_share": round(ps_p90, 2) if ps_p90 is not None else None,
+        },
+        "disclaimer": "Personal research software, not investment advice. Intrinsic value estimates are hypothetical model outputs based on user assumptions.",
+        "method_version": "v1",
+    }
+
+
 def evaluate_reverse_dcf_hurdles(dcf_row: ValuationReverseDCF | None) -> dict[str, Any]:
     """Evaluates expectations gap and benchmarks against 8.0% Malkiel/Collins index hurdle."""
     if dcf_row is None or dcf_row.market_implied_growth_10y is None:

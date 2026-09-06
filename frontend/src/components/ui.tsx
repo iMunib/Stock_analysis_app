@@ -57,7 +57,7 @@ export function HalalBadge({ status }: { status: string | null | undefined }) {
 
 export function Score({ value, size }: { value: number | null | undefined; size?: "lg" | "sm" }) {
   if (value === null || value === undefined) {
-    return <span className={`font-mono text-ink-2 ${size === "lg" ? "text-4xl" : ""}`}>—</span>;
+    return <span className={`font-mono text-ink-2 ${size === "lg" ? "text-4xl" : ""}`}>-</span>;
   }
   return (
     <span className={`font-mono tabular-nums text-accent ${size === "lg" ? "text-5xl" : "text-base"}`} title="Research score 0-10">

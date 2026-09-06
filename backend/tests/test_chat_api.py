@@ -40,7 +40,7 @@ def test_chat_400_for_empty_messages(client, imported_db):
 
 
 def test_chat_returns_valid_structure_without_api_key(client, imported_db, monkeypatch):
-    """Without OPENROUTER_API_KEY, chat returns a graceful 'unavailable' message."""
+    """Without OPENROUTER_API_KEY, chat returns deterministic grade-10 fallback without error banner (Wave 6 US-0718)."""
     import os
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
@@ -60,8 +60,12 @@ def test_chat_returns_valid_structure_without_api_key(client, imported_db, monke
     assert "content" in body
     assert "model_used" in body
     assert "disclaimer" in body
-    # Without API key, content should indicate unavailability
-    assert "AI narration is unavailable" in body["content"] or body["model_used"] == "none"
+    # Wave 6: seamless deterministic fallback, no error banner
+    assert body["model_used"] == "deterministic_fallback"
+    assert "AI Narration (not the score)" in body["content"]
+    assert "Personal research software" in body["content"] or "Personal research software" in body["disclaimer"]
+    assert "citations" in body
+    assert isinstance(body["citations"], list)
 
 
 def test_chat_key_never_in_response(client, imported_db, monkeypatch):

@@ -1,6 +1,6 @@
 """Job queue service (SQLite-backed). enqueue / get / list / claim.
 
-Claim pattern: UPDATE jobs SET status='running' WHERE id = (oldest queued) —
+Claim pattern: UPDATE jobs SET status='running' WHERE id = (oldest queued) -
 one at a time, safe under WAL with busy_timeout. No Redis, no Celery.
 """
 from __future__ import annotations

@@ -24,7 +24,7 @@ describe("mixed-currency warning", () => {
 
 describe("pillar template picker", () => {
   it("uses the locked copy for NULL growth", () => {
-    expect(growthCopy(null)).toBe("Growth not scored — fewer than 3 years of history in the database.");
+    expect(growthCopy(null)).toBe("Growth not scored - fewer than 3 years of history in the database.");
   });
   it("uses the locked copy for coverage penalty", () => {
     expect(coveragePenaltyCopy(3, 0.92)).toContain("Composite reduced");
@@ -42,7 +42,7 @@ describe("pillar template picker", () => {
     expect(signalLabel(null)).toBe("Not scored");
   });
   it("shows money with currency and em-dash for null", () => {
-    expect(money(null, "USD")).toBe("—");
+    expect(money(null, "USD")).toBe("Not reported in filing");
     expect(money(24_948_000_000, "USD")).toContain("B");
     expect(money(24_948_000_000, "USD")).toContain("USD");
   });

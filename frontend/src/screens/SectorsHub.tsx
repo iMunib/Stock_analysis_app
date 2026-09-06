@@ -23,49 +23,31 @@ export default function SectorsHub() {
 
   useEffect(load, []);
 
-  // Batch-load medians for all cards after the sector list arrives.
+  // Populate medians immediately from precomputed sector metrics (instant zero-lag barometer display)
   useEffect(() => {
     if (!data) return;
-    setLoadingMedians(true);
-    const all: { key: string; sheet: string }[] = [
-      ...data.custom_industries.map((s) => ({ key: sectorCardKey("custom", s.name), sheet: s.name })),
-      ...data.gics_sectors.map((s) => ({ key: sectorCardKey("gics", s.name), sheet: gicsSheetParam(s.name) })),
-    ];
-    let cancelled = false;
-    if (view === "ALL") {
-      Promise.allSettled(
-        all.map((c) =>
-          Promise.all([
-            api.sectorSnapshot(c.sheet, "USD"),
-            api.sectorSnapshot(c.sheet, "CAD"),
-          ]).then(([usd, cad]) => {
-            // unitless median composite across both currencies (no money blending)
-            const comps = [usd.median_composite, cad.median_composite].filter((x): x is number => x != null);
-            const avg = comps.length ? comps.reduce((a, b) => a + b, 0) / comps.length : null;
-            return { key: c.key, median: avg };
-          }),
-        ),
-      ).then((results) => {
-        if (cancelled) return;
-        const m: Record<string, number | null> = {};
-        for (const r of results) if (r.status === "fulfilled") m[r.value.key] = r.value.median;
-        setMedians(m);
-        setLoadingMedians(false);
-      });
-    } else {
-      Promise.allSettled(
-        all.map((c) => api.sectorSnapshot(c.sheet, view).then((snap) => ({ key: c.key, median: snap.median_composite }))),
-      ).then((results) => {
-        if (cancelled) return;
-        const m: Record<string, number | null> = {};
-        for (const r of results) if (r.status === "fulfilled") m[r.value.key] = r.value.median;
-        setMedians(m);
-        setLoadingMedians(false);
-      });
+
+    const m: Record<string, number | null> = {};
+    for (const s of data.custom_industries) {
+      const k = sectorCardKey("custom", s.name);
+      m[k] =
+        view === "ALL"
+          ? (s.median_composite_all ?? s.median_composite_usd ?? s.median_composite_cad ?? null)
+          : view === "USD"
+          ? (s.median_composite_usd ?? null)
+          : (s.median_composite_cad ?? null);
     }
-    return () => {
-      cancelled = true;
-    };
+    for (const s of data.gics_sectors) {
+      const k = sectorCardKey("gics", s.name);
+      m[k] =
+        view === "ALL"
+          ? (s.median_composite_all ?? s.median_composite_usd ?? s.median_composite_cad ?? null)
+          : view === "USD"
+          ? (s.median_composite_usd ?? null)
+          : (s.median_composite_cad ?? null);
+    }
+    setMedians(m);
+    setLoadingMedians(false);
   }, [data, view]);
 
   const viewControls = (
@@ -87,7 +69,7 @@ export default function SectorsHub() {
       </div>
       {view === "ALL" && (
         <span className="ml-2 text-xs text-ink-2 font-mono">
-          score-only view — money medians stay split per currency
+          score-only view - money medians stay split per currency
         </span>
       )}
     </div>
@@ -151,7 +133,7 @@ function SectorGroup({
     <section aria-label={title} className="space-y-3">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <h2 className="font-heading text-lg font-semibold text-ink-0">{title}</h2>
-        <span className="font-mono text-xs text-ink-2">{groups.length} sectors</span>
+        <span className="font-mono text-xs text-ink-2">{groups.length} peer groups</span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((g) => (
@@ -159,20 +141,21 @@ function SectorGroup({
             key={g.key}
             to={`/sectors/${enc(g.sheet)}?currency=${currency}`}
             className="group rounded-card border border-border bg-bg-1 p-4 transition-all shadow-card hover:border-accent/60 hover:bg-bg-2 flex items-center justify-between gap-3"
+            aria-label={`${g.name} sector with ${g.count} companies`}
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-semibold text-ink-0 group-hover:text-accent transition-colors truncate">
-                  {g.name}
+                  {g.name} <span className="font-mono text-[11px] font-normal text-ink-2">({g.count} companies)</span>
                 </span>
               </div>
-              <p className="mt-1 font-mono text-[11px] text-ink-2">{g.countLabel}</p>
+              <p className="mt-1 font-mono text-[11px] text-ink-2">{g.countLabel} · {g.count} total constituents</p>
               <div className="mt-2 font-mono text-xs text-ink-1 flex items-center gap-1.5">
                 <span className="text-ink-2">Median score:</span>
                 {g.median === undefined && loadingMedians ? (
-                  <span className="text-ink-2 animate-pulse">…</span>
+                  <span className="text-ink-2 animate-pulse">Not reported in filing</span>
                 ) : g.median == null ? (
-                  <span className="text-ink-2">—</span>
+                  <span className="text-ink-2">Under review</span>
                 ) : (
                   <span className="text-accent font-semibold">{g.median.toFixed(1)}</span>
                 )}

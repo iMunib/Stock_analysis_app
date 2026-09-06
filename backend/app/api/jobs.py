@@ -27,7 +27,7 @@ class BackfillBody(BaseModel):
 @router.post("/backfill", status_code=202, description="Enqueue a backfill job (async, 202 + poll). Only one backfill may be queued/running at a time.")
 def enqueue_backfill(body: BackfillBody, db: Session = Depends(get_session)):
     if jobsvc.has_active(db, "backfill"):
-        raise HTTPException(status_code=409, detail="a backfill job is already queued or running — poll GET /api/v1/jobs")
+        raise HTTPException(status_code=409, detail="a backfill job is already queued or running - poll GET /api/v1/jobs")
     job = jobsvc.enqueue(
         db,
         "backfill",

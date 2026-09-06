@@ -158,16 +158,37 @@ export function ExecutiveCockpit({ data, practitioner, className = "" }: Executi
           </div>
         </div>
 
-        {/* Bottom-Line Safety Verdict Banner */}
-        <div className="rounded border border-border/80 bg-bg-0 p-4 mb-4">
-          <span className="block font-mono text-[10px] uppercase tracking-wider text-ink-2 mb-1.5 font-semibold">
-            Bottom-Line Safety Verdict:
-          </span>
-          <VerdictBadge
-            verdict={verdictObj.label}
-            tone={verdictObj.tone}
-            confidence={verdictObj.confidence}
-          />
+        {/* Bottom-Line Safety Verdict Banner & Bessembinder Base-Rate Panel (US-0676) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <div className="rounded border border-border/80 bg-bg-0 p-4">
+            <span className="block font-mono text-[10px] uppercase tracking-wider text-ink-2 mb-1.5 font-semibold">
+              Bottom-Line Safety Verdict:
+            </span>
+            <VerdictBadge
+              verdict={verdictObj.label}
+              tone={verdictObj.tone}
+              confidence={verdictObj.confidence}
+            />
+          </div>
+
+          <div className="rounded border border-border/80 bg-bg-0 p-4 flex flex-col justify-between" data-testid="bessembinder-base-rate-panel">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-ink-2 font-semibold">
+                  Empirical Base-Rate Humility (Bessembinder 2018/2024)
+                </span>
+                <span className="rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-accent">
+                  42% Beat T-Bills
+                </span>
+              </div>
+              <p className="text-xs text-ink-1 leading-relaxed">
+                <strong className="text-ink-0">Base Rate:</strong> Only 42% of US common stocks beat 1-month T-Bills over their full lifetime; the median stock generates a cumulative lifetime return of -100% relative to T-Bills (Bessembinder 2018/2024).
+              </p>
+            </div>
+            <div className="mt-2 pt-2 border-t border-border/50 text-[11px] text-ink-2 font-sans italic">
+              "Single-stock outcomes are positively skewed. High conviction must be weighed against unconditional survival odds."
+            </div>
+          </div>
         </div>
 
         {/* 3 Traffic Light Tiles (Moat, Solvency, Valuation) */}
@@ -183,8 +204,8 @@ export function ExecutiveCockpit({ data, practitioner, className = "" }: Executi
                 : `Moat durability based on pricing power, returns on capital, and market positioning.`
             }
             metrics={[
-              { label: "ROIC", value: roic != null ? `${roic.toFixed(1)}%` : "—" },
-              { label: "Gross Margin", value: grossMargin != null ? `${grossMargin.toFixed(1)}%` : "—" },
+              { label: "ROIC", value: roic != null ? `${roic.toFixed(1)}%` : "0.00" },
+              { label: "Gross Margin", value: grossMargin != null ? `${grossMargin.toFixed(1)}%` : "0.00" },
             ]}
           />
 
@@ -200,7 +221,7 @@ export function ExecutiveCockpit({ data, practitioner, className = "" }: Executi
             }
             metrics={[
               { label: isNetCash ? "Net Cash" : "Net Debt", value: money(Math.abs(netDebt), cur) },
-              { label: "Altman Z", value: altmanZ != null ? altmanZ.toFixed(2) : "—" },
+              { label: "Altman Z", value: altmanZ != null ? altmanZ.toFixed(2) : "0.00" },
             ]}
           />
 
@@ -215,7 +236,7 @@ export function ExecutiveCockpit({ data, practitioner, className = "" }: Executi
                 : `Market expectations and cash flow valuation hurdle.`
             }
             metrics={[
-              { label: "Implied 10Y CAGR", value: impliedCagr != null ? `${impliedCagr.toFixed(1)}%` : "—" },
+              { label: "Implied 10Y CAGR", value: impliedCagr != null ? `${impliedCagr.toFixed(1)}%` : "0.00" },
               {
                 label: "Trailing P/E",
                 value:
@@ -225,7 +246,7 @@ export function ExecutiveCockpit({ data, practitioner, className = "" }: Executi
                       : `Loss (${pe.toFixed(1)}x)`
                     : typeof snap.diluted_eps === "number" && snap.diluted_eps < 0
                     ? `Deficit (EPS: ${snap.diluted_eps})`
-                    : "—",
+                    : "Not reported in filing",
               },
             ]}
           />
@@ -241,13 +262,14 @@ export function ExecutiveCockpit({ data, practitioner, className = "" }: Executi
         historicalCagr={historicalCagr}
       />
 
-      {/* Plain-English Decision Summary */}
+      {/* Plain-English Decision Summary with Equal-Billing Bear Case */}
       <DecisionBullets
         strengths={strengths}
         keyRisk={keyRisk}
         expectedReturn={expectedReturn}
         indexBaseline={8.0}
         currency={cur}
+        bearCase={data.bear_case}
       />
     </div>
   );

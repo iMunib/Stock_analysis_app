@@ -26,7 +26,7 @@ from app.models import Company, FinancialSnapshot
 
 def _proxy_current_assets(snap: FinancialSnapshot) -> float | None:
     """Conservative proxy when the balance-sheet detail is absent:
-    current assets ~ cash + 0.35 x (total assets - cash) — i.e. assumes the
+    current assets ~ cash + 0.35 x (total assets - cash) - i.e. assumes the
     remaining asset base is ~35% current (below-typical, deliberately strict)."""
     ta = snap.total_assets
     cash = snap.cash_st_investments

@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import Company, PeerBenchmark
+from app.models import Company, PeerBenchmark, SectorCacheSummary
 from app.schemas import SectorCountOut, SectorsOut
 
 router = APIRouter(prefix="/api/v1", tags=["sectors"])
@@ -14,7 +14,14 @@ router = APIRouter(prefix="/api/v1", tags=["sectors"])
 
 @router.get("/sectors", response_model=SectorsOut)
 def list_sectors(db: Session = Depends(get_session)):
-    def _counts(column) -> list[SectorCountOut]:
+    # Pre-load cached sector composite medians
+    cache_rows = db.execute(select(SectorCacheSummary)).scalars().all()
+    cache_map: dict[tuple[str, str], float | None] = {}
+    for cr in cache_rows:
+        if cr.sector_name and cr.currency:
+            cache_map[(cr.sector_name.strip().lower(), cr.currency.strip().upper())] = cr.median_composite
+
+    def _counts(column, is_gics: bool = False) -> list[SectorCountOut]:
         rows = db.execute(
             select(column, Company.currency, func.count())
             .group_by(column, Company.currency)
@@ -30,11 +37,36 @@ def list_sectors(db: Session = Depends(get_session)):
                 entry.usd += count
             elif currency == "CAD":
                 entry.cad += count
+
+        for entry in merged.values():
+            name_lower = entry.name.strip().lower()
+            keys_to_try = [name_lower]
+            if is_gics:
+                keys_to_try.extend([f"gics_{name_lower}", f"gics_{name_lower.replace(' ', '_')}"])
+            else:
+                keys_to_try.append(name_lower.replace(' ', '_'))
+
+            m_usd = None
+            m_cad = None
+            for k in keys_to_try:
+                if (k, "USD") in cache_map and cache_map[(k, "USD")] is not None:
+                    m_usd = cache_map[(k, "USD")]
+                    break
+            for k in keys_to_try:
+                if (k, "CAD") in cache_map and cache_map[(k, "CAD")] is not None:
+                    m_cad = cache_map[(k, "CAD")]
+                    break
+
+            entry.median_composite_usd = m_usd
+            entry.median_composite_cad = m_cad
+            valid_meds = [m for m in (m_usd, m_cad) if m is not None]
+            entry.median_composite_all = (sum(valid_meds) / len(valid_meds)) if valid_meds else None
+
         return sorted(merged.values(), key=lambda s: s.name)
 
     return SectorsOut(
-        custom_industries=_counts(Company.custom_industry_sheet),
-        gics_sectors=_counts(Company.gics_sector),
+        custom_industries=_counts(Company.custom_industry_sheet, is_gics=False),
+        gics_sectors=_counts(Company.gics_sector, is_gics=True),
     )
 
 

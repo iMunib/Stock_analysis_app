@@ -15,7 +15,7 @@ buyback/low-equity ROIC distortion (e.g. AAPL-class):
     ROE   = RNOA + FLEV x (RNOA - NBC)   (Penman DuPont)
 
 Financial institutions (banks/insurers/credit) are excluded: their balance
-sheets do not separate operating from financing activities — tag
+sheets do not separate operating from financing activities - tag
 `financial_institution_excluded`.
 
 All formulas are deterministic and pure; storage lives in

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Company, FinancialPenmanAnalysis, FinancialSnapshotTTM, Score, ScreenerPreset, ValuationReverseDCF
@@ -165,6 +165,93 @@ SYSTEM_PRESETS = [
             "halal_candidate": True,
         },
     },
+    {
+        "id": "sustainable_dividends",
+        "name": "Sustainable Dividends (10+ Yrs & Payout < 60%)",
+        "criteria": {
+            "consecutive_div_years_min": 5,
+            "payout_ratio_max": 0.60,
+            "composite_min": 5.5,
+        },
+    },
+    {
+        "id": "garp_investor",
+        "name": "GARP (Growth at Reasonable Price)",
+        "criteria": {
+            "peg_max": 1.2,
+            "fcf_margin_min": 5.0,
+            "composite_min": 6.0,
+        },
+    },
+    {
+        "id": "novy_marx_gross_profitability",
+        "name": "Novy-Marx Gross Profitability",
+        "criteria": {
+            "gross_profitability_min": 0.25,
+            "composite_min": 6.0,
+            "exclude_banks": True,
+        },
+    },
+    {
+        "id": "fortress_balance_sheet",
+        "name": "Retiree Fortress Balance Sheet",
+        "criteria": {
+            "debt_to_ebitda_max": 3.0,
+            "interest_coverage_min": 8.0,
+            "exclude_banks": True,
+        },
+    },
+    {
+        "id": "boring_great_businesses",
+        "name": "Boring Great Businesses",
+        "criteria": {
+            "roe_min": 15.0,
+            "debt_to_ebitda_max": 2.0,
+            "altman_safe_only": True,
+            "exclude_banks": True,
+        },
+    },
+    {
+        "id": "operational_turnarounds",
+        "name": "Cash-Flow Positive Turnarounds",
+        "criteria": {
+            "turnaround_only": True,
+        },
+    },
+    {
+        "id": "durable_growth_compounders",
+        "name": "Durable Growth Compounders",
+        "criteria": {
+            "cagr_rev_3y_min": 0.15,
+            "has_growth_history": True,
+        },
+    },
+    {
+        "id": "contrarian_deep_value",
+        "name": "Contrarian Deep Value",
+        "criteria": {
+            "pe_max": 12.0,
+            "composite_min": 5.0,
+        },
+    },
+    {
+        "id": "steady_compounders",
+        "name": "Steady Compounders (Drawdown Resilient)",
+        "criteria": {
+            "cagr_rev_3y_min": 0.05,
+            "composite_min": 6.5,
+            "has_growth_history": True,
+        },
+    },
+    {
+        "id": "dorsey_economic_moats",
+        "name": "Dorsey Economic Moats",
+        "criteria": {
+            "roic_min": 0.15,
+            "composite_min": 7.0,
+            "exclude_banks": True,
+        },
+    },
 ]
 
 
@@ -207,7 +294,31 @@ def run_screener_query(
             merged.update(criteria)
             criteria = merged
 
-    # Base query: join Company with Score, TTM, and Reverse DCF
+    # Subquery to pick only the latest fiscal year of Penman analysis per company
+    latest_penman_sub = (
+        select(
+            FinancialPenmanAnalysis.company_id,
+            func.max(FinancialPenmanAnalysis.fiscal_year).label("max_fy"),
+        )
+        .group_by(FinancialPenmanAnalysis.company_id)
+        .subquery()
+    )
+
+    latest_penman = (
+        select(
+            FinancialPenmanAnalysis.company_id,
+            FinancialPenmanAnalysis.rnoa,
+            FinancialPenmanAnalysis.flev,
+        )
+        .join(
+            latest_penman_sub,
+            (FinancialPenmanAnalysis.company_id == latest_penman_sub.c.company_id)
+            & (FinancialPenmanAnalysis.fiscal_year == latest_penman_sub.c.max_fy),
+        )
+        .subquery()
+    )
+
+    # Base query: join Company with Score, TTM, Reverse DCF, and latest Penman
     stmt = (
         select(
             Company.company_id,
@@ -231,13 +342,13 @@ def run_screener_query(
             ValuationReverseDCF.historical_5y_cagr,
             ValuationReverseDCF.expectations_gap,
             ValuationReverseDCF.status.label("dcf_status"),
-            FinancialPenmanAnalysis.rnoa,
-            FinancialPenmanAnalysis.flev,
+            latest_penman.c.rnoa,
+            latest_penman.c.flev,
         )
         .outerjoin(Score, Score.company_id == Company.company_id)
         .outerjoin(FinancialSnapshotTTM, FinancialSnapshotTTM.company_id == Company.company_id)
         .outerjoin(ValuationReverseDCF, ValuationReverseDCF.company_id == Company.company_id)
-        .outerjoin(FinancialPenmanAnalysis, FinancialPenmanAnalysis.company_id == Company.company_id)
+        .outerjoin(latest_penman, latest_penman.c.company_id == Company.company_id)
         .where(Company.is_deleted == False)
     )
 
@@ -249,8 +360,16 @@ def run_screener_query(
             stmt = stmt.where(or_(Company.in_sp500 == True, Company.universe_tags.like('%"SP500"%')))
         elif u_upper in ("TSX", "TSX_COMPOSITE", "S&P/TSX"):
             stmt = stmt.where(or_(Company.in_tsx_composite == True, Company.universe_tags.like('%"TSX"%'), Company.country == "CA"))
+        elif u_upper == "SPUS":
+            stmt = stmt.where(Company.universe_tags.like('%"SPUS"%'))
+        elif u_upper == "QQQ":
+            stmt = stmt.where(Company.universe_tags.like('%"QQQ"%'))
+        elif u_upper == "VONV":
+            stmt = stmt.where(Company.universe_tags.like('%"VONV"%'))
+        elif u_upper in ("RUSSELL1000", "RUSSELL_1000"):
+            stmt = stmt.where(Company.universe_tags.like('%"RUSSELL1000"%'))
         else:
-            stmt = stmt.where(Company.universe_tags.like(f"%{u_upper}%"))
+            stmt = stmt.where(Company.universe_tags.like(f'%"{u_upper}"%'))
 
     # Currency filter
     currency = criteria.get("currency")
@@ -272,10 +391,16 @@ def run_screener_query(
             Company.gics_sector != "Financials",
         )
 
-    # Signal
+    # Signal filter (supports 'scored' and 'insufficient_data')
     signal = criteria.get("signal")
     if signal:
-        stmt = stmt.where(Score.signal == signal)
+        sig_lower = signal.lower()
+        if sig_lower == "scored":
+            stmt = stmt.where(Score.signal.isnot(None), Score.signal != "insufficient_data", Score.composite.isnot(None))
+        elif sig_lower in ("insufficient_data", "gaps", "pending"):
+            stmt = stmt.where(or_(Score.signal == "insufficient_data", Score.composite.is_(None)))
+        else:
+            stmt = stmt.where(Score.signal == signal)
 
     # Minimum composite
     composite_min = criteria.get("composite_min")
@@ -340,7 +465,12 @@ def run_screener_query(
     from app.services.distress_engine import compute_distress
 
     items = []
+    seen_company_ids: set[str] = set()
     for r in results:
+        if r.company_id in seen_company_ids:
+            continue
+        seen_company_ids.add(r.company_id)
+
         pcts = r.percentiles_json or {}
         tsy = pcts.get("total_shareholder_yield")
         val_pcts = [pcts[k] for k in ("pe_ratio", "ev_to_ebitda", "pb_ratio") if pcts.get(k) is not None]

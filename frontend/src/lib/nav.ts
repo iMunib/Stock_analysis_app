@@ -11,11 +11,15 @@ export function navItems(hasJobs: boolean): NavItem[] {
   const items: NavItem[] = [
     { label: "Desk", to: "/" },
     { label: "Screen", to: "/screen" },
-    { label: "Forensic", to: "/screener" },
+    { label: "Forensics", to: "/screener" },
     { label: "Sectors", to: "/sectors" },
     { label: "Compare", to: "/compare" },
     { label: "Jobs", to: "/jobs" },
     { label: "Learn", to: "/learn" },
+    { label: "Curriculum", to: "/learn/curriculum" },
+    { label: "Rotation", to: "/sectors/rotation" },
+    { label: "Governance", to: "/governance/model-risk" },
+    { label: "Ops", to: "/ops" },
   ];
   void hasJobs;
   return items;

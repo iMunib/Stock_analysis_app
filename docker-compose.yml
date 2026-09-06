@@ -11,6 +11,10 @@ services:
       - path: .env
         required: false
     volumes:
+      # Genesis-only seed — container reads it only on first boot when data/app.db is empty.
+      # Runtime is fully decoupled: once SQLite exists, importer skips with millisecond log
+      # "Excel seed reading skipped (database is primary durable store)" and never re-imports
+      # unless --force. The Excel file is not required for normal restarts.
       - ./seed:/seed:ro
       - ./data:/app/data
       - ./backend/app:/app/app
@@ -31,3 +35,6 @@ services:
       - "5173:80"
     depends_on:
       - api
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro

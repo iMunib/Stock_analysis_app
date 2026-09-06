@@ -26,7 +26,7 @@ export function dossierFlags(d: DossierOut): Flag[] {
   }
   if (signal === "avoid") flags.push({ key: "sig", label: "Avoid", tone: "bad" });
   if (d.halal?.status === "not_halal")
-    flags.push({ key: "halal", label: "Activity/ratio flag — not a ruling", tone: "mid" });
+    flags.push({ key: "halal", label: "Activity/ratio flag - not a ruling", tone: "mid" });
 
   const toneOrder: Record<Flag["tone"], number> = { bad: 0, good: 1, mid: 2, info: 3 };
   return flags.sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]).slice(0, 6);

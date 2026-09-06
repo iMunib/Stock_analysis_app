@@ -94,7 +94,7 @@ def narrate(facts: dict[str, Any], model: str, fallback: str, timeout: float = 4
 SWOT_SYSTEM_PROMPT = (
     "You are writing a structured Moat and SWOT draft for a personal equity-research app. "
     "Use ONLY the numbers and facts provided in the JSON. If a field is null or missing, "
-    "state that it is unknown — never guess or invent numbers. Never give buy or sell advice; "
+    "state that it is unknown - never guess or invent numbers. Never give buy or sell advice; "
     "the deterministic score is the rating, your text is qualitative analysis only. "
     "Structure your output using these exact headings: "
     "Strengths: "
@@ -167,7 +167,7 @@ def draft_swot(facts: dict[str, Any], model: str, fallback: str, timeout: float 
 
 def call_openrouter(
     messages: list[dict],
-    model: str = "meta-llama/llama-3.3-70b-instruct:free",
+    model: str = "minimax/minimax-m3:free",
     fallback: str = "mistralai/mistral-small-24b-instruct-2501:free",
     timeout: float = 45.0,
     max_tokens: int = 600,

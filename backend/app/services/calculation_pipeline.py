@@ -95,9 +95,19 @@ def run_company_pipeline(
     # Step 2: Fetch Live Statements & Price (if requested)
     if fetch_live:
         from app.services.mapping import yahoo_symbol_for
+        from app.providers.base import CompanyRef
         query_sym = yahoo_symbol_for(company.ticker, company.country or "US")
         try:
             ref = build_ref(resolve(query_sym))
+            if company.cik and not ref.cik:
+                ref = CompanyRef(
+                    company_id=ref.company_id,
+                    ticker=ref.ticker,
+                    country=ref.country,
+                    currency=ref.currency,
+                    yahoo_symbol=ref.yahoo_symbol,
+                    cik=company.cik,
+                )
             statements = registry.fetch_annual_statements(ref)
             ingest_statements(db, company, statements, refresh=refresh)
             statements_count = len(statements)
@@ -107,6 +117,15 @@ def run_company_pipeline(
 
         try:
             ref = build_ref(resolve(query_sym))
+            if company.cik and not ref.cik:
+                ref = CompanyRef(
+                    company_id=ref.company_id,
+                    ticker=ref.ticker,
+                    country=ref.country,
+                    currency=ref.currency,
+                    yahoo_symbol=ref.yahoo_symbol,
+                    cik=company.cik,
+                )
             quote = registry.fetch_price(ref)
             ingest_price(db, company, quote)
             db.commit()

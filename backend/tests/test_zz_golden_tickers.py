@@ -356,6 +356,10 @@ def test_golden_aapl_net_shareholder_yield(db):
         FinancialSnapshot.company_id == "US:AAPL:US",
         FinancialSnapshot.fiscal_year.isnot(None),
     ).all()
+    # Track whether we need to restore original SBC
+    restore_sbc = None
+    restore_rev = None
+    target_snap = None
     try:
         if len(snaps) < 2:
             s1 = FinancialSnapshot(
@@ -380,6 +384,32 @@ def test_golden_aapl_net_shareholder_yield(db):
             db.add_all([s1, s2])
             db.commit()
             added_ids = [s1.id, s2.id]
+        else:
+            # Upsert SBC/revenue for the latest FY to guarantee ORGANIC_FLOAT_SHRINK
+            # (prior wave fixtures may have left SBC null or stale)
+            target_snap = db.query(FinancialSnapshot).filter(
+                FinancialSnapshot.company_id == "US:AAPL:US",
+                FinancialSnapshot.fiscal_year == 2024,
+                FinancialSnapshot.period_type == "FY",
+            ).first()
+            if target_snap is not None:
+                restore_sbc = target_snap.stock_based_compensation
+                restore_rev = target_snap.revenue
+                target_snap.stock_based_compensation = 10800000000.0
+                target_snap.revenue = 391035000000.0
+                # Ensure shares are as expected for 2024
+                if target_snap.shares_snapshot != 15408095000.0:
+                    target_snap.shares_snapshot = 15408095000.0
+                db.commit()
+            # Also ensure 2023 shares
+            snap_2023 = db.query(FinancialSnapshot).filter(
+                FinancialSnapshot.company_id == "US:AAPL:US",
+                FinancialSnapshot.fiscal_year == 2023,
+                FinancialSnapshot.period_type == "FY",
+            ).first()
+            if snap_2023 is not None and snap_2023.shares_snapshot != 15812547000.0:
+                snap_2023.shares_snapshot = 15812547000.0
+                db.commit()
 
         aapl = compute_shareholder_yield(db, "US:AAPL:US")
         assert aapl["net_buyback_yield_pct"] is not None
@@ -393,6 +423,16 @@ def test_golden_aapl_net_shareholder_yield(db):
                 if s:
                     db.delete(s)
             db.commit()
+        if restore_sbc is not None and target_snap is not None:
+            # Restore original to avoid polluting other tests (best-effort)
+            try:
+                fresh = db.get(FinancialSnapshot, target_snap.id)
+                if fresh is not None:
+                    fresh.stock_based_compensation = restore_sbc
+                    fresh.revenue = restore_rev
+                    db.commit()
+            except Exception:
+                db.rollback()
 
 
 def test_golden_ry_beneish_exclusion_cad(db):

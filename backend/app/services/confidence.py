@@ -1,7 +1,7 @@
 """Deterministic data-confidence computation.
 
 Rules are documented in docs/METRIC_CATALOG.md and here. All thresholds are
-conservative and deterministic — no AI, no estimation.
+conservative and deterministic - no AI, no estimation.
 
 Returned DataConfidence object is computed at request time from stored data;
 it is NOT stored in the database (avoids stale cache issues).
@@ -103,7 +103,7 @@ def _financial_freshness(period_end: date | str | None, fetched_at: datetime | N
         reasons.append(f"Latest statement is {months} months old (period end {d})")
         return "amber", reasons
     else:
-        reasons.append(f"Latest statement is {months} months old — may be very stale (period end {d})")
+        reasons.append(f"Latest statement is {months} months old - may be very stale (period end {d})")
         return "red", reasons
 
 
@@ -147,25 +147,25 @@ def compute_confidence(
             c.currency_aligned = True
         else:
             c.currency_aligned = False
-            c.reasons.append(f"Reporting currency ({rc}) differs from trading currency ({tc}) — price ratios suppressed")
+            c.reasons.append(f"Reporting currency ({rc}) differs from trading currency ({tc}) - price ratios suppressed")
     else:
         c.currency_aligned = None
 
     # Coverage penalty note
     if coverage_pillars < 2:
-        c.reasons.append(f"Only {coverage_pillars}/4 scoring pillars available — composite is low-confidence")
+        c.reasons.append(f"Only {coverage_pillars}/4 scoring pillars available - composite is low-confidence")
     elif coverage_pillars < 4:
-        c.reasons.append(f"{coverage_pillars}/4 scoring pillars available — composite has coverage penalty applied")
+        c.reasons.append(f"{coverage_pillars}/4 scoring pillars available - composite has coverage penalty applied")
 
     # History depth note
     if c.history_depth == 0:
-        c.reasons.append("No annual statement history in database — add ticker to fetch")
+        c.reasons.append("No annual statement history in database - add ticker to fetch")
     elif c.history_depth < 3:
-        c.reasons.append(f"Only {c.history_depth} year(s) of annual history — Growth pillar may be blank")
+        c.reasons.append(f"Only {c.history_depth} year(s) of annual history - Growth pillar may be blank")
 
     # Peer count note
     if peer_count <= 1:
-        c.reasons.append("Peer set has ≤1 member — Value score uses broad universe fallback")
+        c.reasons.append("Peer set has ≤1 member - Value score uses broad universe fallback")
 
     # Overall roll-up
     freshness_scores = {

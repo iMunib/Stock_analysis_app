@@ -14,19 +14,22 @@ from app.services import llm
 from app.services.scoring import DISCLAIMER as _SCORE_DISCLAIMER  # noqa: F401 (parity)
 
 
-def _f(x: Any) -> float | None:
-    if x is None:
+def _to_float_optional(value: Any) -> float | None:
+    if value is None:
         return None
     try:
-        v = float(x)
+        numeric = float(value)
     except (TypeError, ValueError):
         return None
-    return v
+    return numeric if numeric == numeric else None
 
 
-def _round(x: Any, digits: int = 2) -> Any:
-    v = _f(x)
-    return None if v is None else round(v, digits)
+_f = _to_float_optional
+
+
+def _round(value: Any, digits: int = 2) -> Any:
+    numeric = _to_float_optional(value)
+    return None if numeric is None else round(numeric, digits)
 
 
 def company_facts(db: Session, company_id: str) -> dict | None:
@@ -95,7 +98,7 @@ def company_facts(db: Session, company_id: str) -> dict | None:
 
 
 def _gaps_of(entry: dict, enriched: dict) -> list[str]:
-    from app.api.phase4 import _data_gaps
+    from app.services.data_gaps import _data_gaps
 
     return _data_gaps(entry, enriched)
 
@@ -109,7 +112,7 @@ def sector_facts(db: Session, sheet: str, currency: str) -> dict | None:
     members = []
     for c in universe:
         m_sheet = (c.get("custom_industry_sheet") or "").lower() == sheet_l
-        m_gics = sheet_l.startswith("gics_") and (c.get("gics_sector") or "").lower() == sheet_l.removeprefix("gics_")
+        m_gics = sheet_l.startswith("gics_") and (c.get("gics_sector") or "").lower() == sheet_l.removeprefix("gics_").replace("_", " ")
         if m_sheet or m_gics:
             cur = (c.get("currency") or "").upper()
             if currency == "ALL" or cur == currency:

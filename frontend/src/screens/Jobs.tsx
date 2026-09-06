@@ -35,7 +35,7 @@ export default function Jobs() {
         body: JSON.stringify({ mode: "sample", limit: 5 }),
       });
       if (resp.status === 202) {
-        setRefreshMsg("Refresh job queued — progress appears below.");
+        setRefreshMsg("Refresh job queued - progress appears below.");
         load();
       } else if (resp.status === 409) {
         setRefreshMsg("A refresh job is already queued or running.");

@@ -134,6 +134,9 @@ class SectorCountOut(BaseModel):
     count: int
     usd: int = 0
     cad: int = 0
+    median_composite_usd: float | None = None
+    median_composite_cad: float | None = None
+    median_composite_all: float | None = None
 
 
 class SectorsOut(BaseModel):

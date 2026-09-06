@@ -23,7 +23,7 @@ export function signalLabel(signal: string | null | undefined): string {
 
 export function growthCopy(growth: number | null | undefined): string {
   return growth === null || growth === undefined
-    ? "Growth not scored — fewer than 3 years of history in the database."
+    ? "Growth not scored - fewer than 3 years of history in the database."
     : `Growth scored ${growth.toFixed(1)}/10 from the years on file.`;
 }
 
@@ -59,7 +59,7 @@ export function halalCopy(status: string | null | undefined): string {
     case "halal_candidate":
       return "Activity and ratio screens passed (approximation, not a religious ruling).";
     default:
-      return "Halal status unknown — missing inputs (often interest income).";
+      return "Halal status unknown - missing inputs (often interest income).";
   }
 }
 
@@ -70,7 +70,7 @@ export function bankPathCopy(isFinancial: boolean): string | null {
 export function mixedCurrencyWarning(currencies: string[] | null | undefined): string | null {
   const uniq = Array.from(new Set((currencies ?? []).filter((c) => c)));
   if (uniq.length <= 1) return null;
-  return `Mixed currencies: ${uniq.join(" vs ")}. Scores and ratios stay comparable, but money amounts stay in each company's own currency — never converted.`;
+  return `Mixed currencies: ${uniq.join(" vs ")}. Scores and ratios stay comparable, but money amounts stay in each company's own currency - never converted.`;
 }
 
 /** Deterministic "why" bullets built only from payload fields. 3-6 bullets, grade-10. */
@@ -86,7 +86,7 @@ export function whyBullets(d: DossierOut): string[] {
   if (s && s.pillars.growth != null) {
     bullets.push(`Growth scored ${s.pillars.growth.toFixed(1)}/10 from the years on file.`);
   } else if (s) {
-    bullets.push("Growth not scored — fewer than three years of history in the database.");
+    bullets.push("Growth not scored - fewer than three years of history in the database.");
   }
 
   const pe = typeof snap.pe_calc === "number" ? snap.pe_calc : null;
@@ -114,7 +114,7 @@ export function whyBullets(d: DossierOut): string[] {
 }
 
 export function money(v: number | null | undefined, currency: string | null | undefined): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "Not reported in filing";
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
   const cur = (currency ?? "").trim().toUpperCase();
@@ -128,12 +128,12 @@ export function money(v: number | null | undefined, currency: string | null | un
 }
 
 export function ratio(v: number | null | undefined, digits = 1): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "Not reported in filing";
   return v.toFixed(digits);
 }
 
 export function pct(v: number | null | undefined, digits = 1): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "Not reported in filing";
   return `${(v * 100).toFixed(digits)}%`;
 }
 

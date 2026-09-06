@@ -76,8 +76,14 @@ def compute_and_store_ttm(db: Session, company_id: str) -> FinancialSnapshotTTM:
         ocf = sum(float(q.get("operating_cash_flow") or (q.get("net_income") or 0.0)) for q in q_slice)
         capex = sum(float(q.get("capex") or 0.0) for q in q_slice)
         fcf = ocf - abs(capex)
-        if q_slice[0].get("diluted_eps") and ni:
-            shares = float(ni / q_slice[0]["diluted_eps"]) if q_slice[0]["diluted_eps"] != 0 else None
+        q0_eps = q_slice[0].get("diluted_eps")
+        q0_ni = q_slice[0].get("net_income")
+        if base_snap and base_snap.shares_snapshot:
+            shares = float(base_snap.shares_snapshot)
+        elif seed and seed.shares_snapshot:
+            shares = float(seed.shares_snapshot)
+        elif q0_eps and q0_ni and q0_eps != 0:
+            shares = float(q0_ni / q0_eps)
     elif base_snap:
         rev = float(base_snap.revenue or 0.0)
         op_inc = float(getattr(base_snap, "ebit", None) or (base_snap.net_income or 0.0))
@@ -85,14 +91,14 @@ def compute_and_store_ttm(db: Session, company_id: str) -> FinancialSnapshotTTM:
         ocf = float(base_snap.operating_cash_flow or (base_snap.fcf_calc or ni))
         capex = float(base_snap.capex or 0.0)
         fcf = float(base_snap.fcf_calc or (ocf - abs(capex)))
-        shares = float(base_snap.shares_snapshot or 0.0) if base_snap.shares_snapshot else None
+        shares = float(base_snap.shares_snapshot or 0.0) if base_snap.shares_snapshot else (float(seed.shares_snapshot or 0.0) if seed and seed.shares_snapshot else None)
         as_of = base_snap.as_of_date
 
-    # Balance sheet items from base_snap
-    total_assets = float(base_snap.total_assets or 0.0) if base_snap and base_snap.total_assets else 0.0
-    total_debt = float(base_snap.total_debt or 0.0) if base_snap and base_snap.total_debt else 0.0
-    book_equity = float(base_snap.book_equity or 0.0) if base_snap and base_snap.book_equity else 0.0
-    cash = float(base_snap.cash_st_investments or 0.0) if base_snap and base_snap.cash_st_investments else 0.0
+    # Balance sheet items from base_snap falling back to seed
+    total_assets = float(base_snap.total_assets) if (base_snap and base_snap.total_assets is not None) else (float(seed.total_assets or 0.0) if seed and seed.total_assets is not None else 0.0)
+    total_debt = float(base_snap.total_debt) if (base_snap and base_snap.total_debt is not None) else (float(seed.total_debt or 0.0) if seed and seed.total_debt is not None else 0.0)
+    book_equity = float(base_snap.book_equity) if (base_snap and base_snap.book_equity is not None) else (float(seed.book_equity or 0.0) if seed and seed.book_equity is not None else 0.0)
+    cash = float(base_snap.cash_st_investments) if (base_snap and base_snap.cash_st_investments is not None) else (float(seed.cash_st_investments or 0.0) if seed and seed.cash_st_investments is not None else 0.0)
 
     # NOPAT = Operating Income * (1 - tax_rate)
     # Default effective tax rate clamped between 15% and 30%
@@ -153,13 +159,31 @@ def compute_and_store_ttm(db: Session, company_id: str) -> FinancialSnapshotTTM:
     if ni and ni != 0:
         cash_conversion = fcf / ni
 
-    # Market Ratios
-    price = float(base_snap.price or 0.0) if base_snap and base_snap.price else None
-    market_cap = (price * shares) if (price and shares) else (float(base_snap.market_cap) if base_snap and base_snap.market_cap else None)
-    fcf_yield = (fcf / market_cap) if (market_cap and market_cap > 0) else None
+    # Market Ratios: check base_snap first, fall back to seed
+    price = (float(base_snap.price) if base_snap and base_snap.price else None)
+    if price is None and seed and seed.price:
+        price = float(seed.price)
+
+    if not shares:
+        shares = (float(base_snap.shares_snapshot) if base_snap and base_snap.shares_snapshot else None)
+        if not shares and seed and seed.shares_snapshot:
+            shares = float(seed.shares_snapshot)
+
+    market_cap = None
+    if price and shares:
+        market_cap = price * shares
+    elif base_snap and base_snap.market_cap:
+        market_cap = float(base_snap.market_cap)
+    elif seed and seed.market_cap:
+        market_cap = float(seed.market_cap)
+
+    fcf_yield = (fcf / market_cap) if (market_cap and market_cap > 0 and fcf is not None) else None
     pe_ratio = (market_cap / ni) if (market_cap and ni and ni > 0) else None
 
-    ebitda = float(base_snap.ebitda or 0.0) if base_snap and base_snap.ebitda else None
+    ebitda = (float(base_snap.ebitda) if base_snap and base_snap.ebitda else None)
+    if ebitda is None and seed and seed.ebitda:
+        ebitda = float(seed.ebitda)
+
     ev = (market_cap + total_debt - cash) if market_cap else None
     ev_ebitda = (ev / ebitda) if (ev and ebitda and ebitda > 0) else None
 

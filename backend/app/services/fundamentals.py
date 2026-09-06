@@ -1,6 +1,6 @@
 """Map provider AnnualStatement rows onto financial_snapshots column names.
 
-Pure functions — no network, no DB. NULL semantics preserved: absent facts stay
+Pure functions - no network, no DB. NULL semantics preserved: absent facts stay
 absent (never 0, never guessed).
 """
 from __future__ import annotations
@@ -323,4 +323,3 @@ def sync_snapshot_to_3nf(db, snap, company=None):
     derived_row.computed_at = getattr(snap, "fetched_at", None)
 
     return stmt_row, derived_row
-

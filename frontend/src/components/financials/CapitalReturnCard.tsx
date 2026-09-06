@@ -71,7 +71,7 @@ export const CapitalReturnCard: React.FC<CapitalReturnCardProps> = ({
             }`}>
               {netBuyback != null
                 ? `${netBuyback > 0 ? "+" : ""}${netBuyback.toFixed(2)}%`
-                : "—"}
+                : "Not reported in filing"}
             </div>
             <span className="text-[10px] text-ink-2">Buybacks less SBC dilution</span>
           </div>
@@ -83,7 +83,7 @@ export const CapitalReturnCard: React.FC<CapitalReturnCardProps> = ({
             <div className={`font-mono text-xl font-bold mt-1 ${
               (data.sbc_drag_pct || 0) > 4.0 ? "text-warn" : "text-ink-0"
             }`}>
-              {data.sbc_drag_pct != null ? `${data.sbc_drag_pct.toFixed(1)}%` : "—"}
+              {data.sbc_drag_pct != null ? `${data.sbc_drag_pct.toFixed(1)}%` : "0.00"}
             </div>
             <span className="text-[10px] text-ink-2">Stock comp burden on topline</span>
           </div>
@@ -93,7 +93,7 @@ export const CapitalReturnCard: React.FC<CapitalReturnCardProps> = ({
               True Shareholder Yield
             </span>
             <div className="font-mono text-xl font-bold text-pos mt-1">
-              {trueYield != null ? `${trueYield.toFixed(2)}%` : "—"}
+              {trueYield != null ? `${trueYield.toFixed(2)}%` : "0.00"}
             </div>
             <span className="text-[10px] text-ink-1">Total Shareholder Yield (Dividends + Net Repurchases)</span>
           </div>
@@ -131,7 +131,7 @@ export const CapitalReturnCard: React.FC<CapitalReturnCardProps> = ({
               <span>SBC Dilution Offset</span>
             </div>
             <div className="flex items-center gap-1.5 font-semibold text-ink-0">
-              <span>Net Repurchase Rate: {data.net_repurchase_rate_pct != null ? `${data.net_repurchase_rate_pct.toFixed(2)}%` : "—"}</span>
+              <span>Net Repurchase Rate: {data.net_repurchase_rate_pct != null ? `${data.net_repurchase_rate_pct.toFixed(2)}%` : "0.00"}</span>
             </div>
           </div>
         </div>
@@ -173,14 +173,14 @@ export const CapitalReturnCard: React.FC<CapitalReturnCardProps> = ({
             <strong className="text-ink-0">
               {data.share_count_delta_1y_pct != null
                 ? `${data.share_count_delta_1y_pct > 0 ? "+" : ""}${data.share_count_delta_1y_pct.toFixed(2)}%`
-                : "—"}
+                : "Not reported in filing"}
             </strong>
             <span className="mx-2">·</span>
             <span>3Y CAGR: </span>
             <strong className="text-ink-0">
               {data.share_count_cagr_3y_pct != null
                 ? `${data.share_count_cagr_3y_pct > 0 ? "+" : ""}${data.share_count_cagr_3y_pct.toFixed(2)}%`
-                : "—"}
+                : "Not reported in filing"}
             </strong>
           </div>
         </div>

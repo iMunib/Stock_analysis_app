@@ -1,7 +1,7 @@
 """Yahoo Finance adapter (yfinance) for CA names and prices.
 
 yfinance is imported lazily so unit tests never require it. Calls are serialised
-with a 0.2s delay. Accept sparse history — Yahoo usually exposes ~4 annual
+with a 0.2s delay. Accept sparse history - Yahoo usually exposes ~4 annual
 columns. Never pads missing years.
 """
 from __future__ import annotations
@@ -69,7 +69,7 @@ def _col_to_date(col) -> date | None:
 
 def parse_frames(frames: list, currency: str) -> list:
     """Pure: list of pandas-like DataFrames (index=column labels, columns=dates)
-    -> canonical AnnualStatement rows. No yfinance import needed — tests pass
+    -> canonical AnnualStatement rows. No yfinance import needed - tests pass
     simple objects with .columns / .empty / __getitem__ / index access."""
     from app.providers.base import AnnualStatement
 
@@ -303,7 +303,7 @@ def fetch_key_stats(symbol: str) -> dict:
     """Fetch extended key statistics from Yahoo Finance info dict.
 
     Returns a flat dict of {metric_name: {"value", "str_value", "currency", "as_of"}}.
-    All values are optional — absent fields return None without raising.
+    All values are optional - absent fields return None without raising.
     Never mixes currencies.
     """
     yf = _import_yf()

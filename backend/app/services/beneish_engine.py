@@ -56,7 +56,7 @@ def compute_beneish_m_score(db: Session, company_id: str, strict: bool = False) 
             "threshold": -1.78,
             "variables": None,
             "message": "Financial institutions excluded from Beneish M-Score analysis.",
-            "interpretation": "Financial institution — excluded from industrial accrual models.",
+            "interpretation": "Financial institution - excluded from industrial accrual models.",
         }
 
     # Fetch chronologically sorted annual snapshots with non-null financials

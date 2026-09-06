@@ -65,6 +65,8 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_
 const get = <T>(path: string, timeoutMs?: number) => request<T>(path, undefined, timeoutMs);
 const post = <T>(path: string, body?: unknown, timeoutMs?: number) =>
   request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined }, timeoutMs);
+const put = <T>(path: string, body?: unknown, timeoutMs?: number) =>
+  request<T>(path, { method: "PUT", headers: { "Content-Type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined }, timeoutMs);
 const del = <T>(path: string, timeoutMs?: number) =>
   request<T>(path, { method: "DELETE" }, timeoutMs);
 
@@ -99,11 +101,11 @@ export const api = {
   commonSize: (companyId: string, years = 5) =>
     get<import("./types").CommonSizeOut>(`/api/v1/companies/${enc(companyId)}/financials/common-size?years=${years}`),
   statements: (companyId: string, limit = 10) =>
-    get<{ company_id: string; count: number; items: any[] }>(`/api/v1/companies/${enc(companyId)}/statements?limit=${limit}`),
+    get<{ company_id: string; count: number; items: Record<string, unknown>[] }>(`/api/v1/companies/${enc(companyId)}/statements?limit=${limit}`),
   derivedMetrics: (companyId: string, limit = 10) =>
-    get<{ company_id: string; count: number; items: any[] }>(`/api/v1/companies/${enc(companyId)}/derived-metrics?limit=${limit}`),
+    get<{ company_id: string; count: number; items: Record<string, unknown>[] }>(`/api/v1/companies/${enc(companyId)}/derived-metrics?limit=${limit}`),
   benchmarks: (companyId: string) =>
-    get<{ company_id: string; currency: string; count: number; items: any[] }>(`/api/v1/companies/${enc(companyId)}/benchmarks`),
+    get<{ company_id: string; currency: string; count: number; items: Record<string, unknown>[] }>(`/api/v1/companies/${enc(companyId)}/benchmarks`),
   dossierQuality: (companyId: string) => get<Record<string, unknown>>(`/api/v1/companies/${enc(companyId)}/quality`),
   refreshCompanyPrice: (companyId: string) =>
     post<{ job_id: string; status: string }>(`/api/v1/jobs/backfill`, {
@@ -142,4 +144,149 @@ export const api = {
       { messages },
       60_000 // 60s for LLM responses
     ),
+  piotroski: (companyId: string) =>
+    get<import("./types").PiotroskiOut>(`/api/v1/companies/${enc(companyId)}/piotroski`),
+  dupont: (companyId: string) =>
+    get<import("./types").DuPontOut>(`/api/v1/companies/${enc(companyId)}/dupont`),
+  peerMatrix: (companyId: string) =>
+    get<import("./types").PeerMatrixOut>(`/api/v1/companies/${enc(companyId)}/peer-matrix`),
+  pillarDrilldown: (companyId: string) =>
+    get<import("./types").PillarDrilldownOut>(`/api/v1/companies/${enc(companyId)}/pillar-drilldown`),
+  inspectRatio: (companyId: string, ratioName: string) =>
+    get<import("./types").RatioInspectOut>(`/api/v1/companies/${enc(companyId)}/ratios/${enc(ratioName)}/inspect`),
+  bearCase: (companyId: string) =>
+    get<import("./types").BearCaseOut>(`/api/v1/companies/${enc(companyId)}/bear-case`),
+  coverageHealth: () =>
+    get<import("./types").CoverageHealthOut>("/api/v1/coverage/health"),
+  factorEvidence: () =>
+    get<import("./types").FactorEvidenceOut>("/api/v1/factors/evidence"),
+  screenExportUrl: (params?: Record<string, string | number | boolean | null | undefined>) => {
+    const q = new URLSearchParams();
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") {
+          q.set(k, String(v));
+        }
+      }
+    }
+    return `/api/v1/screen/export?${q.toString()}`;
+  },
+  watchlistDigest: (companyIds?: string[]) =>
+    post<import("./types").WatchlistDigestResponse>("/api/v1/watchlist/digest", { company_ids: companyIds }),
+  watchlistDeltas: (companyIds?: string[]) => {
+    const q = companyIds && companyIds.length ? `?company_ids=${companyIds.map(enc).join(",")}` : "";
+    return get<import("./types").WatchlistDeltasResponse>(`/api/v1/watchlist/deltas${q}`);
+  },
+  savePreset: (preset: { name: string; criteria: Record<string, unknown>; auto_run?: boolean }) =>
+    post<import("./types").ScreenerPresetItem>("/api/v1/screener/presets", preset),
+  deletePreset: (id: string) =>
+    del<{ ok: boolean; id: string }>(`/api/v1/screener/presets/${enc(id)}`),
+  setPresetAutoRun: (id: string, autoRun: boolean) =>
+    put<{ ok: boolean; id: string; auto_run: boolean }>(`/api/v1/screener/presets/${enc(id)}/auto-run`, { auto_run: autoRun }),
+  // Wave 3 Forensics & Restatements
+  forensicsSummary: (companyId: string) =>
+    get<import("./types").ForensicsSummaryOut>(`/api/v1/companies/${enc(companyId)}/forensics/summary`),
+  forensicsBenford: (companyId: string) =>
+    get<import("./types").BenfordOut>(`/api/v1/companies/${enc(companyId)}/forensics/benford`),
+  forensicsTimeline: (companyId: string) =>
+    get<import("./types").ForensicsTimelineOut>(`/api/v1/companies/${enc(companyId)}/forensics/timeline`),
+  forensicsRank: (ids: string[]) =>
+    get<import("./types").ForensicsRankOut>(`/api/v1/forensics/rank?ids=${ids.map(enc).join(",")}`),
+  restatements: (companyId: string) =>
+    get<import("./types").RestatementsOut>(`/api/v1/companies/${enc(companyId)}/restatements`),
+  trajectory: (companyId: string) =>
+    get<import("./types").TrajectoryOut>(`/api/v1/companies/${enc(companyId)}/trajectory`),
+  workingCapital: (companyId: string) =>
+    get<import("./types").WorkingCapitalOut>(`/api/v1/companies/${enc(companyId)}/working-capital`),
+  goodwillRisk: (companyId: string) =>
+    get<import("./types").GoodwillRiskOut>(`/api/v1/companies/${enc(companyId)}/goodwill-risk`),
+  dilution: (companyId: string) =>
+    get<import("./types").DilutionOut>(`/api/v1/companies/${enc(companyId)}/dilution`),
+  // Wave 4 Valuation Suite
+  requestEPV: (companyId: string, wacc?: number) =>
+    get<unknown>(`/api/v1/companies/${enc(companyId)}/valuation/epv${wacc != null ? `?wacc=${wacc}` : ""}`),
+  requestDDM: (companyId: string, wacc?: number) =>
+    get<unknown>(`/api/v1/companies/${enc(companyId)}/valuation/ddm${wacc != null ? `?wacc=${wacc}` : ""}`),
+  requestResidual: (companyId: string, wacc?: number) =>
+    get<unknown>(`/api/v1/companies/${enc(companyId)}/valuation/residual-income${wacc != null ? `?wacc=${wacc}` : ""}`),
+  requestGuided: (companyId: string, params?: Record<string, number | string | null | undefined>) => {
+    const q = new URLSearchParams();
+    if (params) for (const [k, v] of Object.entries(params)) if (v != null) q.set(k, String(v));
+    const qs = q.toString();
+    return get<unknown>(`/api/v1/companies/${enc(companyId)}/valuation/guided${qs ? `?${qs}` : ""}`);
+  },
+  requestDecomposition: (companyId: string) =>
+    get<unknown>(`/api/v1/companies/${enc(companyId)}/valuation/decomposition`),
+  requestNormalized: (companyId: string) =>
+    get<unknown>(`/api/v1/companies/${enc(companyId)}/valuation/normalized`),
+  valuationRank: (ids: string[]) =>
+    get<unknown>(`/api/v1/valuation/rank?ids=${ids.map(enc).join(",")}`),
+  valuationCompare: (ids: string[]) =>
+    get<unknown>(`/api/v1/valuation/compare?ids=${ids.map(enc).join(",")}`),
+  // Wave 5 Portfolio & Alerts
+  portfolioAccounts: () => get<unknown>("/api/v1/portfolio/accounts"),
+  createPortfolioAccount: (body: { name: string; account_type: string; currency: string }) =>
+    post<unknown>("/api/v1/portfolio/accounts", body),
+  portfolioHoldings: (accountId?: string) =>
+    get<unknown>(`/api/v1/portfolio/holdings${accountId ? `?account_id=${enc(accountId)}` : ""}`),
+  portfolioSummary: (accountId?: string) =>
+    get<unknown>(`/api/v1/portfolio/summary${accountId ? `?account_id=${enc(accountId)}` : ""}`),
+  portfolioDividends: (accountId?: string) =>
+    get<unknown>(`/api/v1/portfolio/dividends${accountId ? `?account_id=${enc(accountId)}` : ""}`),
+  portfolioRebalance: (accountId?: string) =>
+    get<unknown>(`/api/v1/portfolio/rebalance${accountId ? `?account_id=${enc(accountId)}` : ""}`),
+  portfolioTaxLots: (accountId?: string) =>
+    get<unknown>(`/api/v1/portfolio/tax-lots${accountId ? `?account_id=${enc(accountId)}` : ""}`),
+  portfolioHeatmap: (accountId?: string) =>
+    get<unknown>(`/api/v1/portfolio/forensic-heatmap${accountId ? `?account_id=${enc(accountId)}` : ""}`),
+  createPortfolioTransaction: (body: { account_id: string; company_id: string; txn_type: string; quantity: number; price_per_share: number; txn_date: string; currency?: string; fees?: number; notes?: string }) =>
+    post<unknown>("/api/v1/portfolio/transactions", body),
+  journalEntries: (companyId?: string) =>
+    get<unknown>(`/api/v1/portfolio/journal${companyId ? `?company_id=${enc(companyId)}` : ""}`),
+  createJournalEntry: (body: { company_id: string; account_id?: string; purchase_date?: string; confidence?: number; strategy_tag?: string; thesis?: string; kill_conditions?: string }) =>
+    post<unknown>("/api/v1/portfolio/journal", body),
+  journalCalibration: () => get<unknown>("/api/v1/portfolio/journal/calibration"),
+  alertRules: (companyId?: string) =>
+    get<unknown>(`/api/v1/alerts/rules${companyId ? `?company_id=${enc(companyId)}` : ""}`),
+  createAlertRule: (body: { company_id?: string; rule_type: string; params?: Record<string, unknown>; enabled?: boolean }) =>
+    post<unknown>("/api/v1/alerts/rules", body),
+  evaluateAlerts: (companyIds?: string[]) => {
+    const qs = companyIds && companyIds.length ? `?company_ids=${companyIds.map(enc).join(",")}` : "";
+    return post<unknown>(`/api/v1/alerts/evaluate${qs}`, {});
+  },
+  alertsCalendar: (daysAhead = 30) => get<unknown>(`/api/v1/alerts/calendar?days_ahead=${daysAhead}`),
+  alertsHeartbeat: () => get<unknown>("/api/v1/alerts/heartbeat"),
+  alertsEvents: () => get<unknown>("/api/v1/alerts/events"),
+  requestMemo: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/export/memo?format=json`),
+  requestRawDump: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/export/raw`),
+  requestCanadianTax: (companyId: string) => get<unknown>(`/api/v1/canada/companies/${enc(companyId)}/tax-placement`),
+  requestCanadianMetrics: (companyId: string) => get<unknown>(`/api/v1/canada/companies/${enc(companyId)}/canadian-metrics`),
+  requestDualListed: (companyId: string) => get<unknown>(`/api/v1/canada/companies/${enc(companyId)}/dual-listed`),
+  requestInsiders: (companyId: string, pureMode?: boolean) => get<unknown>(`/api/v1/companies/${enc(companyId)}/insiders${pureMode ? "?pure_mode=true" : ""}`),
+  requestInsiderCluster: (ids: string[]) => get<unknown>(`/api/v1/insiders/cluster?ids=${ids.map(enc).join(",")}`),
+  requestTechnicals: (companyId: string) => get<unknown>(`/api/v1/companies/${enc(companyId)}/technicals`),
+  // Wave 8 Capstone
+  requestCurriculumModules: () => get<unknown>("/api/v1/curriculum/modules"),
+  requestCaseStudies: () => get<unknown>("/api/v1/curriculum/case-studies"),
+  requestFlashcards: (moduleId?: string) => get<unknown>(`/api/v1/curriculum/flashcards${moduleId ? `?module_id=${enc(moduleId)}` : ""}`),
+  requestCurriculumQuiz: (moduleId: string) => get<unknown>(`/api/v1/curriculum/quiz/${enc(moduleId)}`),
+  request10KReader: (companyId: string) => get<unknown>(`/api/v1/curriculum/10k-reader/${enc(companyId)}`),
+  requestSectorRotation: (currency: string = "ALL") => get<unknown>(`/api/v1/sectors/rotation?currency=${enc(currency)}`),
+  requestSectorHistogram: (sheet: string, currency: string = "ALL", metric: string = "composite") => get<unknown>(`/api/v1/sectors/${enc(sheet)}/histogram?currency=${enc(currency)}&metric=${enc(metric)}`),
+  requestCycleTag: (sheet: string) => get<unknown>(`/api/v1/sectors/${enc(sheet)}/cycle-tag`),
+  requestBarrier: (sheet: string, currency: string = "USD") => get<unknown>(`/api/v1/sectors/${enc(sheet)}/barrier?currency=${enc(currency)}`),
+  requestFactorDecay: () => get<unknown>("/api/v1/backtesting/factor-decay"),
+  requestSurvivorship: () => get<unknown>("/api/v1/backtesting/survivorship"),
+  requestSignalFollowThrough: () => get<unknown>("/api/v1/backtesting/signal-follow-through"),
+  checkOverfitting: (criteria: Record<string, unknown>) => post<unknown>("/api/v1/backtesting/overfitting-check", criteria),
+  requestBackups: () => get<unknown>("/api/v1/ops/backups"),
+  createBackup: () => post<unknown>("/api/v1/ops/backup"),
+  requestIntegrity: () => get<unknown>("/api/v1/ops/integrity"),
+  requestSeedChecksum: () => get<unknown>("/api/v1/ops/seed-checksum"),
+  requestDiagnostics: () => get<unknown>("/api/v1/ops/diagnostics"),
+  vacuum: () => post<unknown>("/api/v1/ops/vacuum"),
+  requestModelRisk: () => get<unknown>("/api/v1/governance/model-risk"),
+  requestCanonMap: () => get<unknown>("/api/v1/governance/canon-map"),
+  requestDiffMatrix: () => get<unknown>("/api/v1/governance/diff-matrix"),
 };
+

@@ -208,7 +208,8 @@ def recompute(db: Session, company_id: str | None = None) -> dict:
             "disclaimer": result["disclaimer"],
         }
 
-        halal = evaluate_halal(company, company["snapshot"])
+        enriched_snap = enrich_with_seed(company["snapshot"], company.get("seed_snapshot"))
+        halal = evaluate_halal(company, enriched_snap)
         hf = db.get(HalalFlag, cid)
         if hf is None:
             hf = HalalFlag(company_id=cid)

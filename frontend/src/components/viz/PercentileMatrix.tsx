@@ -133,7 +133,7 @@ export const PercentileMatrix: React.FC<PercentileMatrixProps> = ({
                     {pct != null ? (
                       <span className={getTextColor(pct)}>{pct.toFixed(1)}th pct</span>
                     ) : (
-                      <span className="text-ink-2">—</span>
+                      <span className="text-ink-2">-</span>
                     )}
                   </div>
                 </div>

@@ -9,6 +9,7 @@ invents fiscal years.
 """
 from __future__ import annotations
 
+import logging
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -21,6 +22,14 @@ from app.db import SessionLocal
 from app.models import Company, DataQualityFlag, FinancialSnapshot, ImportRun, Placement, FinancialStatement, DerivedMetric, PeerBenchmark
 from app.services.fundamentals import compute_snapshot_ratios, sync_snapshot_to_3nf
 from app.services.ids import normalize_company_id
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d [%(levelname)s] [%(name)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=False,
+)
+logger = logging.getLogger("importer")
 
 MONEY_COLS = [
     "Revenue", "Net_Income", "Diluted_EPS", "Gross_Profit", "Operating_Cash_Flow",
@@ -268,7 +277,7 @@ def _import_quality(db: Session, wb) -> tuple[int, int, int]:
     """Import 03_Data_Quality rows. Returns (imported, workbook_level, unresolved).
 
     '(workbook)' pseudo-ID rows are workbook-level notes stored with company_id
-    NULL — audited and kept, never silently dropped. Truly unresolvable IDs are
+    NULL - audited and kept, never silently dropped. Truly unresolvable IDs are
     also kept with company_id NULL and counted as unresolved.
     """
     if "03_Data_Quality" not in wb.sheetnames:
@@ -295,7 +304,7 @@ def _import_quality(db: Session, wb) -> tuple[int, int, int]:
         note = " | ".join(note_parts) if note_parts else None
         if raw_id and str(raw_id) != str(company_id or ""):
             note = f"raw_id: {raw_id}" + (f" | {note}" if note else "")
-        # Dedup on (company_id, field, code) — note text may evolve between code
+        # Dedup on (company_id, field, code) - note text may evolve between code
         # versions; update the first row in place and absorb any duplicates left
         # by older buggy versions (self-healing re-import).
         key_filter = (
@@ -369,10 +378,10 @@ def run_import(force: bool = False, seed_path: Path | None = None) -> dict:
         # Check if operational database already contains companies
         existing_companies = db.execute(select(Company.company_id)).scalars().all()
         if existing_companies and seed_path is None and not force:
-            print(
-                f"Operational SQLite database already populated with {len(existing_companies)} companies. "
+            logger.info(
+                "Operational SQLite database already populated with %d companies. "
                 "Excel seed reading skipped (database is primary durable store).",
-                flush=True,
+                len(existing_companies),
             )
             return {"status": "skipped", "companies": len(existing_companies), "source": "database_operational"}
 
@@ -380,14 +389,14 @@ def run_import(force: bool = False, seed_path: Path | None = None) -> dict:
         path = seed_path or find_seed_workbook()
         if path is None:
             if existing_companies:
-                print(f"Seed workbook redacted/archived; SQLite database is operational with {len(existing_companies)} companies.", flush=True)
+                logger.info("Seed workbook redacted/archived; SQLite database is operational with %d companies.", len(existing_companies))
                 return {"status": "skipped", "companies": len(existing_companies), "source": "database_operational"}
-            print("FAIL: seed workbook missing", flush=True)
+            logger.warning("FAIL: seed workbook missing - falling back to synthetic fixture")
             fixture = True
             fixture_dir = Path("./data").resolve()
             fixture_dir.mkdir(parents=True, exist_ok=True)
             path = _build_fixture_workbook(fixture_dir / "fixture_seed.xlsx")
-            print(f"Importing synthetic 5-row fixture instead: {path}", flush=True)
+            logger.info("Importing synthetic 5-row fixture instead: %s", path)
 
         stat = path.stat()
         source_name = path.name
@@ -401,7 +410,7 @@ def run_import(force: bool = False, seed_path: Path | None = None) -> dict:
             .order_by(ImportRun.id.desc())
         ).scalars().first()
         if last is not None and not force and not fixture:
-            print(f"Skip: {source_name} (mtime {source_mtime}) already imported at {last.imported_at}. Use --force to re-import.", flush=True)
+            logger.info("Skip: %s (mtime %s) already imported at %s. Use --force to re-import.", source_name, source_mtime, last.imported_at)
             companies = db.execute(select(Company.company_id)).scalars().all()
             return {"status": "skipped", "companies": len(companies), "source": source_name}
 
@@ -418,10 +427,10 @@ def run_import(force: bool = False, seed_path: Path | None = None) -> dict:
             note="synthetic fixture" if fixture else None,
         ))
         db.commit()
-        print(
-            f"Imported {count} companies, {placements} placements, {flags} quality flags "
-            f"(workbook-level: {workbook_level}, unresolved: {unresolved}, dupes removed: {dupes_removed}) from {source_name}",
-            flush=True,
+        logger.info(
+            "Imported %d companies, %d placements, %d quality flags "
+            "(workbook-level: %d, unresolved: %d, dupes removed: %d) from %s",
+            count, placements, flags, workbook_level, unresolved, dupes_removed, source_name,
         )
         return {
             "status": "fixture" if fixture else "imported",

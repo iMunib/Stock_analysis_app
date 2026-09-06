@@ -18,13 +18,13 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
   const [localGTerm, setLocalGTerm] = useState(0.025);
 
   // Trust sprint C: "Refresh Price & Recompute" enqueues a single-company backfill
-  // (202 + poll). The button never mutates scores directly — the worker does.
+  // (202 + poll). The button never mutates scores directly - the worker does.
   const refreshPrice = async () => {
     setRefreshing(true);
     setRefreshMsg(null);
     try {
       const res = await api.refreshCompanyPrice(companyId);
-      setRefreshMsg(`Queued job ${res.job_id ?? ""} — poll Jobs page`);
+      setRefreshMsg(`Queued job ${res.job_id ?? ""} - poll Jobs page`);
     } catch (err) {
       setRefreshMsg(err instanceof Error ? err.message : "Could not queue refresh");
     } finally {
@@ -197,14 +197,14 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
             </button>
             {refreshMsg && <span className="text-ink-2">{refreshMsg}</span>}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             {/* Implied Growth */}
-            <div className="p-3 bg-bg-2/50 rounded-card border border-border">
+            <div className="p-3 bg-bg-2/50 rounded-card border border-border" style={{ padding: "var(--space-3)" }}>
               <div className="text-xs font-medium text-ink-1 mb-1">
                 Market-Implied 10Y FCF CAGR
               </div>
               <div className="text-xl font-bold font-mono text-ink-0">
-                {impliedG !== null ? `${(impliedG * 100).toFixed(1)}%` : "—"}
+                {impliedG !== null ? `${(impliedG * 100).toFixed(1)}%` : "0.00"}
               </div>
               <p className="text-[11px] text-ink-2 mt-0.5 font-mono">
                 At WACC {(data.wacc * 100).toFixed(1)}%, Terminal g {(data.terminal_growth_rate * 100).toFixed(1)}%
@@ -212,12 +212,12 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
             </div>
 
             {/* Historical 5Y CAGR */}
-            <div className="p-3 bg-bg-2/50 rounded-card border border-border">
+            <div className="p-3 bg-bg-2/50 rounded-card border border-border" style={{ padding: "var(--space-3)" }}>
               <div className="text-xs font-medium text-ink-1 mb-1">
                 Historical FCF CAGR (5Y)
               </div>
               <div className="text-xl font-bold font-mono text-ink-0">
-                {histCAGR !== null ? `${(histCAGR * 100).toFixed(1)}%` : "—"}
+                {histCAGR !== null ? `${(histCAGR * 100).toFixed(1)}%` : "0.00"}
               </div>
               <p className="text-[11px] text-ink-2 mt-0.5">
                 Past realized annual growth rate
@@ -225,7 +225,7 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
             </div>
 
             {/* Expectations Spread */}
-            <div className="p-3 bg-bg-2/50 rounded-card border border-border">
+            <div className="p-3 bg-bg-2/50 rounded-card border border-border" style={{ padding: "var(--space-3)" }}>
               <div className="text-xs font-medium text-ink-1 mb-1 flex items-center justify-between">
                 <span>Expectations Spread</span>
                 {gap !== null && gap < -0.04 && (
@@ -244,7 +244,7 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
                     : "text-ink-0"
                 }`}
               >
-                {gap !== null ? `${gap > 0 ? "+" : ""}${(gap * 100).toFixed(1)}%` : "—"}
+                {gap !== null ? `${gap > 0 ? "+" : ""}${(gap * 100).toFixed(1)}%` : "0.00"}
               </div>
               <p className="text-[11px] text-ink-2 mt-0.5 leading-relaxed">
                 {gap !== null
@@ -258,10 +258,33 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
             </div>
           </div>
 
+          {/* Elegant horizontal comparative bars - Implied vs Historical */}
+          {impliedG !== null && histCAGR !== null && (
+            <svg width={520} height={64} viewBox="0 0 520 64" role="img" aria-label={`Implied growth ${(impliedG*100).toFixed(1)}% vs historical ${(histCAGR*100).toFixed(1)}%`} className="w-full h-auto mb-4">
+              <text x={12} y={14} fontSize={9} fill="var(--ink-2)" fontFamily="IBM Plex Mono">Comparative Growth - Implied (accent) vs Historical (info)</text>
+              {/* gridlines */}
+              {[0, 10, 20].map((v) => (
+                <g key={v}>
+                  <line x1={140 + (v/20)*360} x2={140 + (v/20)*360} y1={18} y2={56} stroke="var(--border)" strokeWidth={0.6} strokeDasharray="2 3" opacity={0.5} />
+                  <text x={140 + (v/20)*360} y={62} textAnchor="middle" fontSize={8} fill="var(--ink-2)" fontFamily="IBM Plex Mono">{v}%</text>
+                </g>
+              ))}
+              {/* Historical bar */}
+              <rect x={140} y={22} width={Math.max(4, Math.min(360, (Math.max(0, histCAGR)*100/20)*360))} height={12} rx={6} fill="var(--info)" opacity={0.9} />
+              <text x={146} y={30} fontSize={9} fill="white" fontFamily="IBM Plex Mono" fontWeight={600}>{(histCAGR*100).toFixed(1)}% hist</text>
+              {/* Implied bar */}
+              <rect x={140} y={38} width={Math.max(4, Math.min(360, (Math.max(0, impliedG)*100/20)*360))} height={12} rx={6} fill="var(--accent)" opacity={0.95} />
+              <text x={146} y={46} fontSize={9} fill="var(--bg-0)" fontFamily="IBM Plex Mono" fontWeight={700}>{(impliedG*100).toFixed(1)}% implied</text>
+              {/* Benchmark marker at 8% hurdle */}
+              <line x1={140 + (8/20)*360} x2={140 + (8/20)*360} y1={18} y2={56} stroke="var(--warn)" strokeWidth={1.2} strokeDasharray="4 3" />
+              <text x={140 + (8/20)*360} y={14} textAnchor="middle" fontSize={8} fill="var(--warn)" fontFamily="IBM Plex Mono">8% hurdle</text>
+            </svg>
+          )}
+
           {/* Trust sprint C3: local what-if sliders (client-side only, never stored) */}
           <div className="mb-4 p-3 rounded-card border border-border bg-bg-2/40">
             <div className="text-xs font-semibold text-ink-0 mb-2 flex items-center justify-between">
-              <span>What-if (local only — never stored, never changes scores)</span>
+              <span>What-if (local only - never stored, never changes scores)</span>
               {localG !== null && (
                 <span className="font-mono text-[11px] text-accent">implied g @ your rates: {(localG * 100).toFixed(1)}%</span>
               )}
@@ -302,7 +325,7 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
             </div>
             {localG === null && (
               <p className="mt-1.5 text-[10px] text-warn">
-                No solution at these rates — the implied-growth bracket does not cross zero (try a higher WACC or lower terminal growth).
+                No solution at these rates - the implied-growth bracket does not cross zero (try a higher WACC or lower terminal growth).
               </p>
             )}
           </div>
@@ -336,22 +359,20 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
                           <td className="py-1.5 px-2 text-ink-1 font-mono text-left font-medium">
                             {(waccVal * 100).toFixed(1)}%
                           </td>
-                          {row.map((cell) => {
+                           {row.map((cell) => {
                             const isBaseline =
                               Math.abs(cell.wacc - data.wacc) < 0.001 &&
                               Math.abs(cell.terminal_g - data.terminal_growth_rate) < 0.001;
+                            const val = cell.implied_growth;
+                            const tint = val == null ? "bg-bg-0 text-ink-2" : val < 0.05 ? "bg-pos-weak text-pos" : val > 0.12 ? "bg-neg-weak text-neg" : "bg-accent-weak text-accent";
                             return (
                               <td
                                 key={`${cell.wacc}-${cell.terminal_g}`}
-                                className={`py-1.5 px-2 font-mono ${
-                                  isBaseline
-                                    ? "bg-accent/20 font-bold text-accent rounded-chip"
-                                    : "text-ink-0"
-                                }`}
+                                role="gridcell"
+                                aria-label={`Implied growth ${(val != null ? (val*100).toFixed(1) : "n/a")}% at WACC ${(cell.wacc*100).toFixed(1)}% terminal ${(cell.terminal_g*100).toFixed(1)}%`}
+                                className={`py-1.5 px-2 font-mono text-center transition-colors hover:bg-accent/10 ${isBaseline ? "bg-accent text-bg-0 font-bold rounded" : tint + " rounded"}`}
                               >
-                                {cell.implied_growth !== null
-                                  ? `${(cell.implied_growth * 100).toFixed(1)}%`
-                                  : "—"}
+                                {val !== null ? `${(val * 100).toFixed(1)}%` : "0.00"}
                               </td>
                             );
                           })}

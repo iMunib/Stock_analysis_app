@@ -220,3 +220,72 @@ def get_company_benchmarks(
             for r in rows
         ],
     }
+
+
+@router.get("/{company_id}/piotroski")
+def get_company_piotroski(
+    company_id: str,
+    db: Session = Depends(get_session),
+):
+    """Retrieve 9-point Piotroski F-Score fundamental accounting analysis."""
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
+    try:
+        from app.services.piotroski_engine import compute_piotroski_f_score
+        return compute_piotroski_f_score(db, company_id)
+    except Exception as exc:
+        # Safe fallback - never 500 (frozen contract: honest null + flag)
+        return {
+            "company_id": company_id,
+            "status": "insufficient_data",
+            "f_score": None,
+            "components": None,
+            "message": f"Piotroski unavailable: {exc.__class__.__name__}",
+            "detail": str(exc)[:300],
+        }
+
+
+@router.get("/{company_id}/dupont")
+def get_company_dupont(
+    company_id: str,
+    db: Session = Depends(get_session),
+):
+    """Retrieve multi-year 3-stage and 5-stage DuPont ROE decomposition."""
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
+    try:
+        from app.services.dupont_engine import compute_dupont_analysis
+        return compute_dupont_analysis(db, company_id)
+    except Exception as exc:
+        return {
+            "company_id": company_id,
+            "status": "insufficient_data",
+            "dupont_3_stage": None,
+            "dupont_5_stage": None,
+            "message": f"DuPont unavailable: {exc.__class__.__name__}",
+            "detail": str(exc)[:300],
+        }
+
+
+@router.get("/{company_id}/peer-matrix")
+def get_company_peer_matrix(
+    company_id: str,
+    db: Session = Depends(get_session),
+):
+    """Retrieve 4-pillar percentile rankings against sector peer cohort in identical currency."""
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
+    try:
+        from app.services.peer_engine import compute_peer_comparison_matrix
+        return compute_peer_comparison_matrix(db, company_id)
+    except Exception as exc:
+        return {
+            "company_id": company_id,
+            "status": "insufficient_data",
+            "matrix": None,
+            "message": f"Peer matrix unavailable: {exc.__class__.__name__}",
+            "detail": str(exc)[:300],
+        }

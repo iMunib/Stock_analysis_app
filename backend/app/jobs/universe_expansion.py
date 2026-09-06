@@ -24,7 +24,12 @@ from app.services.etf_resolver import sync_universe_tags
 from app.services.peer_engine import populate_peer_benchmarks
 from app.services.scoring_service import recompute
 
-logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d [%(levelname)s] [%(name)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=False,
+)
 logger = logging.getLogger("universe_expansion")
 
 # Curated Russell 1000 prominent mid/large cap equities

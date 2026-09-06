@@ -37,7 +37,8 @@ def compute_sector_metrics(
         .outerjoin(Score, Score.company_id == Company.company_id)
         .where(
             (func.lower(Company.custom_industry_sheet) == sheet.lower())
-            | (func.lower(Company.gics_sector) == sheet.removeprefix("GICS_").lower())
+            | (func.lower(Company.custom_industry_sheet) == sheet.replace("_", " ").lower())
+            | (func.lower(Company.gics_sector) == sheet.removeprefix("GICS_").replace("_", " ").lower())
         )
         .where(Company.currency == cur)
     )
@@ -137,6 +138,7 @@ def materialize_sector_cache(db: Session) -> int:
         if gics:
             all_sheets.add(gics)
             all_sheets.add(f"GICS_{gics}")
+            all_sheets.add(f"GICS_{gics.replace(' ', '_')}")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     updated_count = 0
@@ -189,14 +191,16 @@ def get_cached_sector_snapshot(
     Falls back to on-demand computation and caching if cache miss.
     """
     cur = currency.upper()
+    sheet_alt = sheet.replace("_", " ") if "_" in sheet else sheet.replace(" ", "_")
     cached = db.execute(
         select(SectorCacheSummary).where(
-            func.lower(SectorCacheSummary.sector_name) == sheet.lower(),
+            (func.lower(SectorCacheSummary.sector_name) == sheet.lower())
+            | (func.lower(SectorCacheSummary.sector_name) == sheet_alt.lower()),
             SectorCacheSummary.currency == cur,
-        )
-    ).scalar_one_or_none()
+        ).order_by(SectorCacheSummary.company_count.desc())
+    ).scalars().first()
 
-    if cached is not None:
+    if cached is not None and (cached.company_count or 0) > 0:
         return {
             "sheet": sheet,
             "currency": cur,
@@ -213,23 +217,35 @@ def get_cached_sector_snapshot(
             "disclaimer": DISCLAIMER,
         }
 
-    # Cache miss: compute, store, and return
+    # Cache miss or stale empty row: compute, store/update, and return
     metrics = compute_sector_metrics(db, sheet, cur)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    new_entry = SectorCacheSummary(
-        sector_name=sheet,
-        currency=cur,
-        company_count=metrics["companies"],
-        scored_count=metrics["scored"],
-        median_composite=metrics["median_composite"],
-        median_pe=metrics["median_pe"],
-        median_pb=metrics["median_pb"],
-        median_roe=metrics["median_roe"],
-        signal_distribution_json=metrics["signal_histogram"],
-        top_json=metrics["top"],
-        bottom_json=metrics["bottom"],
-        updated_at=now,
-    )
-    db.add(new_entry)
+    if cached is not None:
+        cached.company_count = metrics["companies"]
+        cached.scored_count = metrics["scored"]
+        cached.median_composite = metrics["median_composite"]
+        cached.median_pe = metrics["median_pe"]
+        cached.median_pb = metrics["median_pb"]
+        cached.median_roe = metrics["median_roe"]
+        cached.signal_distribution_json = metrics["signal_histogram"]
+        cached.top_json = metrics["top"]
+        cached.bottom_json = metrics["bottom"]
+        cached.updated_at = now
+    else:
+        new_entry = SectorCacheSummary(
+            sector_name=sheet,
+            currency=cur,
+            company_count=metrics["companies"],
+            scored_count=metrics["scored"],
+            median_composite=metrics["median_composite"],
+            median_pe=metrics["median_pe"],
+            median_pb=metrics["median_pb"],
+            median_roe=metrics["median_roe"],
+            signal_distribution_json=metrics["signal_histogram"],
+            top_json=metrics["top"],
+            bottom_json=metrics["bottom"],
+            updated_at=now,
+        )
+        db.add(new_entry)
     db.commit()
     return metrics

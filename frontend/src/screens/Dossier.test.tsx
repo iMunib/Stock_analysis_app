@@ -90,8 +90,9 @@ describe("Dossier Status Ribbon, CIK link, and Dual Currency", () => {
     expect(screen.getAllByText("ROIC").length).toBeGreaterThanOrEqual(1);
 
     // Verify tab navigation renders workspace tabs without horizontal overflow
-    const tablist = screen.getByRole("tablist");
-    expect(tablist).toBeTruthy();
+    const tablists = screen.getAllByRole("tablist");
+    expect(tablists.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("tablist", { name: /Research terminal workspace navigation/i })).toBeTruthy();
     expect(screen.getByRole("tab", { name: /Overview/i })).toBeTruthy();
     expect(screen.getByRole("tab", { name: /Financials/i })).toBeTruthy();
     expect(screen.getByRole("tab", { name: /Technicals & Chart/i })).toBeTruthy();

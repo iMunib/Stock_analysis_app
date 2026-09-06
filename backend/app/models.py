@@ -588,3 +588,69 @@ class SectorCacheSummary(Base):
     top_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     bottom_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PortfolioAccount(Base):
+    """Local portfolio account segmentation (TFSA/RRSP/FHSA/Taxable/Paper)."""
+
+    __tablename__ = "portfolio_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    account_type: Mapped[str] = mapped_column(String(16), nullable=False)  # TFSA|RRSP|FHSA|Taxable|Paper
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)  # CAD|USD
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PortfolioTransaction(Base):
+    """Local transaction ledger - buy/sell/dividend. Holdings derived via FIFO aggregation."""
+
+    __tablename__ = "portfolio_transactions"
+    __table_args__ = (
+        Index("ix_portfolio_txn_account", "account_id"),
+        Index("ix_portfolio_txn_company", "company_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("portfolio_accounts.id", ondelete="CASCADE"), nullable=False)
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=False)
+    txn_type: Mapped[str] = mapped_column(String(16), nullable=False)  # buy|sell|dividend
+    quantity: Mapped[float] = mapped_column(Float, nullable=False)
+    price_per_share: Mapped[float] = mapped_column(Float, nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    txn_date: Mapped[date] = mapped_column(Date, nullable=False)
+    fees: Mapped[float | None] = mapped_column(Float, nullable=True, default=0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DecisionJournal(Base):
+    """Buy decision journal with thesis, confidence, strategy, kill conditions."""
+
+    __tablename__ = "decision_journal"
+    __table_args__ = (Index("ix_journal_company", "company_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    company_id: Mapped[str] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=False)
+    account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-5
+    strategy_tag: Mapped[str | None] = mapped_column(String(32), nullable=True)  # turnaround|quality|income...
+    thesis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kill_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AlertRule(Base):
+    """Local alert rules - evaluated against snapshots/scores/filings locally."""
+
+    __tablename__ = "alert_rules"
+    __table_args__ = (Index("ix_alert_company", "company_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    company_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("companies.company_id", ondelete="CASCADE"), nullable=True)
+    rule_type: Mapped[str] = mapped_column(String(32), nullable=False)  # price_below_fair_value|distress|forensic|earnings|dividend|custom
+    params_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

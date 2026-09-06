@@ -89,7 +89,7 @@ export const AltmanZGauge: React.FC<AltmanZGaugeProps> = ({
           <div>
             <div className="flex items-baseline gap-2">
               <span className={`font-mono text-2xl font-bold ${zoneColor}`}>
-                {scoreVal != null ? scoreVal.toFixed(2) : "—"}
+                {scoreVal != null ? scoreVal.toFixed(2) : "0.00"}
               </span>
               <span className="text-xs text-ink-2 font-mono">Score</span>
             </div>
@@ -153,32 +153,32 @@ export const AltmanZGauge: React.FC<AltmanZGaugeProps> = ({
             <div>
               <span className="text-ink-2">WC / Total Assets:</span>{" "}
               <span className="font-mono font-medium text-ink-0">
-                {distress.factors.x1_working_capital_to_ta != null ? distress.factors.x1_working_capital_to_ta.toFixed(2) : "—"}
+                {distress.factors.x1_working_capital_to_ta != null ? distress.factors.x1_working_capital_to_ta.toFixed(2) : "0.00"}
               </span>
             </div>
             <div>
               <span className="text-ink-2">Equity / Total Assets:</span>{" "}
               <span className="font-mono font-medium text-ink-0">
-                {distress.factors.x2_retained_earnings_to_ta != null ? distress.factors.x2_retained_earnings_to_ta.toFixed(2) : "—"}
+                {distress.factors.x2_retained_earnings_to_ta != null ? distress.factors.x2_retained_earnings_to_ta.toFixed(2) : "0.00"}
               </span>
             </div>
             <div>
               <span className="text-ink-2">EBIT / Total Assets:</span>{" "}
               <span className="font-mono font-medium text-ink-0">
-                {distress.factors.x3_ebit_to_ta != null ? distress.factors.x3_ebit_to_ta.toFixed(2) : "—"}
+                {distress.factors.x3_ebit_to_ta != null ? distress.factors.x3_ebit_to_ta.toFixed(2) : "0.00"}
               </span>
             </div>
             <div>
               <span className="text-ink-2">Equity / Total Liab:</span>{" "}
               <span className="font-mono font-medium text-ink-0">
-                {distress.factors.x4_market_equity_to_tl != null ? distress.factors.x4_market_equity_to_tl.toFixed(2) : "—"}
+                {distress.factors.x4_market_equity_to_tl != null ? distress.factors.x4_market_equity_to_tl.toFixed(2) : "0.00"}
               </span>
             </div>
             {isMfg && (
               <div className="col-span-2">
                 <span className="text-ink-2">Sales / Total Assets (Turnover):</span>{" "}
                 <span className="font-mono font-medium text-ink-0">
-                  {distress.factors.x5_sales_to_ta != null ? distress.factors.x5_sales_to_ta.toFixed(2) : "—"}
+                  {distress.factors.x5_sales_to_ta != null ? distress.factors.x5_sales_to_ta.toFixed(2) : "0.00"}
                 </span>
               </div>
             )}

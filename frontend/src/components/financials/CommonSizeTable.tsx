@@ -32,12 +32,12 @@ export const CommonSizeTable: React.FC<CommonSizeTableProps> = ({
   const years = isList.map((row) => row.fiscal_year).filter(Boolean) as number[];
 
   const formatVal = (item: { raw: number | null; pct: number | null } | undefined) => {
-    if (!item) return "—";
+    if (!item) return "Not reported in filing";
     if (mode === "percent") {
-      if (item.pct == null) return "—";
+      if (item.pct == null) return "Not reported in filing";
       return `${item.pct.toFixed(1)}%`;
     } else {
-      if (item.raw == null) return "—";
+      if (item.raw == null) return "Not reported in filing";
       return money(item.raw, currency || "USD");
     }
   };

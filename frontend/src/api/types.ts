@@ -1,4 +1,4 @@
-/** Shared API types — mirror the backend payloads (Phases 1-4). */
+/** Shared API types - mirror the backend payloads (Phases 1-4). */
 
 export interface SearchItem {
   company_id: string;
@@ -142,6 +142,20 @@ export interface SwotOut {
   elapsed_ms?: number;
 }
 
+export interface WhyMatchedSummary {
+  median_composite: number | null;
+  median_pe: number | null;
+  median_roe: number | null;
+  top_sectors: Array<{ sector: string; count: number }>;
+  count: number;
+}
+
+export interface NullWarning {
+  has_null_data_warning: boolean;
+  null_reasons: string[];
+  explanation?: string | null;
+}
+
 export interface ScreenItem {
   company_id: string;
   name: string | null;
@@ -161,6 +175,27 @@ export interface ScreenItem {
   is_bank: boolean;
   halal_status: string | null;
   money?: Record<string, number | null> | null;
+
+  // Wave 2 rich metrics (Epic 7):
+  market_cap?: number | null;
+  market_cap_band?: string | null;
+  roic_calc?: number | null;
+  ev_to_ebitda_calc?: number | null;
+  debt_to_ebitda_calc?: number | null;
+  interest_coverage_calc?: number | null;
+  gross_profitability?: number | null;
+  sbc_ratio?: number | null;
+  cagr_rev_3y?: number | null;
+  altman_z?: number | null;
+  altman_zone?: string | null;
+  is_turnaround?: boolean;
+  revenue_sparkline?: number[];
+  checklists?: {
+    graham?: boolean;
+    lynch?: boolean;
+    greenblatt?: boolean;
+    piotroski?: boolean;
+  };
 }
 
 export interface ScreenOut {
@@ -170,6 +205,97 @@ export interface ScreenOut {
   items: ScreenItem[];
   method_version: string;
   disclaimer: string;
+  why_matched_summary?: WhyMatchedSummary | null;
+  null_warning?: NullWarning | null;
+}
+
+export interface ScreenerPresetItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  criteria: Record<string, any>;
+  auto_run?: boolean;
+  created_at?: string;
+}
+
+export interface WatchlistAlertRouting {
+  primary_channel: string;
+  fallback_channel: string;
+  urgency: string;
+}
+
+export interface WatchlistDigestAlert {
+  id: string;
+  company_id: string;
+  ticker: string;
+  name: string;
+  alert_type: string;
+  title: string;
+  detail: string;
+  severity: "high" | "medium" | "low";
+  routing: WatchlistAlertRouting;
+  metrics?: Record<string, any>;
+  sedar_url?: string | null;
+  edgar_url?: string | null;
+  timestamp: string;
+}
+
+export interface WatchlistDigestStats {
+  total_watched: number;
+  high_severity_count: number;
+  medium_severity_count: number;
+  low_severity_count: number;
+  rerated_count: number;
+  earnings_count: number;
+}
+
+export interface WatchlistDigestResponse {
+  brief_date: string;
+  market_session: string;
+  stats: WatchlistDigestStats;
+  alerts: WatchlistDigestAlert[];
+  cad_companies_count: number;
+  usd_companies_count: number;
+  currency_segregation_note: string;
+  disclaimer: string;
+}
+
+export interface WatchlistDeltaItem {
+  company_id: string;
+  ticker: string;
+  name: string;
+  currency: string;
+  current_composite: number | null;
+  prior_composite: number | null;
+  delta_composite: number | null;
+  current_signal: string | null;
+  prior_signal: string | null;
+  is_rerated: boolean;
+  pillar_deltas: {
+    quality?: number | null;
+    value?: number | null;
+    growth?: number | null;
+    risk?: number | null;
+  };
+  earnings_post_actual?: {
+    fiscal_year?: number;
+    revenue_actual?: number | null;
+    prior_year_revenue?: number | null;
+    revenue_growth_pct?: number | null;
+    net_income_actual?: number | null;
+    prior_year_net_income?: number | null;
+  } | null;
+  filing_links: {
+    edgar?: string | null;
+    sedar_plus?: string | null;
+  };
+  as_of: string;
+}
+
+export interface WatchlistDeltasResponse {
+  count: number;
+  deltas: WatchlistDeltaItem[];
+  timestamp: string;
 }
 
 export interface DossierOut {
@@ -248,6 +374,15 @@ export interface DossierOut {
     altman_breakdown?: Record<string, any> | null;
     statement_history_10y?: HistoryRow[] | null;
   } | null;
+  pillar_drilldown?: PillarDrilldownOut | null;
+  tensions?: PillarTension[] | null;
+  bear_case?: BearCaseOut | null;
+  vintage?: {
+    filing_vintage?: string;
+    price_vintage?: string;
+    composite_vintage?: string;
+  } | null;
+  sector_medians?: Record<string, number | null> | null;
   method_version: string;
   disclaimer: string;
 }
@@ -366,6 +501,9 @@ export interface SectorCount {
   count: number;
   usd: number;
   cad: number;
+  median_composite_usd?: number | null;
+  median_composite_cad?: number | null;
+  median_composite_all?: number | null;
 }
 
 export interface SectorsOut {
@@ -695,4 +833,454 @@ export interface CommonSizeOut {
   balance_sheet_common_size: Record<string, any>[];
   margin_drift_flags: MarginDriftFlag[];
 }
+
+export interface PiotroskiTest {
+  name: string;
+  category: string;
+  passed: boolean | null;
+  current_value: number | null;
+  prior_value: number | null;
+  description: string;
+}
+
+export interface PiotroskiOut {
+  company_id: string;
+  fiscal_year: number | null;
+  prior_fiscal_year: number | null;
+  f_score: number;
+  f_possible: number;
+  signal: string;
+  interpretation: string;
+  is_bank: boolean;
+  tests: Record<string, PiotroskiTest>;
+  categories: {
+    profitability: PiotroskiTest[];
+    leverage_liquidity: PiotroskiTest[];
+    efficiency: PiotroskiTest[];
+  };
+}
+
+export interface DuPontYear {
+  fiscal_year: number;
+  roe_direct: number | null;
+  net_profit_margin: number | null;
+  asset_turnover: number | null;
+  equity_multiplier: number | null;
+  roe_3stage: number | null;
+  tax_burden: number | null;
+  interest_burden: number | null;
+  operating_margin: number | null;
+  roe_5stage: number | null;
+  revenue: number | null;
+  net_income: number | null;
+  ebit: number | null;
+  total_assets: number | null;
+  book_equity: number | null;
+}
+
+export interface DuPontOut {
+  company_id: string;
+  is_bank: boolean;
+  primary_driver: string;
+  driver_explanation: string;
+  latest: DuPontYear | null;
+  history: DuPontYear[];
+}
+
+export interface PeerMatrixMetric {
+  value: number | null;
+  percentile: number | null;
+}
+
+export interface PeerMatrixOut {
+  company_id: string;
+  peer_group: string;
+  peer_count: number;
+  pillars: {
+    valuation: Record<string, PeerMatrixMetric>;
+    quality: Record<string, PeerMatrixMetric>;
+    financial_health: Record<string, PeerMatrixMetric>;
+    capital_allocation: Record<string, PeerMatrixMetric>;
+  };
+}
+
+// =========================================================================
+// WAVE 1 TYPES (EPICS 1 - 4)
+// =========================================================================
+
+export interface StatementLineItem {
+  name: string;
+  raw_value: number | null;
+  formatted: string;
+  currency: string;
+  period: string;
+  provenance: string;
+  sec_edgar_url?: string | null;
+}
+
+export interface SubMetric {
+  metric_id: string;
+  name: string;
+  raw_value: number | null;
+  formatted_value: string;
+  weight: number;
+  normalized_score?: number | null;
+  line_items: StatementLineItem[];
+  formula_definition: string;
+}
+
+export interface RiskSubBar {
+  name: string;
+  score: number;
+  max: number;
+  interpretation: string;
+  metrics: { label: string; value: string }[];
+}
+
+export interface PillarDetail {
+  score: number | null;
+  formula: string;
+  interpretation: string;
+  missing_faq: string;
+  sector_median?: number | null;
+  sub_bars?: Record<string, RiskSubBar>;
+  sub_metrics: SubMetric[];
+}
+
+export interface PillarTension {
+  tension_id: string;
+  title: string;
+  chip: string;
+  summary: string;
+  pillars_involved: string[];
+  tone: "warn" | "neg" | "info" | "pos";
+}
+
+export interface CoveragePenaltyTier {
+  pillars: number;
+  multiplier: number;
+  label: string;
+}
+
+export interface CoveragePenaltyDetails {
+  unadjusted_weighted_score: number | null;
+  coverage_count: number;
+  multiplier: number;
+  deduction: number;
+  formula_string: string;
+  published_score: number | null;
+  penalty_table: CoveragePenaltyTier[];
+}
+
+export interface PillarDrilldownOut {
+  company_id: string;
+  name: string;
+  currency: string;
+  sector_peer_medians: Record<string, number | null>;
+  tensions: PillarTension[];
+  coverage_penalty: CoveragePenaltyDetails;
+  method_version: string;
+  disclaimer: string;
+  pillars: {
+    quality: PillarDetail;
+    value: PillarDetail;
+    growth: PillarDetail;
+    risk: PillarDetail;
+  };
+}
+
+export interface RatioComponent {
+  label: string;
+  raw_value: number | null;
+  formatted: string;
+  units: string;
+  currency: string;
+  as_of_date: string;
+  statement_location: string;
+  source: string;
+  sec_edgar_url?: string | null;
+}
+
+export interface RatioInspectOut {
+  company_id: string;
+  ratio_id: string;
+  label: string;
+  formula_string: string;
+  result: number | null;
+  result_formatted: string;
+  vintage: string;
+  numerator: RatioComponent;
+  denominator: RatioComponent;
+  arithmetic_resolution: string[];
+}
+
+export interface SectorHealthBreakdown {
+  sector: string;
+  company_count: number;
+  quality_pct: number;
+  value_pct: number;
+  growth_pct: number;
+  risk_pct: number;
+  average_pillars: number;
+}
+
+export interface NullFieldMissing {
+  field: string;
+  missing_count: number;
+  pct: number;
+}
+
+export interface CoverageHealthOut {
+  universe_summary: {
+    total_companies: number;
+    us_names: number;
+    canadian_names: number;
+    seed_target: number;
+    coverage_verified: boolean;
+  };
+  provenance_summary: {
+    total_snapshot_rows: number;
+    seed_workbook_rows: number;
+    provider_backfill_rows: number;
+    seed_completeness_pct: number;
+  };
+  pillar_completeness: {
+    quality: { count: number; pct: number };
+    value: { count: number; pct: number };
+    growth: { count: number; pct: number };
+    risk: { count: number; pct: number };
+    composite: { count: number; pct: number };
+  };
+  sector_breakdown: SectorHealthBreakdown[];
+  null_data_audit: {
+    total_cells_audited: number;
+    total_null_cells: number;
+    null_percentage: number;
+    honest_null_policy: string;
+    top_missing_fields: NullFieldMissing[];
+  };
+}
+
+export interface LowestPercentileItem {
+  metric_id: string;
+  label: string;
+  percentile: number;
+  rank_descriptor: string;
+}
+
+export interface ForensicConcern {
+  model: string;
+  flag: string;
+  detail: string;
+  false_positive_rate: string;
+  severity: "high" | "medium" | "low";
+}
+
+export interface BearCaseOut {
+  company_id: string;
+  company_name: string;
+  bear_thesis_narrative: string;
+  core_vulnerabilities: string[];
+  lowest_3_percentiles: LowestPercentileItem[];
+  forensic_flags: ForensicConcern[];
+  pre_mortem_challenge: string;
+  equal_billing_mandate: string;
+}
+
+export interface CanonicalFactor {
+  factor_id: string;
+  name: string;
+  academic_source: string;
+  historical_annualized_premium: string;
+  sharpe_ratio: number;
+  max_drawdown: string;
+  sample_window: string;
+  regime_sensitivity: string;
+  decay_date: string;
+}
+
+export interface ForensicModelEvidence {
+  model_id: string;
+  name: string;
+  author: string;
+  publication_year: number;
+  sample_period: string;
+  date_badge: string;
+  out_of_sample_behavior: string;
+  false_positive_rate: string;
+  limitations: string;
+}
+
+export interface FactorEvidenceOut {
+  bessembinder_base_rate: {
+    title: string;
+    stat: string;
+    statement: string;
+    citations: string[];
+    probabilistic_lesson: string;
+  };
+  canonical_factors: CanonicalFactor[];
+  forensic_models: ForensicModelEvidence[];
+}
+
+// =========================================================================
+// WAVE 3 TYPES (EPICS 8 & 9 - Forensics Red Flags & Restatements)
+// =========================================================================
+
+export interface BenfordOut {
+  company_id: string;
+  status: string;
+  data_available: boolean;
+  observations: number;
+  min_required: number;
+  observed_freq: Record<string, number> | null;
+  expected_freq: Record<string, number> | null;
+  observed_counts?: Record<string, number> | null;
+  chi2: number | null;
+  degrees_of_freedom: number;
+  verdict: "conforms" | "deviation_noted" | "strong_deviation" | "insufficient_data";
+  interpretation: string;
+  disclaimer: string;
+}
+
+export interface ForensicsSummaryFlag {
+  code: string;
+  severity: "critical" | "elevated" | "informational";
+  detail: string;
+  threshold: unknown;
+  value: unknown;
+}
+
+export interface ForensicsSummaryOut {
+  company_id: string;
+  currency: string | null;
+  forensic_health_score: number;
+  forensic_risk_tier: string;
+  flag_count: number;
+  flags: ForensicsSummaryFlag[];
+  triggered_codes: string[];
+  cross_model_divergence: string | null;
+  plain_language_summary: string;
+  beneish: BeneishAnalysis;
+  distress: DistressAnalysis;
+  sloan: Record<string, unknown>;
+  shenanigans: Record<string, unknown>;
+  benford: { verdict: string; chi2: number | null; observations: number };
+  disclaimer: string;
+  method_version: string;
+}
+
+export interface ForensicsTimelineItem {
+  fiscal_year: number;
+  beneish_m: number | null;
+  beneish_zone: string | null;
+  altman_z: number | null;
+  altman_zone: string | null;
+  sloan_ratio: number | null;
+  sloan_flag: string | null;
+}
+
+export interface ForensicsTimelineOut {
+  company_id: string;
+  count: number;
+  timeline: ForensicsTimelineItem[];
+  disclaimer: string;
+}
+
+export interface ForensicsRankItem {
+  company_id: string;
+  ticker: string | null;
+  name: string | null;
+  currency: string | null;
+  severity_score: number;
+  worst_flag: string | null;
+  flag_count: number;
+  altman_zone: string | null;
+  beneish_zone: string | null;
+  sloan_flag: string | null;
+}
+
+export interface ForensicsRankOut {
+  count: number;
+  ranked: ForensicsRankItem[];
+}
+
+export interface RestatementItem {
+  fiscal_year: number;
+  as_filed: Record<string, number | string | null>;
+  as_restated: Record<string, number | string | null> | null;
+  delta_pct: Record<string, number | null>;
+  has_restatement: boolean;
+  provenance: { filed_source: string | null; restated_source: string | null };
+}
+
+export interface RestatementsOut {
+  company_id: string;
+  count: number;
+  items: RestatementItem[];
+  disclaimer: string;
+}
+
+export interface TrajectoryPoint {
+  fiscal_year: number;
+  revenue: number | null;
+  gross_margin: number | null;
+  operating_margin: number | null;
+  fcf: number | null;
+  inflections: string[];
+  currency: string | null;
+}
+
+export interface TrajectoryOut {
+  company_id: string;
+  count: number;
+  points: TrajectoryPoint[];
+  currency: string | null;
+}
+
+export interface WorkingCapitalPoint {
+  fiscal_year: number;
+  dso: number | null;
+  dio: number | null;
+  dpo: number | null;
+  ccc: number | null;
+  dso_yoy?: number | null;
+  dio_yoy?: number | null;
+  dpo_yoy?: number | null;
+  ccc_yoy?: number | null;
+}
+
+export interface WorkingCapitalOut {
+  company_id: string;
+  data_available: boolean;
+  reason?: string | null;
+  series: WorkingCapitalPoint[];
+  disclaimer: string;
+}
+
+export interface GoodwillRiskOut {
+  company_id: string;
+  goodwill: Record<string, unknown>;
+  serial_acquirer: Record<string, unknown>;
+  strip: Array<{ fiscal_year: number | null; proxy_intangible_ratio: number | null; total_assets: number | null }>;
+  disclaimer: string;
+}
+
+export interface DilutionPoint {
+  fiscal_year: number | null;
+  shares: number | null;
+  sbc: number | null;
+  annotation?: string | null;
+  delta?: number | null;
+  delta_pct?: number | null;
+  sbc_dilution_note?: string | null;
+}
+
+export interface DilutionOut {
+  company_id: string;
+  count: number;
+  series: DilutionPoint[];
+  disclaimer: string;
+}
+
 

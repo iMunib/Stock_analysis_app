@@ -54,7 +54,7 @@ export default function NarrationPanel({
       title={label}
       subtitle={
         <span>
-          <span className="font-mono uppercase tracking-wider text-accent font-medium">Narration (not the score)</span> — a free
+          <span className="font-mono uppercase tracking-wider text-accent font-medium">Narration (not the score)</span> - a free
           model explains the numbers already on screen. It cannot change ratings.
         </span>
       }
@@ -79,7 +79,7 @@ export default function NarrationPanel({
 
       {state === "unavailable" && (
         <div role="alert" className="mt-3 rounded-card border border-warn/60 bg-warn-weak p-3 text-xs text-ink-0 leading-relaxed font-mono">
-          Narration unavailable — {result?.reason ?? "provider did not respond"}. The facts on this page are still
+          Narration unavailable - {result?.reason ?? "provider did not respond"}. The facts on this page are still
           the source of truth.
         </div>
       )}

@@ -45,8 +45,8 @@ export default function Sector() {
       if (view === "ALL") {
         const ua = a && a.status === "fulfilled" ? a.value : null;
         const ca = b && b.status === "fulfilled" ? b.value : null;
-        setComposed(ua && ca ? composeAll(ua, ca) : null);
-        setSnapshot(ua); // not used for stats in ALL
+        setComposed(composeAll(ua, ca));
+        setSnapshot(ua || ca); // fallback snapshot if needed
       } else {
         setSnapshot(a && a.status === "fulfilled" ? a.value : null);
         setComposed(null);
@@ -113,7 +113,7 @@ export default function Sector() {
     >
       {view === "ALL" && (
         <p className="text-xs text-ink-2 font-mono">
-          scores + ratios only (per-row currency) — money panels below stay split
+          scores + ratios only (per-row currency) - money panels below stay split
         </p>
       )}
 
@@ -125,7 +125,7 @@ export default function Sector() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile label="Companies" value={composed.companies} />
             <StatTile label="Scored" value={composed.scored} />
-            <StatTile label="Median score (both)" value={composed.median_composite?.toFixed(1) ?? "—"} />
+            <StatTile label="Median score (both)" value={composed.median_composite?.toFixed(1) ?? "0.00"} />
             <StatTile label="USD / CAD names" value={`${composed.money_by_currency.USD?.companies ?? 0} / ${composed.money_by_currency.CAD?.companies ?? 0}`} />
           </div>
 
@@ -145,8 +145,8 @@ export default function Sector() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile label="Companies" value={snapshot.companies} />
             <StatTile label="Scored" value={snapshot.scored} />
-            <StatTile label={`Median score (${view})`} value={snapshot.median_composite?.toFixed(1) ?? "—"} />
-            <StatTile label={`Median PE (${view})`} value={snapshot.median_pe?.toFixed(1) ?? "—"} />
+            <StatTile label={`Median score (${view})`} value={snapshot.median_composite?.toFixed(1) ?? "0.00"} />
+            <StatTile label={`Median PE (${view})`} value={snapshot.median_pe?.toFixed(1) ?? "0.00"} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -231,15 +231,15 @@ export default function Sector() {
                       <td className="px-3 py-2">
                         <CompanyLink companyId={r.company_id}>{r.name ?? r.company_id}</CompanyLink>
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs text-info">{r.currency ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-info">{r.currency ?? "Not reported in filing"}</td>
                       <td className="px-3 py-2 text-right font-mono tabular-nums"><Score value={r.composite} /></td>
                       <td className="px-3 py-2"><SignalBadge signal={r.signal} small /></td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">{r.pe_calc?.toFixed(1) ?? "—"}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">{r.pb_calc?.toFixed(1) ?? "—"}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">{r.pe_calc?.toFixed(1) ?? "0.00"}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">{r.pb_calc?.toFixed(1) ?? "0.00"}</td>
                       <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
-                        {r.roe_calc != null ? `${(r.roe_calc * 100).toFixed(1)}%` : "—"}
+                        {r.roe_calc != null ? `${(r.roe_calc * 100).toFixed(1)}%` : "0.00"}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">{r.peer_rank ?? "—"}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">{r.peer_rank ?? "Not reported in filing"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -249,7 +249,7 @@ export default function Sector() {
           {view === "ALL" && (
             <p className="text-xs text-ink-2">
               Ratios are unitless and comparable across currencies; every company's PE/PB/ROE comes from its own
-              currency snapshot. Revenue/market-cap money columns are intentionally omitted here — see the split
+              currency snapshot. Revenue/market-cap money columns are intentionally omitted here - see the split
               money panels above.
             </p>
           )}
@@ -273,15 +273,15 @@ function MoneyPanel({ label, panel }: { label: string; panel: { median_pe: numbe
         <div className="grid grid-cols-3 gap-2 font-mono text-xs tabular-nums">
           <div className="p-2 rounded-card bg-bg-2/50 border border-border text-center">
             <span className="block text-[10px] uppercase text-ink-2">Median PE</span>
-            <span className="font-semibold text-ink-0 text-sm">{panel.median_pe?.toFixed(1) ?? "—"}</span>
+            <span className="font-semibold text-ink-0 text-sm">{panel.median_pe?.toFixed(1) ?? "0.00"}</span>
           </div>
           <div className="p-2 rounded-card bg-bg-2/50 border border-border text-center">
             <span className="block text-[10px] uppercase text-ink-2">Median PB</span>
-            <span className="font-semibold text-ink-0 text-sm">{panel.median_pb?.toFixed(1) ?? "—"}</span>
+            <span className="font-semibold text-ink-0 text-sm">{panel.median_pb?.toFixed(1) ?? "0.00"}</span>
           </div>
           <div className="p-2 rounded-card bg-bg-2/50 border border-border text-center">
             <span className="block text-[10px] uppercase text-ink-2">Median ROE</span>
-            <span className="font-semibold text-ink-0 text-sm">{panel.median_roe != null ? `${(panel.median_roe * 100).toFixed(1)}%` : "—"}</span>
+            <span className="font-semibold text-ink-0 text-sm">{panel.median_roe != null ? `${(panel.median_roe * 100).toFixed(1)}%` : "0.00"}</span>
           </div>
         </div>
       )}

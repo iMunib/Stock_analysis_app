@@ -28,7 +28,7 @@ def test_swot_draft_with_mock_llm(client, monkeypatch):
         "app.services.llm.draft_swot",
         lambda facts, model, fallback, timeout=45.0: {
             "swot": mock_swot_text,
-            "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "model": "minimax/minimax-m3:free",
             "elapsed_ms": 120,
         },
     )
@@ -36,11 +36,20 @@ def test_swot_draft_with_mock_llm(client, monkeypatch):
         "app.services.llm.llm_status",
         lambda model, fallback: {
             "configured": True,
-            "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-            "fallback": "minimax/minimax-m3:free",
+            "model": "minimax/minimax-m3:free",
+            "fallback": "mistralai/mistral-small-24b-instruct-2501:free",
             "free_latch": True,
         },
     )
+    # Ensure clean cache for this company/model
+    from app.db import SessionLocal as _SessionLocal
+    from app.models import LlmCache as _LlmCache
+    try:
+        with _SessionLocal() as _s:
+            _s.query(_LlmCache).filter(_LlmCache.subject_id == "US:MSFT:US", _LlmCache.kind == "swot").delete()
+            _s.commit()
+    except Exception:
+        pass
 
     # First call: not cached
     res = client.post("/api/v1/companies/US:MSFT:US/research")

@@ -134,7 +134,7 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
             )}
           </div>
           <div className="text-lg font-bold font-mono text-ink-0">
-            {sloan !== null ? `${(sloan * 100).toFixed(1)}%` : "—"}
+            {sloan !== null ? `${(sloan * 100).toFixed(1)}%` : "0.00"}
           </div>
           <p className="text-[11px] text-ink-2 mt-0.5 leading-relaxed">
             {sloan !== null
@@ -159,7 +159,7 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
             )}
           </div>
           <div className="text-lg font-bold font-mono text-ink-0">
-            {ccer !== null ? `${Math.round(ccer * 100)}%` : "—"}
+            {ccer !== null ? `${Math.round(ccer * 100)}%` : "0.00"}
           </div>
           <p className="text-[11px] text-ink-2 mt-0.5 leading-relaxed">
             {ccer !== null
@@ -183,17 +183,17 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
               <Chip
                 tone="warning"
                 size="sm"
-                title="ROIC distorted — denominator small/buybacks. High ROIC driven by low book equity from share repurchases or cash offsets; evaluate alongside ROE, ROA, and FCF margin."
+                title="ROIC distorted - denominator small/buybacks. High ROIC driven by low book equity from share repurchases or cash offsets; evaluate alongside ROE, ROA, and FCF margin."
               >
                 ROIC distorted
               </Chip>
             )}
             {data.roic_interpretation === "not_meaningful" && (
-              <Chip tone="neutral" size="sm" title="Corporate ROIC is not meaningful for banks/insurers — use CET1, efficiency, and ROE instead.">n/m</Chip>
+              <Chip tone="neutral" size="sm" title="Corporate ROIC is not meaningful for banks/insurers - use CET1, efficiency, and ROE instead.">n/m</Chip>
             )}
           </div>
           <div className="text-lg font-bold font-mono text-ink-0">
-            {roic !== null ? `${(roic * 100).toFixed(1)}%` : "—"}
+            {roic !== null ? `${(roic * 100).toFixed(1)}%` : "0.00"}
           </div>
           <p className="text-[11px] text-ink-2 mt-0.5 leading-relaxed">
             NOPAT / (Total Debt + Equity − Cash)
@@ -209,7 +209,7 @@ export const ForensicCard: React.FC<ForensicCardProps> = ({ companyId }) => {
             <span>FCF Yield</span>
           </div>
           <div className="text-lg font-bold font-mono text-ink-0">
-            {fcfYield !== null ? `${(fcfYield * 100).toFixed(1)}%` : "—"}
+            {fcfYield !== null ? `${(fcfYield * 100).toFixed(1)}%` : "0.00"}
           </div>
           <p className="text-[11px] text-ink-2 mt-0.5 leading-relaxed">
             Free cash flow relative to market capitalization
