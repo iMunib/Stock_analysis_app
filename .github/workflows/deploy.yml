@@ -1,0 +1,141 @@
+name: CI/CD — Test & Deploy to OCI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Verify — backend pytest + frontend vitest + Vite build
+  # Runs on every push/PR; deploy gate depends on it.
+  # ---------------------------------------------------------------------------
+  test-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backend tests (pytest)
+        working-directory: backend
+        env:
+          JOBS_WORKER_DISABLED: "1"
+        run: python -m pytest tests/ -q
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests (vitest)
+        working-directory: frontend
+        run: npm test -- --run
+
+      - name: Build frontend (tsc + vite)
+        working-directory: frontend
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Deploy to OCI — only on push to main after tests pass
+  # ---------------------------------------------------------------------------
+  deploy-to-oci:
+    needs: test-and-verify
+    # Deploy only on push to main (not PRs, not manual dispatch unless on main)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Deploy via SSH (pull + compose up)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -e
+            echo "=== Deploying to OCI: $(hostname) @ $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+            cd /home/ubuntu/app
+
+            # Clone or fast-forward to origin/main
+            if [ ! -d ".git" ]; then
+              echo "No git repo — cloning fresh ..."
+              # Clone into temp then move to avoid 'destination exists' on non-empty dir
+              if [ -z "$(ls -A . 2>/dev/null)" ]; then
+                git clone https://github.com/iMunib/Stock_analysis_app.git .
+              else
+                echo "Directory not empty but no .git — backing up stray files"
+                mkdir -p /tmp/app_stash
+                # Preserve live state (never overwrite DB/env via git)
+                [ -f data/app.db ] && cp -a data/app.db /tmp/app_stash/app.db || true
+                [ -f .env ] && cp -a .env /tmp/app_stash/.env || true
+                rm -rf ./*
+                rm -rf ./.* 2>/dev/null || true
+                git clone https://github.com/iMunib/Stock_analysis_app.git .
+                [ -f /tmp/app_stash/app.db ] && cp -a /tmp/app_stash/app.db data/app.db || true
+                [ -f /tmp/app_stash/.env ] && cp -a /tmp/app_stash/.env .env || true
+                rm -rf /tmp/app_stash
+              fi
+            else
+              echo "Existing repo — fetching origin/main ..."
+              git fetch origin main
+              # Preserve untracked live files across hard reset
+              git reset --hard origin/main
+            fi
+
+            echo "Commit: $(git rev-parse --short HEAD) — $(git log -1 --oneline)"
+            echo "Ensuring data directories exist ..."
+            mkdir -p data/backups
+
+            # Guard: never let a DB-less deploy wipe production state
+            if [ ! -f data/app.db ]; then
+              echo "WARNING: data/app.db not found on server — expected after initial ship_to_oci.ps1."
+              echo "App will cold-boot from seed (720 rows) if compose starts without DB."
+            else
+              echo "data/app.db present — $(du -h data/app.db | cut -f1) — will be preserved (volume mount)."
+            fi
+            if [ ! -f .env ]; then
+              echo "WARNING: .env not found on server — copy .env.example to .env and set OPENROUTER_API_KEY."
+            fi
+
+            echo "Rebuilding and restarting containers ..."
+            docker compose --profile frontend down || true
+            docker compose --profile frontend up --build -d
+
+            echo "Waiting for API healthcheck ..."
+            for i in $(seq 1 30); do
+              if docker compose ps | grep -q "healthy\|Up"; then
+                echo "Containers:"
+                docker compose ps
+                break
+              fi
+              sleep 2
+            done
+            docker compose ps
+            echo "Recent api logs:"
+            docker compose logs api --tail 30 || true
+            echo "=== Deploy complete ==="

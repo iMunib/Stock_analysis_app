@@ -163,8 +163,8 @@ export default function Compare() {
         </div>
       )}
 
-      {ids.length < 2 && (
-        <p className="rounded-card border border-border bg-bg-1 p-4 text-xs text-ink-1">
+      {ids.length < 2 && compare.ids.length < 2 && (
+        <p className="rounded-card border border-border bg-bg-1 p-4 text-xs text-ink-1" role="status" aria-live="polite">
           Add at least two companies to compare side by side.
         </p>
       )}
@@ -516,29 +516,29 @@ function CompareTable({ data, showHalal, columnGroup = "core" as const }: { data
   const compKeys = columnGroup === "forensics" ? forensicsKeys : columnGroup === "dividends" ? dividendKeys : columnGroup === "banks" ? bankKeys : coreKeys;
 
   return (
-    <table className="w-full text-xs">
-      <thead>
-        <tr className="border-b border-border bg-bg-2/70 text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
-          <th scope="col" className="sticky left-0 z-10 bg-bg-2 px-4 py-3 border-r border-border">Company</th>
-          <th scope="col" className="px-3 py-3 whitespace-nowrap" aria-label="Pillar bars">
+    <table className="w-full text-xs" role="table" aria-label="Comparison table">
+      <thead className="sticky top-0 z-20" style={{ backgroundColor: "var(--bg-0)", borderBottom: "2px solid var(--border-subtle)" }}>
+        <tr className="font-mono text-[10px] uppercase tracking-widest text-ink-2">
+          <th scope="col" className="sticky left-0 z-20 px-3 py-2.5 text-left min-w-[200px] border-r border-border" style={{ backgroundColor: "var(--bg-0)" }}>Company</th>
+          <th scope="col" className="px-3 py-2.5 text-center min-w-[90px] whitespace-nowrap" style={{ backgroundColor: "var(--bg-0)" }} aria-label="Pillar bars">
             <span>Q·V·G·R</span>
             <InfoTip term="Q·V·G·R" />
           </th>
-          <th scope="col" className="px-3 py-3 whitespace-nowrap">
-            <span>Cur</span>
+          <th scope="col" className="px-3 py-2.5 text-center min-w-[70px] whitespace-nowrap" style={{ backgroundColor: "var(--bg-0)" }}>
+            <span>CCY</span>
             <InfoTip term="Cur" />
           </th>
           {compKeys.map(([label]) => (
-            <th key={label} scope="col" className="px-3 py-3 text-right whitespace-nowrap">
+            <th key={label} scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px] whitespace-nowrap" style={{ backgroundColor: "var(--bg-0)" }}>
               <span>{label}</span>
               <InfoTip term={label} />
             </th>
           ))}
-          <th scope="col" className="px-3 py-3 text-right whitespace-nowrap">
+          <th scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px] whitespace-nowrap" style={{ backgroundColor: "var(--bg-0)" }}>
             <span>Peer rank</span>
             <InfoTip term="Peer rank" />
           </th>
-          {showHalal && <th scope="col" className="px-3 py-3">Halal</th>}
+          {showHalal && <th scope="col" className="px-3 py-2.5 text-center min-w-[90px]" style={{ backgroundColor: "var(--bg-0)" }}>Halal</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -559,7 +559,7 @@ function CompareTable({ data, showHalal, columnGroup = "core" as const }: { data
                 <Sparkline data={[r.quality, r.value, r.growth, r.risk]} width={40} height={14} />
               </div>
             </td>
-            <td className="px-3 py-3 font-mono text-xs text-info font-medium">{r.currency ?? "Not reported in filing"}</td>
+            <td className="px-3 py-2.5 text-center min-w-[70px] font-mono text-xs text-info font-medium">{r.currency ?? "Not reported in filing"}</td>
             {compKeys.map(([label, key, , fmt]) => {
               const v = num(r[key] as number | null);
               const best = { composite: bestComposite, pe_calc: bestPe, pb_calc: bestPb, ev_to_ebitda_calc: bestEv, roe_calc: bestRoe, roa_calc: bestRoa, fcfmargin_calc: bestFcf }[
@@ -569,16 +569,16 @@ function CompareTable({ data, showHalal, columnGroup = "core" as const }: { data
               return (
                 <td
                   key={label}
-                  className={`px-3 py-3 text-right font-mono tabular-nums ${isBest ? "rounded-chip bg-accent-weak font-semibold text-accent" : "text-ink-1"}`}
+                  className={`px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px] ${isBest ? "rounded-chip bg-accent-weak font-semibold text-accent" : "text-ink-1"}`}
                 >
                   {v === null ? "Not reported in filing" : fmt(v)}
                 </td>
               );
             })}
-            <td className="px-3 py-3 text-right font-mono tabular-nums text-ink-1">{r.peer_rank ?? "Not reported in filing"}</td>
+            <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1 min-w-[90px]">{r.peer_rank ?? "Not reported in filing"}</td>
             {showHalal && (
-              <td className="px-3 py-3">
-                <HalalBadge status={r.halal_status} />
+              <td className="px-3 py-2.5 text-center min-w-[90px]">
+                <span className="inline-flex justify-center w-full"><HalalBadge status={r.halal_status} /></span>
               </td>
             )}
           </tr>
@@ -609,6 +609,8 @@ function AddRows({ ids, onChange }: { ids: string[]; onChange: (ids: string[]) =
   const debounced = useDebounced(query, 250);
   const [results, setResults] = useState<SearchOut | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [focusedIdx, setFocusedIdx] = useState(0);
+  const compare = useCompare();
 
   useEffect(() => {
     const q = debounced.trim();
@@ -620,11 +622,32 @@ function AddRows({ ids, onChange }: { ids: string[]; onChange: (ids: string[]) =
     api.search(q, 6).then(setResults).catch((e: ApiError) => setErr(e.message));
   }, [debounced]);
 
+  useEffect(() => setFocusedIdx(0), [results]);
+
   const add = (cid: string) => {
     if (ids.includes(cid) || ids.length >= MAX) return;
-    onChange([...ids, cid]);
+    // Use sessionCompare for reactive sync across tabs
+    compare.add(cid);
+    onChange([...ids.filter((x) => x !== cid), cid].slice(0, MAX));
     setQuery("");
     setResults(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!results || results.items.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusedIdx((prev) => Math.min(prev + 1, results.items.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusedIdx((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const target = results.items[focusedIdx] ?? results.items[0];
+      if (target) add(target.company_id);
+    } else if (e.key === "Escape") {
+      setResults(null);
+    }
   };
 
   return (
@@ -635,8 +658,12 @@ function AddRows({ ids, onChange }: { ids: string[]; onChange: (ids: string[]) =
           placeholder="Add ticker or company name to compare…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
           disabled={ids.length >= MAX}
-          className="flex-1 min-w-[200px] rounded-card border border-border bg-bg-0 px-3 py-1.5 font-mono text-xs text-ink-0 placeholder:text-ink-2 disabled:opacity-50"
+          aria-label="Add company to compare"
+          aria-expanded={!!results && results.items.length > 0}
+          aria-controls="compare-search-results"
+          className="flex-1 min-w-[200px] rounded-card border border-border bg-bg-0 px-3 py-1.5 font-mono text-xs text-ink-0 placeholder:text-ink-2 disabled:opacity-50 focus:border-accent focus:outline-none"
         />
         {ids.length >= MAX && (
           <span className="text-[11px] text-ink-2 font-mono">Maximum {MAX} reached</span>
@@ -646,16 +673,17 @@ function AddRows({ ids, onChange }: { ids: string[]; onChange: (ids: string[]) =
       {err && <p className="mt-2 text-xs text-neg font-mono">{err}</p>}
 
       {results && results.items.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full mt-1.5 z-20 divide-y divide-border rounded-card border border-border bg-bg-1 shadow-card max-h-56 overflow-auto">
-          {results.items.map((it) => {
+        <ul id="compare-search-results" role="listbox" aria-label="Search results" className="absolute left-0 right-0 top-full mt-1.5 z-20 divide-y divide-border rounded-card border border-border bg-bg-1 shadow-card max-h-56 overflow-auto">
+          {results.items.map((it, idx) => {
             const added = ids.includes(it.company_id);
+            const isFocused = idx === focusedIdx;
             return (
-              <li key={it.company_id}>
+              <li key={it.company_id} role="option" aria-selected={isFocused}>
                 <button
                   type="button"
                   onClick={() => add(it.company_id)}
                   disabled={added || ids.length >= MAX}
-                  className="w-full flex items-center justify-between px-3.5 py-2 text-left text-xs hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                  className={`w-full flex items-center justify-between px-3.5 py-2 text-left text-xs transition-colors disabled:opacity-40 ${isFocused ? "bg-accent-weak text-accent" : "hover:bg-bg-2"}`}
                 >
                   <span className="text-ink-0 font-medium truncate">
                     {it.name ?? it.company_id} <span className="text-ink-2 font-mono ml-1.5 text-[10px]">{it.company_id}</span>

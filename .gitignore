@@ -5,10 +5,11 @@ __pycache__/
 node_modules/
 .venv/
 venv/
-data/*.db
+data/app.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+data/backups/
 *.db
 *.db-journal
 *.db-wal
@@ -29,3 +30,10 @@ test-results/
 .cluster/
 .audit*.py
 .debug*.py
+
+# Secrets / SSH keys — never commit
+*.key
+*.pem
+*.pub
+*.p12
+*.pfx

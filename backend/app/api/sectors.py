@@ -62,6 +62,38 @@ def list_sectors(db: Session = Depends(get_session)):
             valid_meds = [m for m in (m_usd, m_cad) if m is not None]
             entry.median_composite_all = (sum(valid_meds) / len(valid_meds)) if valid_meds else None
 
+        # Consolidate fragmented custom industries 86 → ~40 (WS7)
+        if not is_gics:
+            try:
+                from app.services.industry_consolidation import consolidate_sheet
+            except Exception:
+                def consolidate_sheet(s):  # type: ignore
+                    return s
+            consolidated: dict[str, SectorCountOut] = {}
+            for name, entry in merged.items():
+                cons = consolidate_sheet(name) or name
+                if cons not in consolidated:
+                    consolidated[cons] = SectorCountOut(name=cons, count=0)
+                target = consolidated[cons]
+                target.count += entry.count
+                target.usd += entry.usd
+                target.cad += entry.cad
+                # Merge medians conservatively: average of available medians
+                # Keep already computed medians if target empty, else average
+                if entry.median_composite_usd is not None:
+                    if target.median_composite_usd is None:
+                        target.median_composite_usd = entry.median_composite_usd
+                    else:
+                        target.median_composite_usd = (target.median_composite_usd + entry.median_composite_usd) / 2
+                if entry.median_composite_cad is not None:
+                    if target.median_composite_cad is None:
+                        target.median_composite_cad = entry.median_composite_cad
+                    else:
+                        target.median_composite_cad = (target.median_composite_cad + entry.median_composite_cad) / 2
+            for ent in consolidated.values():
+                valid = [m for m in (ent.median_composite_usd, ent.median_composite_cad) if m is not None]
+                ent.median_composite_all = (sum(valid) / len(valid)) if valid else None
+            return sorted(consolidated.values(), key=lambda s: s.name)
         return sorted(merged.values(), key=lambda s: s.name)
 
     return SectorsOut(

@@ -68,7 +68,10 @@ def test_sectors_counts(client):
     gics_total = sum(s["count"] for s in body["gics_sectors"])
     assert custom_total == 720
     assert gics_total == 720
-    assert len(body["custom_industries"]) == 30
+    # Consolidated from 30 fragmented sheets to ~18 cohesive groups (WS7: 86→~40)
+    assert 15 <= len(body["custom_industries"]) <= 40
+    # Every consolidated group must have at least 8 members for robust percentiles
+    assert all(s["count"] >= 8 for s in body["custom_industries"]), "All consolidated groups must have ≥8 members"
 
 
 def test_stats_companies_720(client):

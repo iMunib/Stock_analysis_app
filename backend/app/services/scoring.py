@@ -112,14 +112,21 @@ def percentile_rank(values: list[float], observed: float, lower_is_better: bool 
 
 
 def build_peer_sets(companies: list[dict[str, Any]]) -> tuple[dict[str, list[dict[str, Any]]], dict[str, tuple[str, int]]]:
-    """Peer set: same custom_industry_sheet + currency (min 8 members), else
-    GICS_Sector + currency. Currencies are never mixed."""
+    """Peer set: same consolidated custom_industry_sheet + currency (min 8 members), else
+    GICS_Sector + currency. Currencies are never mixed. Consolidation 86→~40 ensures n≥8."""
+    try:
+        from app.services.industry_consolidation import consolidate_sheet  # local import to avoid cycle
+    except Exception:
+        def consolidate_sheet(s):  # type: ignore
+            return s
+
     by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for company in companies:
         currency = (company.get("currency") or "").strip().upper()
         if not currency:
             continue
-        sheet = (company.get("custom_industry_sheet") or "").strip()
+        raw_sheet = (company.get("custom_industry_sheet") or "").strip()
+        sheet = (consolidate_sheet(raw_sheet) or "").strip() if raw_sheet else ""
         sector = (company.get("gics_sector") or "").strip()
         if sheet:
             by_key.setdefault(("custom", sheet, currency), []).append(company)
@@ -131,7 +138,8 @@ def build_peer_sets(companies: list[dict[str, Any]]) -> tuple[dict[str, list[dic
     for company in companies:
         company_id: str = company["company_id"]
         currency = (company.get("currency") or "").strip().upper()
-        sheet = (company.get("custom_industry_sheet") or "").strip()
+        raw_sheet = (company.get("custom_industry_sheet") or "").strip()
+        sheet = (consolidate_sheet(raw_sheet) or "").strip() if raw_sheet else ""
         sector = (company.get("gics_sector") or "").strip()
         custom = by_key.get(("custom", sheet, currency)) if sheet else None
         gics = by_key.get(("gics", sector, currency)) if sector else None

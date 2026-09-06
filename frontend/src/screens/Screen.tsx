@@ -532,7 +532,7 @@ export default function Screen() {
               >
                 <span>⭐</span>
                 <span>{sp.name}</span>
-                {sp.auto_run && <span className="text-[9px] text-pos">●</span>}
+                {sp.auto_run && <span className="text-[9px] text-pos">�-�</span>}
               </button>
             ))}
           </div>
@@ -1108,51 +1108,49 @@ export default function Screen() {
             </div>
           ) : (
             <Card padding="none" className="overflow-hidden terminal-card">
-              <div className="overflow-x-auto max-h-[75vh]">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 z-10 bg-bg-2/95 backdrop-blur-xs">
-                    <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-wider text-ink-2">
-                      <th scope="col" className="px-3 py-2.5 w-8">
+              <div className="overflow-x-auto max-h-[75vh] overscroll-contain">
+                <table className="w-full text-xs" role="table" aria-label="Screener results">
+                  <thead className="sticky top-0 z-20" style={{ backgroundColor: "var(--bg-0)", borderBottom: "2px solid var(--border-subtle)" }}>
+                    <tr className="font-mono text-[10px] uppercase tracking-wider text-ink-2">
+                      <th scope="col" className="px-3 py-2.5 w-8 text-left min-w-[40px]" style={{ backgroundColor: "var(--bg-0)" }}>
                         <span className="sr-only">Select</span>
                       </th>
-                      <th scope="col" className="px-3 py-2.5 cursor-pointer hover:text-ink-0" onClick={() => handleSort("name")}>
+                      <th scope="col" className="px-3 py-2.5 text-left min-w-[200px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("name")}>
                         <span>Name {sortBy === "name" && (sortDir === "asc" ? "▲" : "▼")}</span>
                       </th>
-                      <th scope="col" className="px-2 py-2.5 cursor-pointer hover:text-ink-0" onClick={() => handleSort("currency")}>
-                        <span>Ccy {sortBy === "currency" && (sortDir === "asc" ? "▲" : "▼")}</span>
+                      <th scope="col" className="px-3 py-2.5 text-center min-w-[70px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("currency")}>
+                        <span>CCY {sortBy === "currency" && (sortDir === "asc" ? "▲" : "▼")}</span>
                       </th>
-                      <th scope="col" className="px-3 py-2.5 text-right cursor-pointer hover:text-ink-0" onClick={() => handleSort("composite")}>
-                        <span>Composite {sortBy === "composite" && (sortDir === "asc" ? "▲" : "▼")}</span>
+                      <th scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[110px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("composite")}>
+                        <span>COMPOSITE {sortBy === "composite" && (sortDir === "asc" ? "▲" : "▼")}</span>
                         <InfoTip term="Composite" />
                       </th>
-                      <th scope="col" className="px-3 py-2.5 cursor-pointer hover:text-ink-0" onClick={() => handleSort("signal")}>
-                        <span>Signal {sortBy === "signal" && (sortDir === "asc" ? "▲" : "▼")}</span>
+                      <th scope="col" className="px-3 py-2.5 text-center min-w-[130px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("signal")}>
+                        <span>SIGNAL {sortBy === "signal" && (sortDir === "asc" ? "▲" : "▼")}</span>
                       </th>
-                      <th scope="col" className="px-2.5 py-2.5 text-center">
-                        <span>Halal (AAOIFI)</span>
+                      <th scope="col" className="px-3 py-2.5 text-center min-w-[110px]" style={{ backgroundColor: "var(--bg-0)" }}>
+                        <span>HALAL</span>
                       </th>
-                      <th scope="col" className="px-3 py-2.5 text-right cursor-pointer hover:text-ink-0" onClick={() => handleSort("pe")}>
+                      <th scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("pe")}>
                         <span>PE {sortBy === "pe" && (sortDir === "asc" ? "▲" : "▼")}</span>
                         <InfoTip term="PE" />
                       </th>
-                      <th scope="col" className="px-3 py-2.5 text-right cursor-pointer hover:text-ink-0" onClick={() => handleSort("roe")}>
+                      <th scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("roe")}>
                         <span>ROE {sortBy === "roe" && (sortDir === "asc" ? "▲" : "▼")}</span>
                         <InfoTip term="ROE" />
                       </th>
-                      <th scope="col" className="px-3 py-2.5 text-right cursor-pointer hover:text-ink-0" onClick={() => handleSort("fcf_margin")}>
-                        <span>FCF Margin {sortBy === "fcf_margin" && (sortDir === "asc" ? "▲" : "▼")}</span>
+                      <th scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[110px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("fcf_margin")}>
+                        <span>FCF MARGIN {sortBy === "fcf_margin" && (sortDir === "asc" ? "▲" : "▼")}</span>
                         <InfoTip term="FCF margin" />
                       </th>
-                      {/* Inline 5-Year Revenue Sparklines (US-0039) */}
-                      <th scope="col" className="px-3 py-2.5 text-center">
-                        <span>5Y Rev Trend (US-0039)</span>
+                      <th scope="col" className="px-3 py-2.5 text-center min-w-[120px]" style={{ backgroundColor: "var(--bg-0)" }}>
+                        <span>5Y REV TREND</span>
                       </th>
-                      {/* Book Checklist Scorer (US-0041) */}
-                      <th scope="col" className="px-3 py-2.5 text-center">
-                        <span>Checklists (US-0041)</span>
+                      <th scope="col" className="px-3 py-2.5 text-center min-w-[120px]" style={{ backgroundColor: "var(--bg-0)" }}>
+                        <span>CHECKLISTS</span>
                       </th>
-                      <th scope="col" className="px-3 py-2.5 text-right cursor-pointer hover:text-ink-0" onClick={() => handleSort("peer_rank")}>
-                        <span>Peer Rank {sortBy === "peer_rank" && (sortDir === "asc" ? "▲" : "▼")}</span>
+                      <th scope="col" className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[110px] cursor-pointer hover:text-ink-0" style={{ backgroundColor: "var(--bg-0)" }} onClick={() => handleSort("peer_rank")}>
+                        <span>PEER RANK {sortBy === "peer_rank" && (sortDir === "asc" ? "▲" : "▼")}</span>
                       </th>
                     </tr>
                   </thead>
@@ -1164,7 +1162,7 @@ export default function Screen() {
                           key={it.company_id}
                           className={`hover:bg-bg-2/60 transition-colors ${isSelected ? "bg-accent-weak" : ""}`}
                         >
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2.5 text-left min-w-[40px]">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -1173,42 +1171,38 @@ export default function Screen() {
                               className="h-3.5 w-3.5 rounded-chip border-border bg-bg-0 accent-accent"
                             />
                           </td>
-                          <td className="px-3 py-2 font-medium">
+                          <td className="px-3 py-2.5 text-left min-w-[200px] font-medium">
                             <CompanyLink companyId={it.company_id}>{it.name ?? it.company_id}</CompanyLink>
                             {it.ticker && <span className="ml-2 font-mono text-[10px] text-ink-2">{it.ticker}</span>}
                           </td>
-                          <td className="px-2 py-2">
-                            <Chip tone={it.currency === "USD" ? "info" : "warning"} size="sm">
-                              {it.currency ?? "Not reported in filing"}
-                            </Chip>
+                          <td className="px-3 py-2.5 text-center min-w-[70px]">
+                            <span className="inline-flex justify-center w-full"><Chip tone={it.currency === "USD" ? "info" : "warning"} size="sm">{it.currency ?? "Not reported in filing"}</Chip></span>
                           </td>
-                          <td className="px-3 py-2 text-right">
-                            <Score value={it.composite} />
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[110px]">
+                            <span className="inline-flex justify-end w-full"><Score value={it.composite} /></span>
                           </td>
-                          <td className="px-3 py-2">
-                            <SignalBadge signal={it.signal} small />
+                          <td className="px-3 py-2.5 text-center min-w-[130px]">
+                            <span className="inline-flex justify-center w-full"><SignalBadge signal={it.signal} small /></span>
                           </td>
-                          <td className="px-2.5 py-2 text-center">
-                            <HalalBadge status={it.halal_status} />
+                          <td className="px-3 py-2.5 text-center min-w-[110px]">
+                            <span className="inline-flex justify-center w-full"><HalalBadge status={it.halal_status} /></span>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1 min-w-[90px]">
                             {multiple(it.pe_calc)}
                           </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1 min-w-[90px]">
                             {percentish(it.roe_calc)}
                           </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1 min-w-[110px]">
                             {percentish(it.fcfmargin_calc)}
                           </td>
-                          {/* 5-Year Revenue Sparkline (US-0039) */}
-                          <td className="px-3 py-2 text-center">
-                            <RevenueSparkline values={it.revenue_sparkline} />
+                          <td className="px-3 py-2.5 text-center min-w-[120px]">
+                            <span className="inline-flex justify-center w-full"><RevenueSparkline values={it.revenue_sparkline} /></span>
                           </td>
-                          {/* Academic Book Checklists (US-0041) */}
-                          <td className="px-3 py-2 text-center">
-                            <BookChecklists checklists={it.checklists} />
+                          <td className="px-3 py-2.5 text-center min-w-[120px]">
+                            <span className="inline-flex justify-center w-full"><BookChecklists checklists={it.checklists} /></span>
                           </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1 min-w-[110px]">
                             {it.peer_rank != null && it.peer_n != null ? (
                               <span>
                                 #{it.peer_rank} of {it.peer_n}

@@ -25,19 +25,13 @@ engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_engine_kwarg
 
 
 @event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_connection, connection_record):  # pragma: no cover
-    if DATABASE_URL.startswith("sqlite"):
-        cursor = dbapi_connection.cursor()
-        try:
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA busy_timeout=60000")
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA cache_size=-64000")   # 64 MB page cache
-            cursor.execute("PRAGMA temp_store=MEMORY")
-        except Exception:
-            pass
-        cursor.close()
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode = WAL;")
+    cursor.execute("PRAGMA busy_timeout = 60000;")
+    cursor.execute("PRAGMA synchronous = NORMAL;")
+    cursor.execute("PRAGMA foreign_keys = ON;")
+    cursor.close()
 
 
 class Base(DeclarativeBase):

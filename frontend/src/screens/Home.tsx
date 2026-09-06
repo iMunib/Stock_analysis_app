@@ -10,7 +10,7 @@ import { Card, Grid, Page } from "../components/layout";
 import { CompositeGauge } from "../components/viz";
 import { EmptyState } from "../components/feedback";
 import TickerTypeahead from "../components/common/TickerTypeahead";
-import IsometricFinanceGraphic from "../components/viz/IsometricFinanceGraphic";
+
 
 const LEGEND =
   "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers - average companies land mid-pack, not at 8.";
@@ -273,30 +273,42 @@ export default function Home() {
             <div className="lg:col-span-5 flex flex-col">
               <Card
                 title="3-Tier Decision Architecture"
-                subtitle="Autonomous fundamental equity analysis pipeline"
+                subtitle="Autonomous fundamental equity analysis pipeline — flat, auditable tiers"
                 className="flex-1 flex flex-col justify-between"
               >
-                <div className="flex-1 flex items-center justify-center py-2">
-                  <IsometricFinanceGraphic
-                    ticker="S&P 500 / TSX"
-                    moat="Wide Moat · 58% ROIC"
-                    solvency="Pristine · Altman Z 4.8"
-                    hurdle="FCF Hurdle 11.2% CAGR"
-                    className="w-full"
-                  />
-                </div>
-                <div className="border-t border-border pt-3 mt-2 grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
-                  <div className="p-2 rounded bg-bg-2/60 border border-border/60">
-                    <span className="text-accent font-bold block text-[11px]">LEVEL 1</span>
-                    <span className="text-ink-2">60s Cockpit</span>
+                <div className="space-y-3 py-1" role="img" aria-label="Flat 3-tier pipeline: 60s Cockpit, Flight Deck, Engine Room">
+                  <div className="rounded-md border border-border-subtle bg-bg-0 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-accent">TIER 1 · 60s Cockpit</span>
+                      <span className="font-mono text-[10px] text-ink-2">Instant Verdict</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-ink-1">Composite gauge · Signal chip · Moat (ROIC vs WACC) · Solvency (Altman Z distance)</p>
+                    <div className="mt-2 flex gap-1.5 font-mono text-[10px]">
+                      <span className="rounded bg-pos-weak border border-pos/20 px-1.5 py-0.5 text-pos">Wide Moat · 58% ROIC</span>
+                      <span className="rounded bg-pos-weak border border-pos/20 px-1.5 py-0.5 text-pos">Pristine · Z 4.8</span>
+                    </div>
                   </div>
-                  <div className="p-2 rounded bg-bg-2/60 border border-border/60">
-                    <span className="text-accent font-bold block text-[11px]">LEVEL 2</span>
-                    <span className="text-ink-2">Flight Deck</span>
+                  <div className="rounded-md border border-border-subtle bg-bg-0 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-accent">TIER 2 · Flight Deck</span>
+                      <span className="font-mono text-[10px] text-ink-2">Pillars & Context</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-ink-1">4-Pillar radar · Sector percentiles · Bessembinder 42% base rate</p>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-bg-2 overflow-hidden" aria-hidden="true">
+                      <div className="h-full bg-accent" style={{ width: "67%" }} />
+                    </div>
                   </div>
-                  <div className="p-2 rounded bg-bg-2/60 border border-border/60">
-                    <span className="text-accent font-bold block text-[11px]">LEVEL 3</span>
-                    <span className="text-ink-2">Engine Room</span>
+                  <div className="rounded-md border border-border-subtle bg-bg-0 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-accent">TIER 3 · Engine Room</span>
+                      <span className="font-mono text-[10px] text-ink-2">Drilldown</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-ink-1">Forensics (Beneish/Schilit) · Valuation (DCF/EPV) · Filings provenance</p>
+                    <div className="mt-2 flex gap-1.5 font-mono text-[10px]">
+                      <span className="rounded bg-bg-2 border border-border px-1.5 py-0.5 text-ink-2">Beneish ✓</span>
+                      <span className="rounded bg-bg-2 border border-border px-1.5 py-0.5 text-ink-2">DCF ✓</span>
+                      <span className="rounded bg-bg-2 border border-border px-1.5 py-0.5 text-ink-2">10-K ✓</span>
+                    </div>
                   </div>
                 </div>
               </Card>

@@ -280,7 +280,7 @@ export default function Screener() {
                 className="rounded-chip border border-accent/60 bg-accent-weak px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent hover:text-bg-0 transition-colors flex items-center gap-1.5"
               >
                 <span>Full Dossier</span>
-                <span>â†—</span>
+                <span>â†-</span>
               </Link>
             )
           )}
@@ -436,7 +436,7 @@ export default function Screener() {
                     className="rounded-chip border border-accent/60 bg-accent-weak hover:bg-accent hover:text-bg-0 text-accent font-medium px-3 py-1.5 text-xs transition-colors flex items-center gap-1"
                   >
                     <span>Full Dossier</span>
-                    <span>â†—</span>
+                    <span>â†-</span>
                   </Link>
                 </div>
               </div>
@@ -486,7 +486,7 @@ export default function Screener() {
                   onClick={() => selectAuditCompany(item.id)}
                   className="rounded-chip border border-border bg-bg-2/80 px-2 py-0.5 font-mono text-[11px] text-ink-1 hover:border-accent hover:text-accent transition-colors"
                 >
-                  Audit {item.ticker} â†—
+                  Audit {item.ticker} â†-
                 </button>
               ))}
               <button
@@ -494,7 +494,7 @@ export default function Screener() {
                 onClick={() => switchView("audit")}
                 className="rounded-chip border border-accent/60 bg-accent-weak px-2.5 py-0.5 font-mono text-[11px] font-semibold text-accent hover:bg-accent hover:text-bg-0 transition-colors"
               >
-                Open Audit Mode â†—
+                Open Audit Mode â†-
               </button>
             </div>
           </div>
@@ -653,9 +653,8 @@ export default function Screener() {
                     <p>
                       {result?.count ?? 0} matches{activePreset && presets.find((p) => p.id === activePreset) ? ` Â· preset: ${presets.find((p) => p.id === activePreset)?.name}` : ""}
                     </p>
-                    <span className="font-mono text-[11px] text-accent flex items-center gap-1.5 bg-accent-weak/40 border border-accent/30 px-2 py-0.5 rounded">
-                      <span>ðŸ“…</span>
-                      <span>Universe Vintage: FY Statements & Latest Traded Prices (US-0481)</span>
+                    <span className="font-mono text-[11px] text-ink-2 border border-border px-2 py-0.5 rounded bg-bg-0">
+                      Universe Vintage: FY Statements & Latest Traded Prices Â· Scores vintage {new Date().getFullYear()}-FY
                     </span>
                   </div>
                   {rows.length === 0 ? (
@@ -666,14 +665,16 @@ export default function Screener() {
                       </p>
                     </Card>
                   ) : (
-                    <div className="overflow-x-auto rounded-card border border-border bg-bg-1 shadow-card max-h-[75vh]">
-                      <table className="w-full text-sm">
-                        <thead className="sticky top-0 z-20 bg-bg-2/95 backdrop-blur-xs">
-                          <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
+                    <div className="overflow-x-auto rounded-card border border-border bg-bg-1 shadow-card max-h-[75vh] overscroll-contain">
+                      <table className="w-full text-sm" role="table" aria-label="Forensic screener results">
+                        <thead className="sticky top-0 z-20" style={{ backgroundColor: "var(--bg-0)", borderBottom: "2px solid var(--border-subtle)" }}>
+                          <tr className="font-mono text-[10px] uppercase tracking-widest text-ink-2">
                             {COLUMNS.map((col) => {
                               const sortable = ["ticker", "name", "composite", "roic", "sloan_accrual", "cash_conversion", "expectations_gap"].includes(col.key);
+                              const alignClass = col.key === "ticker" || col.key === "name" ? "text-left" : col.key === "currency" || col.key === "signal" || col.key === "altman" || col.key === "audit" ? "text-center" : "text-right font-mono tabular-nums";
+                              const minW = col.key === "name" ? "min-w-[180px]" : col.key === "ticker" ? "min-w-[90px]" : col.key === "currency" ? "min-w-[70px]" : col.key === "signal" ? "min-w-[110px]" : col.key === "composite" ? "min-w-[90px]" : col.key === "roic" ? "min-w-[110px]" : col.key === "altman" ? "min-w-[90px]" : col.key === "audit" ? "min-w-[90px]" : "min-w-[110px]";
                               return (
-                                <th key={col.key} scope="col" className="px-3 py-2.5 whitespace-nowrap">
+                                <th key={col.key} scope="col" className={`px-3 py-2.5 whitespace-nowrap ${alignClass} ${minW}`} style={{ backgroundColor: "var(--bg-0)" }}>
                                   {sortable ? (
                                     <button
                                       type="button"
@@ -695,23 +696,23 @@ export default function Screener() {
                         <tbody className="divide-y divide-border">
                           {rows.map((r) => (
                             <tr key={r.company_id} className="hover:bg-bg-2/40">
-                              <td className="sticky left-0 z-10 bg-bg-1 px-3 py-2 font-mono text-xs whitespace-nowrap">
+                              <td className="sticky left-0 z-10 bg-bg-1 px-3 py-2.5 font-mono text-xs whitespace-nowrap text-left min-w-[90px]">
                                 <CompanyLink companyId={r.company_id}>{r.ticker ?? r.company_id}</CompanyLink>
                               </td>
-                              <td className="max-w-[200px] truncate px-3 py-2 whitespace-nowrap" title={r.name ?? ""}>
+                              <td className="max-w-[200px] truncate px-3 py-2.5 whitespace-nowrap text-left min-w-[180px]" title={r.name ?? ""}>
                                 {r.name ?? "Not reported in filing"}
                               </td>
-                              <td className="px-3 py-2 font-mono text-xs text-info">{r.currency ?? "Not reported in filing"}</td>
-                              <td className="px-3 py-2">
-                                <SignalBadge signal={r.signal} small />
+                              <td className="px-3 py-2.5 font-mono text-xs text-info text-center min-w-[70px]">{r.currency ?? "Not reported in filing"}</td>
+                              <td className="px-3 py-2.5 text-center min-w-[110px]">
+                                <span className="inline-flex justify-center w-full"><SignalBadge signal={r.signal} small /></span>
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums">
-                                <Score value={r.composite} size="sm" />
+                              <td className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px]">
+                                <span className="inline-flex justify-end w-full"><Score value={r.composite} size="sm" /></span>
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                              <td className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[110px]">
                                 {r.roic === null || r.roic === undefined ? (
                                   r.roic_interpretation === "not_meaningful" ? (
-                                    <span className="text-[10px] uppercase text-ink-2" title="Corporate ROIC is not meaningful for banks/insurers - use CET1/ROE instead.">n/m</span>
+                                    <span className="text-[10px] uppercase text-ink-2" title="Corporate ROIC is not meaningful for banks/insurers - use CET1/ROE instead.">Not applicable: Bank model</span>
                                   ) : (
                                     "Not reported in filing"
                                   )
@@ -735,7 +736,7 @@ export default function Screener() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                              <td className="px-3 py-2.5 text-center font-mono tabular-nums min-w-[90px]">
                                 {r.altman_zone ? (
                                   <span
                                     className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
@@ -754,7 +755,7 @@ export default function Screener() {
                                   "Not reported in filing"
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                              <td className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[80px]">
                                 {r.total_shareholder_yield != null ? (
                                   <span className={(r.total_shareholder_yield || 0) > 0 ? "text-pos font-medium" : "text-ink-1"}>
                                     {r.total_shareholder_yield.toFixed(1)}%
@@ -763,7 +764,7 @@ export default function Screener() {
                                   "Not reported in filing"
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                              <td className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[110px]">
                                 {r.cash_conversion_ratio === null || r.cash_conversion_ratio === undefined ? (
                                   "Not reported in filing"
                                 ) : (
@@ -775,7 +776,7 @@ export default function Screener() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                              <td className="px-3 py-2.5 text-right font-mono tabular-nums min-w-[90px]">
                                 {r.sloan_accrual_ratio === null || r.sloan_accrual_ratio === undefined ? (
                                   "Not reported in filing"
                                 ) : (
@@ -787,10 +788,10 @@ export default function Screener() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
+                              <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1 min-w-[90px]">
                                 {r.expectations_gap === null || r.expectations_gap === undefined ? "0.0%" : percentish(r.expectations_gap)}
                               </td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap">
+                              <td className="px-3 py-2.5 text-center whitespace-nowrap min-w-[90px]">
                                 <button
                                   type="button"
                                   onClick={() => selectAuditCompany(r.company_id)}

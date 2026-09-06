@@ -212,73 +212,17 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
     company = db.get(Company, company_id)
     if company is None:
         raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
-    # Auto-resolve CIK if missing for US tickers
-    if not company.cik and company.country == "US":
-        try:
-            from app.services.mapping import cik_for_unknown_us, _universe_rows
-            by_id, _ = _universe_rows()
-            if company_id in by_id and by_id[company_id].get("cik"):
-                company.cik = by_id[company_id]["cik"]
-                db.flush()
-            else:
-                cik_val, _ = cik_for_unknown_us(company.ticker)
-                if cik_val:
-                    company.cik = cik_val
-                    db.flush()
-        except Exception:
-            pass
-
+    # Read-only: do not mutate Company on GET (no CIK auto-resolve writes)
     entry = next((u for u in load_universe(db) if u["company_id"] == company_id), None)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"unknown company_id: {company_id}")
 
-    # Dynamic auto-ingest: if dated history is sparse (< 3 years with revenue), fetch filings and ingest
-    # (Disabled during automated test runs to preserve test isolation and offline execution)
-    import os
-    dated_rev_count = len([h for h in entry["history"] if h.get("fiscal_year") is not None and h.get("revenue") is not None])
-    if dated_rev_count < 3 and company.ticker and not os.environ.get("PYTEST_CURRENT_TEST"):
-        try:
-            from app.providers.registry import ProviderRegistry
-            from app.providers.base import CompanyRef
-            from app.services.mapping import yahoo_symbol_for
-            from app.services.ingest import ingest_statements, ingest_price
-            from app.services.scoring_service import recompute
+    # Read-only: no auto-ingest on GET (writes would lock SQLite under NullPool)
+    # History enrichment is via background jobs / POST /ingest, not GET
 
-            registry = ProviderRegistry()
-            ref = CompanyRef(
-                company_id=company.company_id,
-                ticker=company.ticker,
-                country=company.country,
-                currency=company.currency,
-                yahoo_symbol=yahoo_symbol_for(company.ticker, company.country),
-                cik=company.cik,
-            )
-            stmts = registry.fetch_annual_statements(ref)
-            if stmts:
-                ingest_statements(db, company, stmts, refresh=True)
-                quote = registry.fetch_price(ref)
-                if quote:
-                    ingest_price(db, company, quote)
-                db.commit()
-                try:
-                    from app.services.calculation_pipeline import run_company_pipeline
-                    run_company_pipeline(db, company_id, refresh=False, fetch_live=False, recompute_score=False)
-                except Exception:
-                    pass
-                recompute(db, company_id)
-                entry = next((u for u in load_universe(db) if u["company_id"] == company_id), entry)
-        except Exception:
-            db.rollback()
-
-    # Dynamic TTM computation: ensure TTM row is always up to date and computed
-    from app.services.ttm_engine import compute_and_store_ttm
+    # Read-only TTM: never compute_and_store on GET
     from app.models import FinancialSnapshotTTM
-    ttm_row = None
-    try:
-        ttm_row = compute_and_store_ttm(db, company_id)
-    except Exception:
-        db.rollback()
-        ttm_row = db.get(FinancialSnapshotTTM, company_id)
+    ttm_row = db.get(FinancialSnapshotTTM, company_id)
 
     enriched = enrich_with_seed(entry["snapshot"], entry.get("seed_snapshot"))
 
@@ -461,27 +405,8 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
         # create_all here (Workstream A: migrations are the only schema authority).
         prof = None
 
-    if prof is None and company.ticker:
-        try:
-            from app.providers.yahoo import fetch_profile_and_quarterly
-            from app.services.mapping import yahoo_symbol_for
-            symbol = yahoo_symbol_for(company.ticker, company.country or "US")
-            p_data = fetch_profile_and_quarterly(symbol)
-            if p_data.get("summary") or p_data.get("dividend_yield") is not None or p_data.get("quarterly"):
-                prof = CompanyProfile(
-                    company_id=company_id,
-                    summary=p_data.get("summary"),
-                    dividend_yield=p_data.get("dividend_yield"),
-                    dividend_rate=p_data.get("dividend_rate"),
-                    next_earnings_date=p_data.get("next_earnings_date"),
-                    quarterly_json=p_data.get("quarterly"),
-                    fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
-                )
-                db.add(prof)
-                db.commit()
-        except Exception:
-            db.rollback()
-            prof = None
+    # Read-only: no Yahoo fetch or CompanyProfile creation on GET (would lock DB)
+    # Profile enrichment is via background ingest/refresh jobs
 
     profile_payload = {
         "summary": prof.summary if prof else None,
@@ -541,11 +466,12 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
         db.rollback()
         moat_rating = None
 
+    # Read-only: never materialize Reverse DCF on GET
+    from app.models import ValuationReverseDCF
     try:
-        dcf = compute_and_store_reverse_dcf(db, company_id)
+        dcf = db.get(ValuationReverseDCF, company_id)
         expectations_gap = dcf.expectations_gap if dcf else None
     except Exception:
-        db.rollback()
         dcf = None
         expectations_gap = None
 
@@ -573,10 +499,13 @@ def company_dossier(company_id: str, response: Response, db: Session = Depends(g
         db.rollback()
         distress = None
 
+    # Read-only: query existing Penman row, never compute_and_store on GET
     try:
-        penman = latest_penman(db, company_id)
+        from app.models import FinancialPenmanAnalysis
+        penman = db.execute(
+            select(FinancialPenmanAnalysis).where(FinancialPenmanAnalysis.company_id == company_id).order_by(FinancialPenmanAnalysis.fiscal_year.desc().nullslast())
+        ).scalars().first()
     except Exception:
-        db.rollback()
         penman = None
 
     level1 = {

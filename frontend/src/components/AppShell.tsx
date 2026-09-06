@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { api, ApiError, enc } from "../api/client";
+import { api, ApiError, enc, isInitializingError } from "../api/client";
 import type { SuggestionsOut } from "../api/types";
 import { navItems } from "../lib/nav";
 import { getCompareSelection, COMPARE_EVENT } from "../lib/sessionCompare";
@@ -8,6 +8,7 @@ import { Score, SignalBadge, useDebounced } from "./ui";
 import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./common/CommandPalette";
 import TerminalMarketTape from "./viz/TerminalMarketTape";
+import InitializingResearchDesk from "./InitializingResearchDesk";
 
 function AlertDrawerContent() {
   const [events, setEvents] = React.useState<any[]>([]);
@@ -38,6 +39,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [compareCount, setCompareCount] = useState(0);
   const [alertCount, setAlertCount] = useState(0);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -57,7 +59,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    api.jobs().then(() => setHasJobs(true)).catch(() => setHasJobs(false));
+    let cancelled = false;
+    const checkHealth = async () => {
+      try {
+        await fetch("/api/v1/research/meta").then((r) => {
+          if (!r.ok && (r.status === 502 || r.status === 503)) throw new ApiError(r.status, "warming");
+          return r;
+        });
+        if (!cancelled) setIsInitializing(false);
+      } catch (e) {
+        if (!cancelled && isInitializingError(e)) setIsInitializing(true);
+        setTimeout(() => { if (!cancelled) checkHealth(); }, 2500);
+      }
+    };
+    checkHealth();
+    api.jobs().then(() => setHasJobs(true)).catch((e: unknown) => {
+      if (isInitializingError(e)) setIsInitializing(true);
+      setHasJobs(false);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -277,7 +297,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="mx-auto w-full max-w-desk flex-1 px-3 sm:px-5 lg:px-6 xl:px-8 py-3 sm:py-5">{children}</main>
+      <main className="mx-auto w-full max-w-desk flex-1 px-3 sm:px-5 lg:px-6 xl:px-8 py-3 sm:py-5">
+        {isInitializing ? <InitializingResearchDesk /> : children}
+      </main>
 
       <footer className="border-t border-border mt-12">
         <div className="mx-auto max-w-desk px-6 py-6 text-xs leading-relaxed text-ink-2">

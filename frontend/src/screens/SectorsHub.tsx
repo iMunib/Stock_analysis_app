@@ -6,6 +6,7 @@ import { ErrorBanner, Spinner } from "../components/ui";
 import { gicsSheetParam, sectorCardKey } from "../lib/nav";
 import { Page } from "../components/layout";
 import { CompositeGauge } from "../components/viz";
+import { consolidateSheet } from "../lib/industryConsolidation";
 
 const VIEWS: CurrencyView[] = ["ALL", "USD", "CAD"];
 
@@ -86,19 +87,44 @@ export default function SectorsHub() {
 
       {data && (
         <div className="space-y-8">
-          <SectorGroup
-            title="Custom industries"
-            groups={data.custom_industries.map((s) => ({
-              key: sectorCardKey("custom", s.name),
-              name: s.name,
-              count: view === "CAD" ? s.cad : view === "USD" ? s.usd : s.usd + s.cad,
-              countLabel: view === "ALL" ? `${s.usd} USD / ${s.cad} CAD` : `${s.count} names`,
-              sheet: s.name,
-              median: medians[sectorCardKey("custom", s.name)],
-            }))}
-            currency={view}
-            loadingMedians={loadingMedians}
-          />
+          {(() => {
+            // Aggregate fragmented industries client-side as fallback (ensures 8-15 min even if backend not yet consolidated)
+            const agg = new Map<string, { name: string; count: number; usd: number; cad: number; median: number | null | undefined; sheet: string }>();
+            for (const s of data.custom_industries) {
+              const cons = consolidateSheet(s.name);
+              const existing = agg.get(cons);
+              const count = s.count ?? s.usd + s.cad;
+              const median = medians[sectorCardKey("custom", s.name)];
+              if (!existing) {
+                agg.set(cons, { name: cons.replace(/_/g, " "), count, usd: s.usd, cad: s.cad, median, sheet: cons });
+              } else {
+                existing.count += count;
+                existing.usd += s.usd;
+                existing.cad += s.cad;
+                // average median if both exist
+                if (median != null) {
+                  existing.median = existing.median != null ? (existing.median + median) / 2 : median;
+                }
+              }
+            }
+            // If backend already consolidated, agg size ≈ raw size; else it will reduce 30→~18
+            const customGroups = Array.from(agg.values()).map((g) => ({
+              key: sectorCardKey("custom", g.name),
+              name: g.name,
+              count: view === "CAD" ? g.cad : view === "USD" ? g.usd : g.count,
+              countLabel: view === "ALL" ? `${g.usd} USD / ${g.cad} CAD` : `${g.count} names`,
+              sheet: g.sheet,
+              median: g.median,
+            }));
+            return (
+              <SectorGroup
+                title="Custom industries"
+                groups={customGroups}
+                currency={view}
+                loadingMedians={loadingMedians}
+              />
+            );
+          })()}
           <SectorGroup
             title="GICS sectors"
             groups={data.gics_sectors.map((s) => ({

@@ -11,10 +11,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Company, FinancialSnapshot, FinancialSnapshotTTM, Score, ScreenerPreset, ValuationReverseDCF
 from app.services.ids import normalize_company_id
-from app.services.screener_bundle import ensure_all_presets
-from app.services.screener_engine import ensure_system_presets, run_screener_query
-from app.services.ttm_engine import compute_and_store_ttm
-from app.services.valuation_engine import compute_and_store_reverse_dcf
+from app.services.screener_engine import run_screener_query
 
 router = APIRouter(prefix="/api/v1", tags=["forensics"])
 
@@ -115,14 +112,12 @@ def get_company_forensics(company_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Company {cid} not found")
 
     try:
-        # Ensure TTM snapshot exists
+        # Read-only: never create TTM on GET (avoids SQLite write lock)
         ttm = db.get(FinancialSnapshotTTM, cid)
         if not ttm:
-            ttm = compute_and_store_ttm(db, cid)
-            db.commit()
+            raise ValueError("ttm_not_materialized")
     except Exception as exc:
-        db.rollback()
-        # Safe fallback - never 500
+        # Safe fallback - never 500, never write
         return ForensicsOut(
             company_id=cid,
             currency=company.currency or "USD",
@@ -484,9 +479,21 @@ def get_company_quality(company_id: str, db: Session = Depends(get_db)):
     if latest_annual and latest_annual.source:
         sources.add(str(latest_annual.source).split(":")[0])
 
+    # Read-only: never materialize TTM on GET
     ttm = db.get(FinancialSnapshotTTM, cid)
-    ttm_map = ttm if ttm is not None else compute_and_store_ttm(db, cid)
-    db.commit()
+    if ttm is None:
+        return {
+            "company_id": cid,
+            "currency": company.currency,
+            "price_freshness": price_freshness,
+            "price_as_of": price_as_of.isoformat() if price_as_of else None,
+            "statement_as_of": latest_annual.as_of_date.isoformat() if latest_annual and latest_annual.as_of_date else None,
+            "source_count": len(sources),
+            "sources": sorted(sources),
+            "denominator_confidence": None,
+            "roic_interpretation": "not_meaningful",
+            "roic_warning_reason": "ttm_not_materialized",
+        }
 
     return {
         "company_id": cid,
@@ -496,24 +503,26 @@ def get_company_quality(company_id: str, db: Session = Depends(get_db)):
         "statement_as_of": latest_annual.as_of_date.isoformat() if latest_annual and latest_annual.as_of_date else None,
         "source_count": len(sources),
         "sources": sorted(sources),
-        "denominator_confidence": ttm_map.roic_confidence,
-        "roic_interpretation": ttm_map.roic_interpretation,
-        "roic_warning_reason": ttm_map.roic_warning_reason,
+        "denominator_confidence": ttm.roic_confidence,
+        "roic_interpretation": ttm.roic_interpretation,
+        "roic_warning_reason": ttm.roic_warning_reason,
     }
 
 
 @router.get("/companies/{company_id}/penman")
 def get_company_penman(company_id: str, db: Session = Depends(get_db)):
-    """Analytical sprint WS2: Penman reformulation (RNOA vs naive ROIC, leverage)."""
+    """Analytical sprint WS2: Penman reformulation (RNOA vs naive ROIC, leverage). Read-only."""
     cid = normalize_company_id(company_id) or company_id
     company = db.get(Company, cid)
     if not company:
         raise HTTPException(status_code=404, detail=f"Company {cid} not found")
 
-    from app.services.penman_engine import latest_penman
+    # Read-only: query existing Penman row, never compute_and_store on GET
+    from app.models import FinancialPenmanAnalysis
 
-    row = latest_penman(db, cid)
-    db.commit()
+    row = db.execute(
+        select(FinancialPenmanAnalysis).where(FinancialPenmanAnalysis.company_id == cid).order_by(FinancialPenmanAnalysis.fiscal_year.desc().nullslast())
+    ).scalars().first()
     if row is None:
         return {
             "company_id": cid,
@@ -559,7 +568,7 @@ def get_company_schilit(company_id: str, db: Session = Depends(get_db)):
 
 @router.get("/companies/{company_id}/graham")
 def get_company_graham(company_id: str, db: Session = Depends(get_db)):
-    """Analytical sprint WS4: Graham floors (Graham Number, NCAV, NNWC) + MoS."""
+    """Analytical sprint WS4: Graham floors (Graham Number, NCAV, NNWC) + MoS. Read-only."""
     cid = normalize_company_id(company_id) or company_id
     company = db.get(Company, cid)
     if not company:
@@ -567,9 +576,8 @@ def get_company_graham(company_id: str, db: Session = Depends(get_db)):
 
     from app.services.graham_engine import compute_graham
 
-    out = compute_graham(db, cid)
-    db.commit()
-    return out
+    # compute_graham is pure (no DB writes), so no commit needed
+    return compute_graham(db, cid)
 
 
 @router.get("/companies/{company_id}/practitioner")
@@ -592,11 +600,10 @@ def get_company_valuation(company_id: str, db: Session = Depends(get_db)):
     if not company:
         raise HTTPException(status_code=404, detail=f"Company {cid} not found")
 
-    # Ensure Reverse DCF exists
+    # Read-only: never materialize Reverse DCF on GET
     dcf = db.get(ValuationReverseDCF, cid)
     if not dcf:
-        dcf = compute_and_store_reverse_dcf(db, cid)
-        db.commit()
+        raise HTTPException(status_code=404, detail=f"Valuation not materialized for {cid}. Trigger background recompute or ingest.")
 
     # Trust sprint C: freshness classification for price + FCF basis.
     from datetime import datetime as _dt, timezone as _tz
@@ -662,21 +669,32 @@ def restore_company(company_id: str, db: Session = Depends(get_db)):
 
 @router.get("/screener/presets")
 def get_screener_presets(db: Session = Depends(get_db)):
-    """Lists institutional deep-value and forensic screener presets including user custom presets."""
-    ensure_all_presets(db)
+    """Lists institutional deep-value and forensic screener presets including user custom presets. Read-only."""
     presets = db.execute(
         select(ScreenerPreset).order_by(ScreenerPreset.is_system_preset.desc(), ScreenerPreset.name.asc())
     ).scalars().all()
-    return [
-        {
-            "id": p.id,
-            "name": p.name,
-            "criteria": p.criteria_json,
-            "is_system": p.is_system_preset,
-            "auto_run_on_refresh": bool(p.criteria_json.get("auto_run_on_refresh", False)) if p.criteria_json else False,
-        }
-        for p in presets
-    ]
+    if presets:
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "criteria": p.criteria_json,
+                "is_system": p.is_system_preset,
+                "auto_run_on_refresh": bool(p.criteria_json.get("auto_run_on_refresh", False)) if p.criteria_json else False,
+            }
+            for p in presets
+        ]
+    # Read-only fallback: return in-memory system presets when DB not yet seeded (avoids write on GET)
+    try:
+        from app.services.screener_engine import SYSTEM_PRESETS
+        from app.services.screener_bundle import CANONICAL_PRESETS
+        combined = {p["id"]: p for p in SYSTEM_PRESETS + CANONICAL_PRESETS}
+        return [
+            {"id": pid, "name": p["name"], "criteria": p["criteria"], "is_system": True, "auto_run_on_refresh": False}
+            for pid, p in sorted(combined.items())
+        ]
+    except Exception:
+        return []
 
 
 @router.post("/screener/presets")

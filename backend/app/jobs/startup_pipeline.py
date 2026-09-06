@@ -32,10 +32,18 @@ logger = logging.getLogger("startup_pipeline")
 
 
 def run_startup_sync(limit: int | None = None, sync_only: bool = True, force: bool = False) -> dict[str, int]:
-    """Synchronous pass at startup: ensures metrics are computed for all companies in DB."""
+    """Synchronous pass at startup: ensures metrics are computed and presets seeded."""
     logger.info("Running startup pipeline: computing missing metrics for universe (limit=%s, sync_only=%s, force=%s)...", limit, sync_only, force)
     db = SessionLocal()
     try:
+        # Seed screener presets once at startup (read path is now read-only)
+        try:
+            from app.services.screener_bundle import ensure_all_presets
+            ensure_all_presets(db)
+            logger.info("Screener presets ensured at startup")
+        except Exception as exc:
+            logger.warning("Preset seeding failed: %s", exc)
+            db.rollback()
         res = populate_missing_metrics(db, limit=limit, fetch_live=not sync_only, force=force)
         logger.info(
             "Startup metrics check finished: scanned=%d, populated=%d, errors=%d, benchmarks=%d",

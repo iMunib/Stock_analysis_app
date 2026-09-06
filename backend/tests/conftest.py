@@ -46,6 +46,23 @@ def imported_db(seed_workbook):
     _cfg.set_main_option("sqlalchemy.url", f"sqlite:///{TEST_DB.as_posix()}")
     _alembic_command.stamp(_cfg, "head")
     run_import(force=True, seed_path=seed_workbook)
+    # Pre-materialize TTM, valuation, penman etc. so GET handlers can be read-only (no writes)
+    try:
+        from app.services.calculation_pipeline import populate_missing_metrics
+        from app.services.screener_bundle import ensure_all_presets
+        db = SessionLocal()
+        try:
+            ensure_all_presets(db)
+        except Exception:
+            pass
+        try:
+            populate_missing_metrics(db, fetch_live=False, force=False)
+        except Exception:
+            pass
+        finally:
+            db.close()
+    except Exception:
+        pass
     yield SessionLocal()
     SessionLocal.close_all()
     engine.dispose()

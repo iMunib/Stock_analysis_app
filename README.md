@@ -289,12 +289,12 @@ docker compose logs api --tail 50
 
 # Backend tests — 322 passed, 10 warnings (322 baseline; includes trust/forensics/valuation/portfolio/chat/canada/insiders/technicals/curriculum/sector/backtesting/ops/governance)
 cd backend
-python -m pytest -q
+python -m pytest tests/ -q   # 322 passed in ~86s
 
-# Frontend — 167 tests across 34 files, 147 modules Vite, 0 TypeScript errors
+# Frontend — 170 tests across 34 files, 149 modules Vite, 0 TypeScript errors
 cd ..\frontend
-npm test -- --run        # vitest run
-npm run build            # tsc strict + vite → dist/ (✓ 147 modules, gzip ~195 kB)
+npm test -- --run        # vitest run → 170 passed
+npm run build            # tsc strict + vite → dist/ (✓ 149 modules, JS 834 kB / gzip 218 kB)
 
 # Playwright e2e (UI must be up; then `npx playwright install chromium`)
 npx playwright test app.spec.ts
@@ -320,8 +320,8 @@ Importer is idempotent and mtime-skipped. Force re-import: `docker compose exec 
 - **Scores:** 924 scored (`composite` non-NULL), 4 `insufficient_data` (LMN.TO 0 FY + 3 sparse micro-caps are honest). Growth pillar populated for ~690+ names with ≥3 FY; staples + new quality are 4/4 where history permits (LMN `insufficient_data` is correct).
 - **Quality compounders verified:** Staples PG (5.89), KO (5.08), PEP (4.99), COST (4.30), WMT (5.00), CL (4.66), GIS (3.95), KMB (6.32), HSY (4.54), CHD (5.74), MKC (6.22), MDLZ (4.46), JNJ, NSRGY + New: RLI (0.44 Altman, 17.9% ROIC), GGG (14.5 Altman, 24.3% ROIC), TTEK (4.47), MEDP (11.31), ASML, LVMUY (6.8), HEI-A (7.25), MTY.TO (3.17), ENGH.TO (8.62) — each with 10-year timeline, Sloan/Beneish/Altman/TTM.
 - **Migrations:** head `h7i8j9k0l1m2` (wave5 portfolio/alerts, merges `23317f57050f` + `g1h2i3j4k5l6`). Chain: `ccf1cb226400` (initial) → `b7f2a91c4d50` → `c3d4e5f6a780` → `d6e7f8a9b001` → … → `a1b2c3d4e5f6` → `23317f57050f` → `h7i8j9k0l1m2`. Live DB `alembic_version = h7i8j9k0l1m2` matches head. `lifespan` refuses to boot on mismatch (manual `alembic upgrade head` or `stamp head`).
-- **Tests:** backend `pytest` **322 passed** (10 warnings); frontend `vitest` **167 passed** across **34 files**; `tsc && vite build` **0 errors, 147 modules** (CSS 41.8 kB gzip 8.7 kB, JS 743.7 kB gzip 194.6 kB).
-- **Docker:** `invest-api` (:8000) and `invest-frontend` (:5173) both `healthy`; `GET /health` → `{"status":"ok"}`, `GET /ready` → `{"status":"ready","database":"ok"}`; logs show `.SSS` millisecond timestamps; zero crashes.
+- **Tests:** backend `pytest` **322 passed** (10 warnings); frontend `vitest` **170 passed** across **34 files**; `tsc && vite build` **0 errors, 149 modules** (CSS 48.1 kB gzip 9.9 kB, JS 834.8 kB gzip 218.4 kB).
+- **Docker:** `invest-api` (:8000) and `invest-frontend` (:5173) both `healthy` on `0.0.0.0`, `restart: unless-stopped`, `service_healthy` gate; `GET /health` → `{"status":"ok"}`, `GET /ready` → `{"status":"ready","database":"ok"}`; logs show `.SSS` millisecond timestamps; zero crashes.
 - **Config:** LLM `minimax/minimax-m3:free` (fallback `mistralai/mistral-small-24b-instruct-2501:free`, 45s guard, cached in `llm_cache`); HALAL `unknown` by default; 12-1 momentum is **technical context outside composite**; factor backtests never alter scores; CAD/USD never blended.
 
 **Design system 2026-09-02:**
@@ -334,12 +334,15 @@ Importer is idempotent and mtime-skipped. Force re-import: `docker compose exec 
 ```
 AGENTS.md                  ← ops runbook (short, authoritative)
 README.md                  ← this file (sole definitive guide)
+.github/workflows/deploy.yml ← CI: test-and-verify (pytest+vitest+build) → deploy-to-oci (appleboy/ssh-action, git pull + compose up)
+scripts/setup_oci_server.sh ← OCI bootstrap: 4GB swap, Docker, iptables (80,443,5173,8000) + UFW, /home/ubuntu/app/data/backups
+scripts/ship_to_oci.ps1    ← one-click helper: -OciIp <IP>, bootstraps + scp data/app.db + scp .env (PowerShell 5.1)
 docs/
   DATA_CONTRACT.md         ← 57-col dictionary + currency/ID/provenance rules
   SCORING_SPEC.md          ← locked v1 scoring design
   reports/INDEX.md         ← engineering milestone archive index (historical)
-docker-compose.yml         ← api (:8000) + frontend profile (:5173), seed genesis-only comment
-.env.example               ← OPENROUTER_API_KEY / SEC_USER_AGENT / DATABASE_URL / REFRESH_*
+docker-compose.yml         ← api 0.0.0.0:8000 (restart unless-stopped, healthcheck, ./data:/app/data) + frontend profile 0.0.0.0:5173 (service_healthy)
+.env.example               ← OPENROUTER_API_KEY / SEC_USER_AGENT / DATABASE_URL=sqlite:////app/data/app.db / ENVIRONMENT=production / VITE_API_BASE_URL= / REFRESH_*
 backend/
   app/main.py              ← FastAPI + millisecond logging + migration guard + JobWorker
   app/config.py            ← env + seed discovery
@@ -362,11 +365,13 @@ frontend/
   src/screens/             ← Home, Dossier, Compare (with clearCompare + basket strip), Screen, Sector, Portfolio, Ops, Governance, Curriculum, SectorRotation, etc.
   vite.config.ts           ← jsdom, localStorage, coverage
   package.json             ← scripts: dev / build (tsc && vite) / test (vitest run) / e2e (playwright)
-  nginx.conf               ← proxy /api → api:8000, proxy_read_timeout 180s (LLM)
-  dist/                    ← static build (147 modules)
+  nginx.conf               ← proxy /api → api:8000, proxy_read_timeout 120s (LLM), listen 80
+  dist/                    ← static build (149 modules)
 seed/                      ← READ-ONLY genesis: Sector_Financials_Final_Owner.xlsx (mtime 2026-08-22, git diff clean) + raw/sec_ticker_exchange.json
 legacy/                    ← archived refresh.py copies (never executed)
-data/                      ← SQLite app.db (WAL, gitignored, 16 MB, host mount → /app/data/app.db), backups/, sec_tickers_cache.json
+data/                      ← SQLite app.db (WAL, gitignored — data/app.db + data/backups/ + WAL/SHM, 16 MB, host ./data → /app/data), backups/, sec_tickers_cache.json
+.gitignore                 ← .env + *.key/*.pem/*.pub/*.p12/*.pfx + data/app.db + data/backups/ + WAL/SHM strict
+.env                       ← (gitignored) local secrets; production on OCI at /home/ubuntu/app/.env
 ```
 
 Hidden/temp files (`__pycache__/`, `.pytest_cache/`, backend `app.db` 4096-byte stub, `test_ephem2.db`) are gitignored and pruned; only `data/app.db` is operational.
@@ -427,4 +432,70 @@ Then `docker compose restart api`. `GET /api/v1/system/health/telemetry` shows `
 
 ---
 
-*Generated 2026-09-06 — 322 backend / 167 frontend tests green, 147 Vite modules (768k), 928-company quality universe verified, repository cleaned (5 root scripts + 3 frontend mjs + caches pruned).* 
+## 16. Oracle Cloud (OCI) Deployment — Automated CI/CD (2026-09-06)
+
+**Target:** `VM.Standard.E2.1.Micro` — Ubuntu 24.04, AMD64, 1 OCPU, 1 GB RAM, 50 GB boot — `https://github.com/iMunib/Stock_analysis_app`
+
+The repository is fully automated for OCI. Manual work is limited to one local command and three GitHub secrets.
+
+### 16.1 What the automation does
+
+| Layer | File | Role |
+|---|---|---|
+| **Bootstrap** | `scripts/setup_oci_server.sh` | Idempotent one-shot: 4 GB swap (`/swapfile` + `vm.swappiness=10` + `/etc/fstab`), `apt-get update` + `ca-certificates curl gnupg git ufw iptables-persistent`, Docker Engine + Compose via `get.docker.com` + `usermod -aG docker ubuntu`, Oracle iptables unlock (`INPUT 6 … --dports 80,443,5173,8000`), `netfilter-persistent save`, `ufw allow 22/80/443/5173/8000` + `ufw --force enable`, `mkdir -p /home/ubuntu/app/data/backups` |
+| **CI** | `.github/workflows/deploy.yml` | `test-and-verify` (ubuntu-latest, Python 3.12 `pip install -r backend/requirements.txt` → `python -m pytest tests/ -q`, Node 20 `npm ci` → `npm test -- --run` + `npm run build`) — gate for deploy. `deploy-to-oci` (only on `push` to `main` after tests pass) via `appleboy/ssh-action@v1.0.3` with `OCI_HOST / OCI_USERNAME / OCI_SSH_KEY` → `git clone || fetch+reset`, `docker compose --profile frontend down && up --build -d`, `docker compose ps` + logs |
+| **Local helper** | `scripts/ship_to_oci.ps1 -OciIp <IP>` | One-click: (1) bootstrap remote via `ssh -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" ubuntu@$OciIp "curl -fsSL https://raw.githubusercontent.com/iMunib/Stock_analysis_app/main/scripts/setup_oci_server.sh -o setup.sh && chmod +x setup.sh && ./setup.sh"` (uploads local script if present, else curls from GitHub), (2) `scp -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" "data/app.db" ubuntu@${OciIp}:/home/ubuntu/app/data/app.db`, (3) `scp -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" ".env" ubuntu@${OciIp}:/home/ubuntu/app/.env`, then prints next-step `docker compose --profile frontend up --build -d` |
+| **Persistence** | `docker-compose.yml` + `.gitignore` + `.env.example` | `docker-compose.yml` binds `./data:/app/data` (SQLite WAL durable store), `0.0.0.0:8000:8000` + `0.0.0.0:5173:80` with `restart: unless-stopped` and `service_healthy` gate; `frontend/nginx.conf` proxies `/api/` → `api:8000` with `proxy_read_timeout 120s`; `.gitignore` strictly ignores `.env`, `*.key/*.pem/*.pub/*.p12/*.pfx`, `data/app.db`, `data/*.db-journal|wal|shm`, `data/backups/`; `.env.example` documents production defaults `DATABASE_URL=sqlite:////app/data/app.db`, `ENVIRONMENT=production`, `VITE_API_BASE_URL=` (same-origin) |
+
+### 16.2 One-time setup (operator)
+
+```powershell
+# 1. Create three GitHub repo secrets (Settings → Secrets → Actions):
+#    OCI_HOST      = <OCI public IP>         e.g., 129.80.x.x
+#    OCI_USERNAME  = ubuntu
+#    OCI_SSH_KEY   = <contents of ssh-key-2026-09-06.key> (private key, no passphrase)
+
+# 2. Open OCI Console → VCN → Security List → Ingress: allow 22, 80, 443, 5173, 8000 from 0.0.0.0/0
+#    (OS-level iptables/UFW is handled by setup_oci_server.sh, but VCN still gates externally.)
+
+# 3. From your Windows workstation (repo root), one command ships everything:
+powershell -ExecutionPolicy Bypass -File scripts/ship_to_oci.ps1 -OciIp 129.80.x.x
+
+# 4. SSH and bring stack up (if not already via CI push):
+ssh -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" ubuntu@129.80.x.x
+cd /home/ubuntu/app
+# helper already created /home/ubuntu/app/data/backups; if fresh VM without DB/.env, the helper uploaded them
+docker compose --profile frontend up --build -d
+docker compose ps
+docker compose logs api --tail 50
+curl http://localhost:8000/health   # {"status":"ok"}
+curl http://localhost:8000/ready    # {"status":"ready","database":"ok"}
+# UI: http://<OCI_IP>:5173   API: http://<OCI_IP>:8000
+```
+
+After this, **every `git push` to `main` auto-runs tests and redeploys** via GitHub Actions — no manual SSH required. `data/app.db` and `.env` are never overwritten by `git reset --hard` (deploy script preserves them; `.gitignore` prevents commits).
+
+### 16.3 Persistence & safety guarantees
+
+- **DB is gitignored live state.** `data/app.db` + `data/backups/` + WAL/SHM files are ignored, so local mutations and remote 928-company production DB never collide in Git. CI `git fetch && reset --hard origin/main` preserves `data/app.db` and `.env` via the deploy script’s stash/restore guard.
+- **`.env` never committed.** `.env`, `*.key`, `*.pem`, `*.pub` are strictly ignored; `.env.example` is the only template. Production `DATABASE_URL` is `sqlite:////app/data/app.db` (absolute Docker path); local dev may use `sqlite:///./data/app.db`.
+- **Swap prevents OOM.** 1 GB Micro without swap OOM-kills `uvicorn` + `alembic` + `importer` during cold build. 4 GB `/swapfile` + `vm.swappiness=10` + `fstab` persistence is created idempotently; re-running the script is safe.
+- **Firewall dual-layer.** Oracle Ubuntu images ship restrictive `iptables INPUT` chain — the script inserts `ACCEPT` for `80,443,5173,8000` and persists via `netfilter-persistent`, then enables `UFW` for the same ports + `22`. VCN Security List must still allow them externally (step 2 above).
+
+### 16.4 Verify after deploy
+
+```bash
+# On OCI host:
+free -h                          # Swap: 4.0G
+swapon --show                    # /swapfile 4G
+sudo ufw status verbose          # 22,80,443,5173,8000 ALLOW
+sudo iptables -L INPUT -n --line-numbers | head -20
+docker compose --profile frontend ps   # invest-api (healthy) + invest-frontend (Up)
+docker compose logs api --tail 30    # millisecond timestamps .SSS
+curl -s http://localhost:8000/health | jq
+curl -s http://localhost:8000/api/v1/stats | jq
+```
+
+---
+
+*Generated 2026-09-06 — 322 backend / 170 frontend tests green, 149 Vite modules (834 kB / 218 kB gzip), 928-company quality universe verified, OCI bootstrap + GitHub Actions CI/CD automated (VM.Standard.E2.1.Micro, 4 GB swap, UFW+iptables unlock, 0.0.0.0 binds, DB/.env gitignored persistence).* 

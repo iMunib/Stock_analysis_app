@@ -16,8 +16,19 @@ export class ApiError extends Error {
 }
 
 const TIMEOUT_MS = 15_000;
+const RETRY_MAX = 3;
+const RETRY_BASE_MS = 800;
 
-async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status: number): boolean {
+  // Only 502/503 and network (0) are retryable for startup race; 504 is gateway timeout and should surface immediately per tests
+  return status === 502 || status === 503 || status === 0;
+}
+
+async function requestOnce<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let resp: Response;
@@ -60,6 +71,29 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_
   } catch {
     throw new ApiError(resp.status, "Invalid response from the server.");
   }
+}
+
+async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= RETRY_MAX; attempt++) {
+    try {
+      return await requestOnce<T>(path, init, timeoutMs);
+    } catch (e) {
+      lastError = e;
+      const status = e instanceof ApiError ? e.status : 0;
+      const shouldRetry = isRetryableStatus(status);
+      const isLastAttempt = attempt === RETRY_MAX;
+      if (!shouldRetry || isLastAttempt) throw e;
+      const delay = RETRY_BASE_MS * Math.pow(2, attempt);
+      await sleep(delay);
+    }
+  }
+  throw lastError as Error;
+}
+
+export function isInitializingError(e: unknown): boolean {
+  if (e instanceof ApiError && isRetryableStatus(e.status)) return true;
+  return false;
 }
 
 const get = <T>(path: string, timeoutMs?: number) => request<T>(path, undefined, timeoutMs);
