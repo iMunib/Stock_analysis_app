@@ -1,4 +1,6 @@
 
+import { useId } from "react";
+
 export interface PillarRadarProps {
   quality: number | null | undefined;
   value: number | null | undefined;
@@ -16,9 +18,13 @@ export function PillarRadar({
   size = 220,
   className = "",
 }: PillarRadarProps) {
-  const cx = 110;
-  const cy = 110;
-  const maxR = 70;
+  const rawId = useId().replace(/:/g, "_");
+  const gradId = `radarGrad_${rawId}`;
+  const glowId = `vertexGlow_${rawId}`;
+
+  const cx = 140;
+  const cy = 112;
+  const maxR = 66;
 
   // Scale 0-10 to radius 0-maxR (clamped)
   const getR = (val: number | null | undefined) => {
@@ -47,15 +53,29 @@ export function PillarRadar({
   const ariaLabel = `Pillar radar chart: Quality ${qStr}, Value ${vStr}, Growth ${gStr}, Risk ${rStr}`;
 
   return (
-    <div className={`relative flex flex-col items-center ${className}`}>
+    <div className={`relative flex flex-col items-center select-none ${className}`}>
       <svg
-        viewBox="0 0 220 220"
+        viewBox="0 0 280 230"
         width={size}
-        height={size}
+        height={Math.round((size * 230) / 280)}
         role="img"
         aria-label={ariaLabel}
         className="overflow-visible"
       >
+        <defs>
+          <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
+            <stop offset="65%" stopColor="var(--accent)" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.04" />
+          </radialGradient>
+          <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="var(--accent)" floodOpacity="0.6" />
+          </filter>
+        </defs>
+
+        {/* Circular background tint */}
+        <circle cx={cx} cy={cy} r={maxR} fill="var(--bg-2)" opacity="0.3" />
+
         {/* Background Grid: Concentric Reference Polygons (2.5, 5.0, 7.5, 10.0) */}
         {[0.25, 0.5, 0.75, 1.0].map((step) => {
           const r = maxR * step;
@@ -67,53 +87,66 @@ export function PillarRadar({
               stroke="var(--border)"
               strokeWidth={step === 1.0 ? "1.5" : "1"}
               strokeDasharray={step === 1.0 ? undefined : "2 2"}
+              opacity={step === 1.0 ? 0.9 : 0.6}
             />
           );
         })}
 
+        {/* Diagonal Cross Webbing (Corner to Corner) */}
+        <line x1={cx - maxR * 0.707} y1={cy - maxR * 0.707} x2={cx + maxR * 0.707} y2={cy + maxR * 0.707} stroke="var(--border)" strokeWidth="0.75" strokeDasharray="1 3" opacity="0.5" />
+        <line x1={cx - maxR * 0.707} y1={cy + maxR * 0.707} x2={cx + maxR * 0.707} y2={cy - maxR * 0.707} stroke="var(--border)" strokeWidth="0.75" strokeDasharray="1 3" opacity="0.5" />
+
         {/* Cross Axes */}
-        <line x1={cx} y1={cy - maxR} x2={cx} y2={cy + maxR} stroke="var(--border)" strokeWidth="1" />
-        <line x1={cx - maxR} y1={cy} x2={cx + maxR} y2={cy} stroke="var(--border)" strokeWidth="1" />
+        <line x1={cx} y1={cy - maxR} x2={cx} y2={cy + maxR} stroke="var(--border-strong)" strokeWidth="1" />
+        <line x1={cx - maxR} y1={cy} x2={cx + maxR} y2={cy} stroke="var(--border-strong)" strokeWidth="1" />
 
         {/* Value Polygon */}
         <polygon
           points={polygonPoints}
-          fill="var(--accent-weak)"
+          fill={`url(#${gradId})`}
           stroke="var(--accent)"
-          strokeWidth="2"
+          strokeWidth="2.2"
           strokeLinejoin="round"
           className="transition-all duration-300"
         />
 
         {/* Quality Vertex (North) */}
         {quality !== null && quality !== undefined ? (
-          <circle cx={qPoint.x} cy={qPoint.y} r="3.5" fill="var(--accent)" />
+          <g filter={`url(#${glowId})`}>
+            <circle cx={qPoint.x} cy={qPoint.y} r="3.5" fill="var(--accent)" />
+          </g>
         ) : (
           <circle cx={cx} cy={cy - maxR} r="3.5" fill="var(--bg-1)" stroke="var(--ink-2)" strokeWidth="1.5" />
         )}
 
         {/* Value Vertex (East) */}
         {value !== null && value !== undefined ? (
-          <circle cx={vPoint.x} cy={vPoint.y} r="3.5" fill="var(--accent)" />
+          <g filter={`url(#${glowId})`}>
+            <circle cx={vPoint.x} cy={vPoint.y} r="3.5" fill="var(--accent)" />
+          </g>
         ) : (
           <circle cx={cx + maxR} cy={cy} r="3.5" fill="var(--bg-1)" stroke="var(--ink-2)" strokeWidth="1.5" />
         )}
 
         {/* Growth Vertex (South) */}
         {growth !== null && growth !== undefined ? (
-          <circle cx={gPoint.x} cy={gPoint.y} r="3.5" fill="var(--accent)" />
+          <g filter={`url(#${glowId})`}>
+            <circle cx={gPoint.x} cy={gPoint.y} r="3.5" fill="var(--accent)" />
+          </g>
         ) : (
           <circle cx={cx} cy={cy + maxR} r="3.5" fill="var(--bg-1)" stroke="var(--ink-2)" strokeWidth="1.5" />
         )}
 
         {/* Risk Vertex (West) */}
         {risk !== null && risk !== undefined ? (
-          <circle cx={rPoint.x} cy={rPoint.y} r="3.5" fill="var(--accent)" />
+          <g filter={`url(#${glowId})`}>
+            <circle cx={rPoint.x} cy={rPoint.y} r="3.5" fill="var(--accent)" />
+          </g>
         ) : (
           <circle cx={cx - maxR} cy={cy} r="3.5" fill="var(--bg-1)" stroke="var(--ink-2)" strokeWidth="1.5" />
         )}
 
-        {/* Axis Labels */}
+        {/* Axis Labels (positioned safely inside viewBox 280x230) */}
         <text
           x={cx}
           y={cy - maxR - 12}

@@ -31,7 +31,7 @@ describe("BeneishCard", () => {
     expect(screen.getByText("Beneish M-Score Forensic Screen")).toBeDefined();
     expect(screen.getByText("-2.45")).toBeDefined();
     expect(screen.getByText("Clean Profile (Non-manipulator)")).toBeDefined();
-    expect(screen.getByText("DSRI")).toBeDefined();
+    expect(screen.getAllByText("DSRI").length).toBeGreaterThan(0);
     expect(screen.getByText("1.02")).toBeDefined();
   });
 

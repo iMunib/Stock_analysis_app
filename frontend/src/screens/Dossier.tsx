@@ -7,7 +7,6 @@ import {
   coveragePenaltyCopy,
   gapLabel,
   growthCopy,
-  halalCopy,
   signalCopy,
   whyBullets,
 } from "../api/copy";
@@ -59,6 +58,7 @@ import ExportCenterModal from "../components/export/ExportCenterModal";
 import CanadianTaxCard from "../components/dossier/CanadianTaxCard";
 import InsiderActivityCard from "../components/dossier/InsiderActivityCard";
 import TechnicalContextCard from "../components/dossier/TechnicalContextCard";
+import HalalComplianceCard from "../components/dossier/HalalComplianceCard";
 
 
 type DossierTab =
@@ -429,6 +429,7 @@ export default function Dossier() {
                 <div className="flex flex-col items-end gap-0.5">
                   <div className="flex items-center gap-2">
                     <SignalBadge signal={s?.signal ?? "insufficient_data"} />
+                    {data.halal && <HalalBadge status={data.halal.status} />}
                     {s?.composite != null && (
                       <span className="font-mono text-base font-bold text-accent bg-accent-weak px-2 py-0.5 rounded border border-accent/30">
                         {s.composite.toFixed(1)}/10
@@ -1064,12 +1065,7 @@ export default function Dossier() {
 
           {/* Halal Screening Summary */}
           {data.halal && (
-            <Card title="Halal Screening (AAOIFI)" subtitle="Informational compliance flag - never a filter" padding="sm">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <HalalBadge status={data.halal.status ?? "unknown"} />
-                <span className="text-ink-1">{halalCopy(data.halal.status)}</span>
-              </div>
-            </Card>
+            <HalalComplianceCard halal={data.halal} />
           )}
 
           {/* Canadian Tax-Account Placement Guide - CAD securities & US dividend holdings */}

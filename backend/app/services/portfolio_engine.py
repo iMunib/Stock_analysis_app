@@ -26,13 +26,14 @@ VALID_CURRENCIES = {"CAD", "USD"}
 
 
 def create_account(db: Session, name: str, account_type: str, currency: str) -> PortfolioAccount:
+    if not name or not name.strip():
+        raise ValueError("account name must be non-empty")
     at = account_type.strip().upper()
-    # Normalize Paper/Simulation
     if at in ("PAPER", "SIMULATION", "PAPER/SIMULATION"):
         at = "Paper"
-    if at not in VALID_ACCOUNT_TYPES and at not in ("PAPER/SIMULATION",):
-        # Allow Paper variant
-        at = account_type
+    # Strict validation: only allowed types
+    if at not in VALID_ACCOUNT_TYPES:
+        raise ValueError(f"account_type must be one of {sorted(VALID_ACCOUNT_TYPES)}")
     cur = currency.strip().upper()
     if cur not in VALID_CURRENCIES:
         raise ValueError("currency must be CAD or USD")

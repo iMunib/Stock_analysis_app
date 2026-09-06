@@ -61,7 +61,11 @@ def post_account(body: AccountCreateIn, db: Session = Depends(get_db)):
     try:
         acct = create_account(db, body.name, body.account_type, body.currency)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        if "account_type" in msg.lower() or "currency" in msg.lower():
+            # Validation error maps to 422 to match Pydantic semantics
+            raise HTTPException(status_code=422, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
     return {"id": acct.id, "name": acct.name, "account_type": acct.account_type, "currency": acct.currency, "created_at": acct.created_at.isoformat() if acct.created_at else None}
 
 
@@ -74,11 +78,15 @@ def get_accounts(db: Session = Depends(get_db)):
 @router.post("/transactions")
 def post_transaction(body: TransactionCreateIn, db: Session = Depends(get_db)):
     cid = normalize_company_id(body.company_id) or body.company_id
-    # Validate account exists etc in engine
     try:
         txn = add_transaction(db, body.account_id, cid, body.txn_type, body.quantity, body.price_per_share, body.txn_date, body.currency, body.fees or 0, body.notes)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        if "quantity" in msg.lower() or "price_per_share" in msg.lower():
+            raise HTTPException(status_code=422, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
     return {"id": txn.id, "account_id": txn.account_id, "company_id": txn.company_id, "txn_type": txn.txn_type, "quantity": txn.quantity, "price_per_share": txn.price_per_share, "currency": txn.currency, "txn_date": txn.txn_date.isoformat()}
 
 

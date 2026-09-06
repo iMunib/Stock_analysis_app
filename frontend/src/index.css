@@ -49,6 +49,22 @@ table {
   border-collapse: collapse;
 }
 
+/* Sleek custom scrollbars for data tables and panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-0);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
 /* Eliminate ugly horizontal scrollbars across browsers */
 .no-scrollbar::-webkit-scrollbar,
 .scrollbar-none::-webkit-scrollbar {
@@ -61,6 +77,51 @@ table {
 .scrollbar-none {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
+}
+
+/* Institutional Terminal Glassmorphism & Depth Primitives */
+.terminal-card {
+  position: relative;
+  background-color: var(--bg-1);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.terminal-glass {
+  background: linear-gradient(145deg, rgba(19, 25, 34, 0.92) 0%, rgba(10, 14, 20, 0.96) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="light"] .terminal-glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
+.glow-accent {
+  box-shadow: 0 0 16px -2px rgba(224, 168, 79, 0.25);
+}
+.glow-pos {
+  box-shadow: 0 0 16px -2px rgba(74, 222, 128, 0.25);
+}
+.glow-neg {
+  box-shadow: 0 0 16px -2px rgba(248, 113, 113, 0.25);
+}
+
+@keyframes tickerAnimation {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  display: flex;
+  width: max-content;
+  animation: tickerAnimation 45s linear infinite;
+}
+.animate-ticker:hover {
+  animation-play-state: paused;
 }
 
 /* Purposeful CSS Motion System */

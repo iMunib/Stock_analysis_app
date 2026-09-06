@@ -423,32 +423,302 @@ export const GLOSSARY: GlossaryEntry[] = [
     why: "Distils the dossier into three yes/no questions a new investor can check in one minute.",
     how_to_read: "All three green = investigates further. Any red = understand why before proceeding.",
   },
+  // --- Core valuation & accounting acronyms (added for full coverage) ---
+  {
+    term: "TTM",
+    short: "Trailing Twelve Months — sum of the last 4 quarters (or last 12 months) of a metric.",
+    why: "Smooths seasonality and shows the most recent full-year run-rate versus a single quarter.",
+    how_to_read: "TTM revenue $10B means $10B sold in the last 12 months. Compare TTM vs FY to spot inflections.",
+  },
+  {
+    term: "ROIC",
+    short: "Return on Invested Capital — NOPAT divided by invested capital (debt + equity − cash).",
+    why: "Measures how well cash invested in the business is being turned into after-tax operating profit.",
+    how_to_read: "Above 10% with high confidence is strong. Low or negative invested capital makes ROIC not meaningful.",
+  },
+  {
+    term: "DCF",
+    short: "Discounted Cash Flow — present value of projected future cash flows discounted at a hurdle rate.",
+    why: "Anchors valuation to cash, not multiples; small assumption changes drive big value swings.",
+    how_to_read: "DCF is a what-if model, not a price target. Question growth, margin, and WACC before trusting the output.",
+  },
+  {
+    term: "EPV",
+    short: "Earnings Power Value — Greenwald's no-growth value: NOPAT / WACC, floored by reproduction cost.",
+    why: "Asks what the business is worth if it never grows but sustains current earnings power.",
+    how_to_read: "EPV > market cap suggests the market expects decline. EPV vs reproduction cost = franchise value.",
+  },
+  {
+    term: "DDM",
+    short: "Dividend Discount Model — present value of future dividends discounted at cost of equity.",
+    why: "Values the cash actually returned to shareholders; best when dividends are stable and relevant.",
+    how_to_read: "Needs ≥3 years of dividends. Banks/insurers often fit DDM better than FCF DCF.",
+  },
+  {
+    term: "EBIT",
+    short: "Earnings Before Interest and Tax — operating income before financing and tax.",
+    why: "Pure operating profit before capital-structure and tax choices distort it.",
+    how_to_read: "Compare EBIT margin (EBIT/revenue) across peers to gauge operating efficiency.",
+  },
+  {
+    term: "EBITDA",
+    short: "EBIT plus Depreciation & Amortization — cash-ish operating profit before non-cash charges.",
+    why: "Approximates recurring cash generation and is the denominator for EV/EBITDA multiples.",
+    how_to_read: "High EBITDA margin is good, but check if high D&A later forces heavy capex to sustain it.",
+  },
+  {
+    term: "CAPEX",
+    short: "Capital Expenditures — cash spent to buy or maintain property, plant, and equipment.",
+    why: "Capex sustains future revenue; heavy capex can consume all operating cash flow.",
+    how_to_read: "FCF = Operating Cash Flow − CAPEX. Falling capex may flatter FCF temporarily.",
+  },
+  {
+    term: "CAGR",
+    short: "Compound Annual Growth Rate — smoothed yearly growth rate between two points.",
+    why: "One number summarises multi-year compounding; hides volatility along the way.",
+    how_to_read: "5% CAGR over 5 years means ~27% total growth. Needs ≥3 years and positive start/end values.",
+  },
+  {
+    term: "DSO",
+    short: "Days Sales Outstanding — average days to collect cash after a sale (receivables / revenue × 365).",
+    why: "Rising DSO can mean channel stuffing or lax credit.",
+    how_to_read: "Stable or falling DSO is healthy. A jump >10% YoY warrants a question.",
+  },
+  {
+    term: "DIO",
+    short: "Days Inventory Outstanding — average days inventory sits before being sold (inventory / COGS × 365).",
+    why: "Rising DIO can mean over-production or soft demand.",
+    how_to_read: "Manufacturer/retailer focus. Compare trend vs revenue growth.",
+  },
+  {
+    term: "DPO",
+    short: "Days Payable Outstanding — average days to pay suppliers (payables / COGS × 365).",
+    why: "Lengthening DPO conserves cash but may strain suppliers if stretched too far.",
+    how_to_read: "Rising DPO lowers CCC. Sudden spikes can mean cash stress.",
+  },
+  {
+    term: "CCC",
+    short: "Cash Conversion Cycle — DSO + DIO − DPO; days cash is tied up in operations.",
+    why: "Shorter CCC means faster cash recycling; longer means working-capital hunger.",
+    how_to_read: "Negative CCC (collect before paying) is elite (e.g., platform businesses). Watch trend, not single point.",
+  },
+  {
+    term: "SBC",
+    short: "Stock-Based Compensation — non-cash expense for employee stock awards.",
+    why: "Inflates reported earnings while diluting owners silently.",
+    how_to_read: "High SBC/revenue (>5–10%) can mean true profitability is lower once dilution is counted.",
+  },
+  {
+    term: "COGS",
+    short: "Cost of Goods Sold — direct costs to make what was sold.",
+    why: "Gross profit = Revenue − COGS; low COGS drives high gross margin pricing power.",
+    how_to_read: "Compare COGS trend vs revenue: widening gap can mean pricing pressure.",
+  },
+  {
+    term: "Piotroski",
+    short: "Piotroski F-Score (2000) — 9-point financial-strength score from profitability, leverage, and efficiency signals.",
+    why: "A cheap stock with a high F-Score (7–9) is less likely to be a value trap.",
+    how_to_read: "8–9 strong, 5–7 mixed, 0–4 weak. Blank if insufficient history. Publication 2000, US sample.",
+  },
+  {
+    term: "Beneish",
+    short: "Beneish M-Score (1999) — 8-variable manipulation risk score (DSRI, GMI, AQI, SGI, DEPI, SGAI, LVGI, TATA).",
+    why: "M > −1.78 flags elevated earnings-manipulation risk (14% false-positive rate).",
+    how_to_read: "Below −1.78 clean; above −1.78 investigate. Needs 2 years. Publication 1999.",
+  },
+  {
+    term: "Sloan",
+    short: "Sloan Accrual Ratio — (Net Income − Operating Cash Flow) / Average Assets.",
+    why: "High accruals (paper profit without cash) predict future earnings disappointments.",
+    how_to_read: "Near 0 is clean; >0.10 is high accruals/paper earnings; negative means cash-rich earnings.",
+  },
+  {
+    term: "Altman",
+    short: "Altman Z-Score (1968) — solvency distress predictor from 5 ratios (working capital, retained earnings, EBIT, market cap, sales).",
+    why: "Distress zone implies elevated bankruptcy risk within ~2 years in original manufacturing sample.",
+    how_to_read: "Z > 2.99 Safe, 1.81–2.99 Grey, <1.81 Distress. Blank/excluded for banks. Publication 1968.",
+  },
+  {
+    term: "Z-Score",
+    short: "Altman Z-Score value — weighted sum predicting solvency distress.",
+    why: "Single-number solvency gauge; widely watched but sample and era specific.",
+    how_to_read: "See Altman entry. Z-Score alone never decides; combine with coverage and forensic flags.",
+  },
+  {
+    term: "M-Score",
+    short: "Beneish M-Score value — manipulation risk from 8 forensic variables.",
+    why: "Higher (less negative) means more manipulation-like fingerprints.",
+    how_to_read: "Threshold −1.78. See Beneish. Investigate which variable (DSRI, AQI, etc.) drives the flag.",
+  },
+  {
+    term: "DSRI",
+    short: "Days Sales in Receivables Index — receivables growth vs revenue growth (Beneish variable).",
+    why: "DSRI >1 can mean inflated receivables / channel stuffing.",
+    how_to_read: "Contributes positively to M-Score (higher = more risk). Part of 8-variable Beneish.",
+  },
+  {
+    term: "GMI",
+    short: "Gross Margin Index — prior gross margin / current gross margin (Beneish variable).",
+    why: "GMI >1 means margin deterioration which can pressure managers to manipulate.",
+    how_to_read: "Part of Beneish M-Score. Deteriorating margin alone is not manipulation.",
+  },
+  {
+    term: "AQI",
+    short: "Asset Quality Index — (non-current assets ex-PPE / total assets) growth (Beneish variable).",
+    why: "Rising AQI can mean capitalizing costs that should be expensed.",
+    how_to_read: "See AQI Expense Cap. Part of Beneish.",
+  },
+  {
+    term: "SGI",
+    short: "Sales Growth Index — current sales / prior sales (Beneish variable).",
+    why: "High growth firms face pressure to sustain trend.",
+    how_to_read: "Part of Beneish. High SGI alone is not a red flag; with other flags it matters.",
+  },
+  {
+    term: "DEPI",
+    short: "Depreciation Index — prior depreciation rate / current rate (Beneish variable).",
+    why: "DEPI >1 can mean lengthening asset lives to lower expense.",
+    how_to_read: "Part of Beneish. Check if capex and asset notes confirm life changes.",
+  },
+  {
+    term: "SGAI",
+    short: "Sales, General & Administrative Expenses Index — SG&A growth vs sales growth (Beneish variable).",
+    why: "Disproportionate SG&A rise can signal inefficiency.",
+    how_to_read: "Part of Beneish. Rising SGAI warrants margin-trend review.",
+  },
+  {
+    term: "LVGI",
+    short: "Leverage Index — leverage growth (Beneish variable).",
+    why: "Rising leverage amplifies manipulation incentives.",
+    how_to_read: "Part of Beneish. Combine with solvency (Altman) for context.",
+  },
+  {
+    term: "TATA",
+    short: "Total Accruals to Total Assets — income − cash flow scaled by assets (Beneish variable).",
+    why: "High TATA means paper earnings dominate cash earnings.",
+    how_to_read: "Part of Beneish. Compare with Sloan accrual ratio for cross-check.",
+  },
+  {
+    term: "SEC",
+    short: "U.S. Securities and Exchange Commission — regulator for US listed filings (EDGAR).",
+    why: "Source of 10-K filings; CIK links to EDGAR prove provenance.",
+    how_to_read: "Click CIK/EDGAR link to see the original filing auditors signed.",
+  },
+  {
+    term: "EDGAR",
+    short: "SEC's Electronic Data Gathering, Analysis, and Retrieval — public filing database.",
+    why: "Primary source for US 10-K provenance; verifies numbers are from audited filings.",
+    how_to_read: "EDGAR link proves the filing exists; check the filing date vs price date.",
+  },
+  {
+    term: "SEDAR",
+    short: "SEDAR+ — Canada's filing system for TSX issuers (analogous to EDGAR).",
+    why: "Canadian filings live on SEDAR+, not EDGAR; ensures CAD provenance is correct.",
+    how_to_read: "SEDAR+ link is expected for Canadian names (RY, SHOP.TO).",
+  },
+  {
+    term: "CIK",
+    short: "Central Index Key — 10-digit SEC ID for a US registrant.",
+    why: "CIK is the stable key to find all filings for a company on EDGAR.",
+    how_to_read: "Click the CIK to open the issuer's EDGAR browse page.",
+  },
+  {
+    term: "ADR",
+    short: "American Depositary Receipt — US listing representing a foreign share.",
+    why: "Lets US investors buy foreign names (e.g., BABA) in USD; currency and filing nuances apply.",
+    how_to_read: "ADR price is USD but underlying business may report in another currency.",
+  },
+  {
+    term: "FY",
+    short: "Fiscal Year — the company's 12-month reporting year (may not equal calendar year).",
+    why: "All annual metrics (revenue, EPS) are FY-based; comparables must be same FY.",
+    how_to_read: "FY2024 means year ending on that company's fiscal year-end date.",
+  },
+  {
+    term: "TSX",
+    short: "Toronto Stock Exchange — Canada's main equity exchange (CAD trading).",
+    why: "TSX listings trade in CAD; never blend their CAD amounts with USD amounts.",
+    how_to_read: "Suffix .TO or :TSX means TSX. See SEDAR+ for filings.",
+  },
+  {
+    term: "NYSE",
+    short: "New York Stock Exchange — US large-cap exchange.",
+    why: "US listings trade in USD; provenance is EDGAR 10-K.",
+    how_to_read: "NYSE + NASDAQ together are the US market. Currency USD.",
+  },
+  {
+    term: "NASDAQ",
+    short: "Nasdaq — US electronic exchange, tech-heavy.",
+    why: "Also USD; same provenance as NYSE.",
+    how_to_read: "Ticker like AAPL on NASDAQ still resolves to USD.",
+  },
+  {
+    term: "TFSA",
+    short: "Tax-Free Savings Account — Canadian registered account, tax-free growth and withdrawals.",
+    why: "Where you hold stock determines after-tax outcome; Canada separates accounts by type.",
+    how_to_read: "Pick the account type that matches your actual holding; CAD vs USD totals stay segregated.",
+  },
+  {
+    term: "RRSP",
+    short: "Registered Retirement Savings Plan — Canadian tax-deferred retirement account.",
+    why: "Tax-deferred; US withholding nuances differ from TFSA.",
+    how_to_read: "RRSP is for retirement; contribution room and withdrawal tax differ from TFSA.",
+  },
+  {
+    term: "FHSA",
+    short: "First Home Savings Account — Canadian account for first-time home purchase.",
+    why: "Newest registered type; combines deduction and tax-free withdrawal for a qualifying home.",
+    how_to_read: "FHSA has specific opening and qualifying rules; check CRA before relying.",
+  },
+  {
+    term: "USD",
+    short: "United States Dollar — trading and reporting currency for US listings.",
+    why: "Never add USD and CAD money together; ratios are cross-border comparable, amounts are not.",
+    how_to_read: "USD amounts stay in USD panels; CAD amounts stay in CAD panels.",
+  },
+  {
+    term: "CAD",
+    short: "Canadian Dollar — trading and reporting currency for TSX listings.",
+    why: "Same rule as USD: view CAD totals separately.",
+    how_to_read: "TSX names report and trade in CAD; do not FX-convert implicitly.",
+  },
+  {
+    term: "AAOIFI",
+    short: "Accounting and Auditing Organization for Islamic Financial Institutions — halal screening standard referenced.",
+    why: "Our halal flag approximates AAOIFI-style 30/30/5 screens; it is informational, not a fatwa.",
+    how_to_read: "Flag is not a ruling; consult a scholar. Missing interest income keeps it as Unknown, never halal by default.",
+  },
 ];
 
 export function glossaryEntry(term: string): GlossaryEntry | undefined {
-  const norm = term.trim().toLowerCase();
+  const strip = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const norm = strip(term);
+  const alias: Record<string, string> = {
+    currency: "cur",
+    marketcap: "marketcap",
+    fcfcalc: "fcfmargin",
+    freecashflow: "fcfmargin",
+    evtoebitda: "evebitda",
+    evebitda: "evebitda",
+    netdebt: "netdebt",
+    dilutedeps: "eps",
+    roiccalc: "roic",
+    ttmfcf: "ttm",
+    piotroskif: "piotroski",
+    zscore: "zscore",
+    mscore: "mscore",
+    sedarplus: "sedar",
+    fiscalyear: "fy",
+    grahamnumber: "grahamnumber",
+    cet1ratio: "cet1",
+    efficiencyratio: "efficiencyratio",
+    nimfy2025: "nim",
+    reversedcf: "reversedcf",
+    terminalgrowth: "terminalgrowth",
+  };
+  const target = alias[norm] ?? norm;
   return GLOSSARY.find((g) => {
-    const gn = g.term.toLowerCase();
-    if (gn === norm) return true;
-    if (norm === "currency" && gn === "cur") return true;
-    if (norm === "market_cap" && gn === "market cap") return true;
-    if (norm === "fcf_calc" && gn === "fcf margin") return true;
-    if (norm === "free cash flow" && gn === "fcf margin") return true;
-    if (norm === "ev_to_ebitda" && gn === "ev/ebitda") return true;
-    if (norm === "net_debt" && gn === "net debt") return true;
-    if (norm === "diluted_eps" && gn === "eps") return true;
-    if (norm === "fcf" && gn === "fcf") return true;
-    if (norm === "rnoa" && gn === "rnoa") return true;
-    if (norm === "flev" && gn === "flev") return true;
-    if (norm === "noa" && gn === "noa") return true;
-    if (norm === "nfo" && gn === "nfo") return true;
-    if (norm === "eqr" && gn === "eqr") return true;
-    if (norm === "graham_number" && gn === "graham number") return true;
-    if (norm === "cet1_ratio" && gn === "cet1") return true;
-    if (norm === "efficiency_ratio" && gn === "efficiency ratio") return true;
-    if (norm === "nim_fy2025" && gn === "nim") return true;
-    if (norm === "beta" && gn === "beta") return true;
-    if (norm === "reverse_dcf" && gn === "reverse dcf") return true;
-    return false;
+    const gn = strip(g.term);
+    return gn === target || gn === norm;
   });
 }

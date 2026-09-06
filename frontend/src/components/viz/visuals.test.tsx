@@ -168,4 +168,58 @@ describe("SVG Visualization Primitives", () => {
       expect(screen.getByText(/needs net income and operating cash flow/i)).toBeDefined();
     });
   });
+
+  describe("TerminalMarketTape", () => {
+    it("renders market tape with benchmarks and pulse status", async () => {
+      const { TerminalMarketTape } = await import("./TerminalMarketTape");
+      render(<TerminalMarketTape />);
+      expect(screen.getByLabelText(/Global market benchmarks ticker tape/i)).toBeDefined();
+      expect(screen.getAllByText("SPX").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("TX60").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("DESK FEED")).toBeDefined();
+    });
+  });
+
+  describe("IsometricFinanceGraphic", () => {
+    it("renders 3D decision architecture SVG graphic", async () => {
+      const { IsometricFinanceGraphic } = await import("./IsometricFinanceGraphic");
+      render(
+        <IsometricFinanceGraphic
+          ticker="AAPL"
+          moat="Wide Moat · 58% ROIC"
+          solvency="Pristine · Altman Z 4.8"
+          hurdle="FCF Hurdle 11.2% CAGR"
+        />
+      );
+      expect(screen.getByRole("img", { name: /3D Isometric Decision Architecture/i })).toBeDefined();
+      expect(screen.getByText("SOLVENCY FLOOR")).toBeDefined();
+      expect(screen.getByText("OPERATING MOAT")).toBeDefined();
+      expect(screen.getByText(/AAPL/)).toBeDefined();
+    });
+  });
+
+  describe("HalalComplianceCard", () => {
+    it("renders failed tests with object ratio without [object Object]", async () => {
+      const { HalalComplianceCard } = await import("../dossier/HalalComplianceCard");
+      const mockHalal = {
+        status: "not_halal",
+        method: "AAOIFI-21",
+        failed_tests: [
+          {
+            test: "debt_to_mcap",
+            ratio: { ratio: 0.385, limit: 0.3, result: "fail" },
+          },
+          {
+            test: "activity_screen",
+            basis: { keyword_hit: "brewery", gics_sector: "Consumer Staples" },
+          },
+        ],
+      };
+      const { container } = render(<HalalComplianceCard halal={mockHalal as any} />);
+      expect(screen.getByText(/Failed Compliance Criteria \(2\)/i)).toBeDefined();
+      expect(screen.getByText(/Ratio: 38.5% \(limit 30%\)/i)).toBeDefined();
+      expect(screen.getByText(/Hit: "brewery"/i)).toBeDefined();
+      expect(container.textContent).not.toContain("[object Object]");
+    });
+  });
 });

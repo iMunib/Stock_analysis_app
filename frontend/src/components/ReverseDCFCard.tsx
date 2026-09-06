@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { ValuationOut } from "../api/types";
 import { Card, Chip } from "./layout";
+import InfoTip from "./InfoTip";
 
 interface ReverseDCFCardProps {
   companyId: string;
@@ -113,13 +114,13 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
       tone={cardTone}
       title={
         <div className="flex items-center gap-2">
-          <span>Deterministic Reverse DCF</span>
+          <span>Deterministic Reverse DCF <InfoTip term="DCF" /></span>
           <span className="text-[10px] px-2 py-0.5 rounded bg-bg-2 text-info font-mono uppercase">
             Expectations Investing
           </span>
         </div>
       }
-      subtitle="Solves for 10-year FCF compound growth rate priced into current Enterprise Value"
+      subtitle={<span>Solves for 10-year FCF <InfoTip term="FCF" /> compound growth rate (CAGR <InfoTip term="CAGR" />) priced into current Enterprise Value (EV <InfoTip term="EV" />)</span>}
     >
       {/* Analytical sprint WS5: Opportunity cost vs index hurdle */}
       {(() => {
@@ -142,7 +143,7 @@ export const ReverseDCFCard: React.FC<ReverseDCFCardProps> = ({ companyId }) => 
         return (
           <div className="mb-3 rounded-card border border-border bg-bg-2/50 px-3 py-2 text-[11px] leading-relaxed text-ink-1">
             <span className="font-semibold text-ink-0">Opportunity cost vs index: </span>
-            owner FCF yield {`${(fcfYield * 100).toFixed(1)}%`} vs index baseline 4.5%.{" "}
+            owner FCF <InfoTip term="FCF" /> yield {`${(fcfYield * 100).toFixed(1)}%`} vs index baseline 4.5%.{" "}
             {beats ? (
               <span className="text-pos">Current cash generation clears the hurdle; growth above {(requiredG * 100).toFixed(1)}% is upside.</span>
             ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "../api/client";
 import { Card, Chip, Page } from "../components/layout";
 import TransactionModal from "../components/portfolio/TransactionModal";
@@ -45,6 +45,8 @@ type HoldingRow = {
 };
 
 export default function Portfolio() {
+  const rawId = useId().replace(/:/g, "_");
+  const sectorBarGradId = `sectorBarGrad_${rawId}`;
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string; account_type: string; currency: string }>>([]);
   const [activeAccount, setActiveAccount] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<HoldingRow[]>([]);
@@ -151,13 +153,24 @@ export default function Portfolio() {
       {summary?.sector_concentration && summary.sector_concentration.length > 0 && (
         <Card title="Sector Concentration - Pure SVG" subtitle="Allocation by sector (market value)">
           <svg width={520} height={120} viewBox="0 0 520 120" role="img" aria-label="Sector concentration bar chart" className="w-full h-auto">
+            <defs>
+              <linearGradient id={sectorBarGradId} x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="var(--accent-strong)" stopOpacity="1" />
+              </linearGradient>
+            </defs>
             {summary.sector_concentration.slice(0, 6).map((sectorEntry, i: number) => {
-              const w = (sectorEntry.weight_pct / 100) * 480;
+              const w = Math.max(4, (sectorEntry.weight_pct / 100) * 320);
               return (
                 <g key={sectorEntry.sector}>
-                  <text x={10} y={16 + i * 18} fontSize={10} fill="var(--ink-1)" fontFamily="IBM Plex Mono">{sectorEntry.sector.slice(0, 18)}</text>
-                  <rect x={140} y={8 + i * 18} width={w} height={10} rx={3} fill="var(--accent)" />
-                  <text x={145 + w} y={16 + i * 18} fontSize={9} fill="var(--ink-2)" fontFamily="IBM Plex Mono">{sectorEntry.weight_pct}%</text>
+                  <text x={10} y={16 + i * 18} fontSize={10} fill="var(--ink-1)" fontFamily="IBM Plex Mono" fontWeight="500">
+                    {sectorEntry.sector.slice(0, 18)}
+                  </text>
+                  <rect x={140} y={7 + i * 18} width={320} height={11} rx={3} fill="var(--bg-2)" />
+                  <rect x={140} y={7 + i * 18} width={w} height={11} rx={3} fill={`url(#${sectorBarGradId})`} />
+                  <text x={470} y={16 + i * 18} fontSize={9.5} fill="var(--ink-0)" fontFamily="IBM Plex Mono" fontWeight="600" textAnchor="end">
+                    {sectorEntry.weight_pct}%
+                  </text>
                 </g>
               );
             })}
@@ -170,23 +183,57 @@ export default function Portfolio() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border text-left font-mono text-[10px] uppercase text-ink-2">
-                <th className="px-3 py-2">Company</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2 text-right">Avg Cost</th><th className="px-3 py-2 text-right">Price</th><th className="px-3 py-2 text-right">Market Value</th><th className="px-3 py-2 text-right">Unrealized</th><th className="px-3 py-2">Currency</th>
+              <tr className="border-b border-border bg-bg-2/30 text-left font-mono text-[10px] uppercase text-ink-2">
+                <th className="px-3 py-2.5">Company</th>
+                <th className="px-3 py-2.5">Qty</th>
+                <th className="px-3 py-2.5 text-right">Avg Cost</th>
+                <th className="px-3 py-2.5 text-right">Price</th>
+                <th className="px-3 py-2.5 text-right">Market Value</th>
+                <th className="px-3 py-2.5 text-right">Unrealized</th>
+                <th className="px-3 py-2.5">Currency</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {holdings.map((holding) => (
-                <tr key={`${holding.account_id}-${holding.company_id}`}>
-                  <td className="px-3 py-2 font-mono">{holding.ticker ?? holding.company_id}</td>
-                  <td className="px-3 py-2">{holding.quantity}</td>
-                  <td className="px-3 py-2 text-right font-mono">${holding.avg_cost_per_share ?? "0.00"}</td>
-                  <td className="px-3 py-2 text-right font-mono">{holding.market_price ?? "Not reported in filing"}</td>
-                  <td className="px-3 py-2 text-right font-mono">{holding.market_value != null ? `$${holding.market_value.toLocaleString()}` : "0.00"}</td>
-                  <td className={`px-3 py-2 text-right font-mono ${holding.unrealized_pnl != null && holding.unrealized_pnl < 0 ? "text-neg" : "text-pos"}`}>{holding.unrealized_pnl ?? "0.00"}</td>
-                  <td className="px-3 py-2"><Chip tone={holding.currency === "USD" ? "info" : "warning"} size="sm">{holding.currency}</Chip></td>
+              {holdings.map((holding) => {
+                const isPos = holding.unrealized_pnl != null && holding.unrealized_pnl > 0;
+                const isNeg = holding.unrealized_pnl != null && holding.unrealized_pnl < 0;
+                return (
+                  <tr key={`${holding.account_id}-${holding.company_id}`} className="hover:bg-bg-2/40 transition-colors">
+                    <td className="px-3 py-2.5 font-mono font-semibold text-ink-0">
+                      {holding.ticker ?? holding.company_id}
+                    </td>
+                    <td className="px-3 py-2.5 tabular-nums text-ink-1">{holding.quantity}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-1">
+                      ${holding.avg_cost_per_share != null ? Number(holding.avg_cost_per_share).toFixed(2) : "0.00"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-0">
+                      {holding.market_price != null ? `$${Number(holding.market_price).toFixed(2)}` : "Not reported in filing"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold text-ink-0">
+                      {holding.market_value != null ? `$${holding.market_value.toLocaleString()}` : "0.00"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                        isNeg ? "bg-neg-weak text-neg border border-neg/20" : isPos ? "bg-pos-weak text-pos border border-pos/20" : "text-ink-2"
+                      }`}>
+                        {holding.unrealized_pnl != null ? (isPos ? `+${holding.unrealized_pnl}` : `${holding.unrealized_pnl}`) : "0.00"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <Chip tone={holding.currency === "USD" ? "info" : "warning"} size="sm">
+                        {holding.currency}
+                      </Chip>
+                    </td>
+                  </tr>
+                );
+              })}
+              {holdings.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-3 py-6 text-center text-ink-2">
+                    No holdings - add a Buy transaction.
+                  </td>
                 </tr>
-              ))}
-              {holdings.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-ink-2">No holdings - add a Buy transaction.</td></tr>}
+              )}
             </tbody>
           </table>
         </div>
@@ -196,22 +243,45 @@ export default function Portfolio() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card title="Dividend Income Planner" subtitle="Trailing 12m vs forward 12m by currency">
           {dividends ? (
-            <div className="space-y-1 font-mono text-xs">
-              <div>Trailing: {Object.entries(dividends.trailing_12m_by_currency ?? {}).map(([k, v]) => `${k}: $${Number(v).toFixed(2)}`).join(" · ") || "0.00"}</div>
-              <div>Forward: {Object.entries(dividends.forward_12m_by_currency ?? {}).map(([k, v]) => `${k}: $${Number(v).toFixed(2)}`).join(" · ") || "0.00"}</div>
+            <div className="space-y-2 font-mono text-xs">
+              <div className="p-2 rounded bg-bg-2/50 border border-border/50">
+                <span className="text-[10px] uppercase text-ink-2 block">Trailing 12M</span>
+                <div className="font-semibold text-ink-0 mt-0.5">
+                  {Object.entries(dividends.trailing_12m_by_currency ?? {}).map(([k, v]) => `${k}: $${Number(v).toFixed(2)}`).join(" · ") || "0.00"}
+                </div>
+              </div>
+              <div className="p-2 rounded bg-bg-2/50 border border-border/50">
+                <span className="text-[10px] uppercase text-ink-2 block">Forward 12M</span>
+                <div className="font-semibold text-pos mt-0.5">
+                  {Object.entries(dividends.forward_12m_by_currency ?? {}).map(([k, v]) => `${k}: $${Number(v).toFixed(2)}`).join(" · ") || "0.00"}
+                </div>
+              </div>
             </div>
           ) : <span className="text-xs text-ink-2">Loading…</span>}
         </Card>
 
         <Card title="Position Sizing & Rebalancing" subtitle="Target equal weight, drift >5pp, max >25% flagged">
           {rebalance ? (
-            <div className="space-y-1 text-xs">
-              {rebalance.holdings?.slice(0, 4).map((rebalanceEntry) => (
-                <div key={rebalanceEntry.company_id} className="flex justify-between font-mono">
-                  <span>{rebalanceEntry.ticker ?? rebalanceEntry.company_id}</span>
-                  <span className={rebalanceEntry.warning ? "text-warn" : "text-ink-1"}>{rebalanceEntry.weight_pct}% (drift {rebalanceEntry.drift_pct}%) {rebalanceEntry.warning ? `· ${rebalanceEntry.warning}` : ""}</span>
-                </div>
-              ))}
+            <div className="space-y-2 text-xs">
+              {rebalance.holdings?.slice(0, 4).map((rebalanceEntry) => {
+                const isDrifting = Math.abs(rebalanceEntry.drift_pct) > 5;
+                return (
+                  <div key={rebalanceEntry.company_id} className="p-2 rounded bg-bg-2/40 border border-border/50 space-y-1">
+                    <div className="flex justify-between font-mono">
+                      <span className="font-semibold text-ink-0">{rebalanceEntry.ticker ?? rebalanceEntry.company_id}</span>
+                      <span className={rebalanceEntry.warning ? "text-warn font-semibold" : "text-ink-1"}>
+                        {rebalanceEntry.weight_pct}% (drift {rebalanceEntry.drift_pct}%) {rebalanceEntry.warning ? `· ${rebalanceEntry.warning}` : ""}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-bg-0 overflow-hidden flex">
+                      <div
+                        className={`h-full ${isDrifting ? "bg-warn" : "bg-accent"} rounded-full`}
+                        style={{ width: `${Math.min(100, rebalanceEntry.weight_pct * 2)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
               {(!rebalance.holdings || rebalance.holdings.length === 0) && <span className="text-ink-2">No holdings</span>}
             </div>
           ) : <span className="text-xs text-ink-2">Loading…</span>}
@@ -219,13 +289,21 @@ export default function Portfolio() {
 
         <Card title="Forensic Heatmap - Holdings" subtitle="Distress & red-flag exposure">
           {heat ? (
-            <div className="space-y-1 text-xs font-mono">
-              {heat.heatmap?.slice(0, 4).map((heatEntry) => (
-                <div key={heatEntry.company_id} className="flex justify-between">
-                  <span>{heatEntry.ticker ?? heatEntry.company_id}</span>
-                  <span className={heatEntry.severity > 20 ? "text-neg" : heatEntry.severity > 10 ? "text-warn" : "text-pos"}>Severity {heatEntry.severity} · {heatEntry.flags?.join(", ") || "clean"}</span>
-                </div>
-              ))}
+            <div className="space-y-2 text-xs font-mono">
+              {heat.heatmap?.slice(0, 4).map((heatEntry) => {
+                const isHigh = heatEntry.severity > 20;
+                const isMed = heatEntry.severity > 10;
+                return (
+                  <div key={heatEntry.company_id} className="flex items-center justify-between p-2 rounded bg-bg-2/40 border border-border/50">
+                    <span className="font-bold text-ink-0">{heatEntry.ticker ?? heatEntry.company_id}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      isHigh ? "bg-neg-weak text-neg border border-neg/30" : isMed ? "bg-warn-weak text-warn border border-warn/30" : "bg-pos-weak text-pos border border-pos/30"
+                    }`}>
+                      Severity {heatEntry.severity} · {heatEntry.flags?.join(", ") || "clean"}
+                    </span>
+                  </div>
+                );
+              })}
               {(!heat.heatmap || heat.heatmap.length === 0) && <span className="text-ink-2">No forensic flags on holdings</span>}
             </div>
           ) : <span className="text-xs text-ink-2">Loading…</span>}

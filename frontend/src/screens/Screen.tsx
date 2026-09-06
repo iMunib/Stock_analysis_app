@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError, enc } from "../api/client";
 import type { ScreenOut, ScreenerPresetItem, SectorsOut } from "../api/types";
-import { CompanyLink, ErrorBanner, Score, SignalBadge, Spinner } from "../components/ui";
+import { CompanyLink, ErrorBanner, HalalBadge, Score, SignalBadge, Spinner } from "../components/ui";
 import { multiple, percentish } from "../lib/format";
 import InfoTip from "../components/InfoTip";
 import { evaluateAlert, getAlerts } from "../lib/alerts";
@@ -1107,11 +1107,11 @@ export default function Screen() {
               </div>
             </div>
           ) : (
-            <Card padding="none" className="overflow-hidden">
-              <div className="overflow-x-auto">
+            <Card padding="none" className="overflow-hidden terminal-card">
+              <div className="overflow-x-auto max-h-[75vh]">
                 <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-bg-2/70 text-left font-mono text-[10px] uppercase tracking-wider text-ink-2">
+                  <thead className="sticky top-0 z-10 bg-bg-2/95 backdrop-blur-xs">
+                    <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-wider text-ink-2">
                       <th scope="col" className="px-3 py-2.5 w-8">
                         <span className="sr-only">Select</span>
                       </th>
@@ -1127,6 +1127,9 @@ export default function Screen() {
                       </th>
                       <th scope="col" className="px-3 py-2.5 cursor-pointer hover:text-ink-0" onClick={() => handleSort("signal")}>
                         <span>Signal {sortBy === "signal" && (sortDir === "asc" ? "▲" : "▼")}</span>
+                      </th>
+                      <th scope="col" className="px-2.5 py-2.5 text-center">
+                        <span>Halal (AAOIFI)</span>
                       </th>
                       <th scope="col" className="px-3 py-2.5 text-right cursor-pointer hover:text-ink-0" onClick={() => handleSort("pe")}>
                         <span>PE {sortBy === "pe" && (sortDir === "asc" ? "▲" : "▼")}</span>
@@ -1159,7 +1162,7 @@ export default function Screen() {
                       return (
                         <tr
                           key={it.company_id}
-                          className={`hover:bg-bg-2/50 transition-colors ${isSelected ? "bg-accent-weak" : ""}`}
+                          className={`hover:bg-bg-2/60 transition-colors ${isSelected ? "bg-accent-weak" : ""}`}
                         >
                           <td className="px-3 py-2">
                             <input
@@ -1184,6 +1187,9 @@ export default function Screen() {
                           </td>
                           <td className="px-3 py-2">
                             <SignalBadge signal={it.signal} small />
+                          </td>
+                          <td className="px-2.5 py-2 text-center">
+                            <HalalBadge status={it.halal_status} />
                           </td>
                           <td className="px-3 py-2 text-right font-mono tabular-nums text-ink-1">
                             {multiple(it.pe_calc)}

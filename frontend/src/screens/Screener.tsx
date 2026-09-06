@@ -666,10 +666,10 @@ export default function Screener() {
                       </p>
                     </Card>
                   ) : (
-                    <div className="overflow-x-auto rounded-card border border-border bg-bg-1 shadow-card">
+                    <div className="overflow-x-auto rounded-card border border-border bg-bg-1 shadow-card max-h-[75vh]">
                       <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border bg-bg-2/60 text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
+                        <thead className="sticky top-0 z-20 bg-bg-2/95 backdrop-blur-xs">
+                          <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-widest text-ink-2">
                             {COLUMNS.map((col) => {
                               const sortable = ["ticker", "name", "composite", "roic", "sloan_accrual", "cash_conversion", "expectations_gap"].includes(col.key);
                               return (

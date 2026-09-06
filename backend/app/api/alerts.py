@@ -18,6 +18,8 @@ from app.services.alerts_daemon import evaluate_rules, get_calendar, heartbeat
 router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
 
 
+ALLOWED_RULE_TYPES = {"price_below_fair_value", "distress", "forensic", "earnings", "dividend", "custom"}
+
 class AlertRuleCreateIn(BaseModel):
     company_id: str | None = None
     rule_type: str
@@ -27,6 +29,8 @@ class AlertRuleCreateIn(BaseModel):
 
 @router.post("/rules")
 def post_rule(body: AlertRuleCreateIn, db: Session = Depends(get_db)):
+    if body.rule_type not in ALLOWED_RULE_TYPES:
+        raise HTTPException(status_code=422, detail=f"rule_type must be one of {sorted(ALLOWED_RULE_TYPES)}")
     cid = None
     if body.company_id:
         cid = normalize_company_id(body.company_id) or body.company_id
@@ -72,6 +76,8 @@ def get_evaluate(company_ids: str | None = None, db: Session = Depends(get_db)):
 
 @router.get("/calendar")
 def get_calendar_endpoint(days_ahead: int = 30, db: Session = Depends(get_db)):
+    if days_ahead < 0:
+        raise HTTPException(status_code=422, detail="days_ahead must be >= 0")
     items = get_calendar(db, days_ahead)
     return {"count": len(items), "items": items}
 

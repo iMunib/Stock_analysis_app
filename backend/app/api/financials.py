@@ -80,6 +80,11 @@ def tickers_resolve(q: str = Query(min_length=1, max_length=64)):
 @router.post("/tickers/ingest", status_code=202, description="Enqueue an ingest job (async 202 + poll).")
 def tickers_ingest(body: IngestBody, db: Session = Depends(get_session)):
     q = body.ticker.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="ticker must be non-empty after trimming")
+    # Reject tickers that are only special chars without alphanum
+    if not any(c.isalnum() for c in q):
+        raise HTTPException(status_code=400, detail="ticker must contain alphanumeric characters")
     company_id = None
     try:
         res = resolve(q)

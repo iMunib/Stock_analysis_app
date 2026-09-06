@@ -10,6 +10,7 @@ import { Card, Grid, Page } from "../components/layout";
 import { CompositeGauge } from "../components/viz";
 import { EmptyState } from "../components/feedback";
 import TickerTypeahead from "../components/common/TickerTypeahead";
+import IsometricFinanceGraphic from "../components/viz/IsometricFinanceGraphic";
 
 const LEGEND =
   "Scores lean low on purpose: most companies (713 of 720) have less than three years of history in the database, so their Growth pillar is not scored and the composite is reduced. Valuation is a strict percentile versus same-currency peers - average companies land mid-pack, not at 8.";
@@ -218,49 +219,89 @@ export default function Home() {
             </p>
           </Card>
 
-          <Card title="Signal Distribution & Market Breadth" subtitle="System-wide classification histogram across the active universe (Click any row to view screener cohort)">
-            <ul className="space-y-2.5">
-              {SIGNAL_ORDER.map((sig) => {
-                const n = meta.signal_histogram[sig] ?? 0;
-                if (!n) return null;
-                const tone = signalTone(sig === "score_missing" ? null : sig);
-                const color =
-                  tone === "good"
-                    ? "bg-pos"
-                    : tone === "mid"
-                      ? "bg-warn"
-                      : tone === "bad"
-                        ? "bg-neg"
-                        : "bg-info";
-                const pct = ((n / (meta.companies || 1)) * 100).toFixed(1);
-                const sigParam = sig === "score_missing" ? "insufficient_data" : sig;
-                return (
-                  <li key={sig}>
-                    <Link
-                      to={`/screen?signal=${sigParam}`}
-                      className="group flex items-center gap-3 text-xs p-1 rounded hover:bg-bg-2/60 transition-colors"
-                      title={`Filter screener by ${signalLabel(sig === "score_missing" ? null : sig)}`}
-                    >
-                      <span className="w-36 shrink-0 text-ink-1 font-medium group-hover:text-accent transition-colors flex items-center justify-between">
-                        <span>{signalLabel(sig === "score_missing" ? null : sig)}</span>
-                        <span className="font-mono text-[10px] text-ink-2 mr-2">({pct}%)</span>
-                      </span>
-                      <span className="h-2 rounded-sm bg-bg-2 overflow-hidden flex-1 max-w-md">
-                        <span
-                          className={`block h-full rounded-sm ${color} transition-all duration-300 group-hover:brightness-110`}
-                          style={{ width: `${Math.max(2, (n / meta.companies) * 100)}%` }}
-                        />
-                      </span>
-                      <span className="font-mono tabular-nums font-semibold text-ink-0 text-right w-12 group-hover:text-accent transition-colors">
-                        {n}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-4 text-xs leading-relaxed text-ink-2 border-t border-border pt-3">{LEGEND}</p>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            <div className="lg:col-span-7 flex flex-col">
+              <Card
+                title="Signal Distribution & Market Breadth"
+                subtitle="System-wide classification histogram across the active universe (Click any row to view screener cohort)"
+                className="flex-1 flex flex-col justify-between"
+              >
+                <ul className="space-y-2.5">
+                  {SIGNAL_ORDER.map((sig) => {
+                    const n = meta.signal_histogram[sig] ?? 0;
+                    if (!n) return null;
+                    const tone = signalTone(sig === "score_missing" ? null : sig);
+                    const color =
+                      tone === "good"
+                        ? "bg-pos"
+                        : tone === "mid"
+                          ? "bg-warn"
+                          : tone === "bad"
+                            ? "bg-neg"
+                            : "bg-info";
+                    const pct = ((n / (meta.companies || 1)) * 100).toFixed(1);
+                    const sigParam = sig === "score_missing" ? "insufficient_data" : sig;
+                    return (
+                      <li key={sig}>
+                        <Link
+                          to={`/screen?signal=${sigParam}`}
+                          className="group flex items-center gap-3 text-xs p-1 rounded hover:bg-bg-2/60 transition-colors"
+                          title={`Filter screener by ${signalLabel(sig === "score_missing" ? null : sig)}`}
+                        >
+                          <span className="w-36 shrink-0 text-ink-1 font-medium group-hover:text-accent transition-colors flex items-center justify-between">
+                            <span>{signalLabel(sig === "score_missing" ? null : sig)}</span>
+                            <span className="font-mono text-[10px] text-ink-2 mr-2">({pct}%)</span>
+                          </span>
+                          <span className="h-2.5 rounded-sm bg-bg-2 overflow-hidden flex-1 max-w-md shadow-inner">
+                            <span
+                              className={`block h-full rounded-sm ${color} transition-all duration-300 group-hover:brightness-110`}
+                              style={{ width: `${Math.max(2, (n / meta.companies) * 100)}%` }}
+                            />
+                          </span>
+                          <span className="font-mono tabular-nums font-semibold text-ink-0 text-right w-12 group-hover:text-accent transition-colors">
+                            {n}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-4 text-xs leading-relaxed text-ink-2 border-t border-border pt-3">{LEGEND}</p>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-5 flex flex-col">
+              <Card
+                title="3-Tier Decision Architecture"
+                subtitle="Autonomous fundamental equity analysis pipeline"
+                className="flex-1 flex flex-col justify-between"
+              >
+                <div className="flex-1 flex items-center justify-center py-2">
+                  <IsometricFinanceGraphic
+                    ticker="S&P 500 / TSX"
+                    moat="Wide Moat · 58% ROIC"
+                    solvency="Pristine · Altman Z 4.8"
+                    hurdle="FCF Hurdle 11.2% CAGR"
+                    className="w-full"
+                  />
+                </div>
+                <div className="border-t border-border pt-3 mt-2 grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+                  <div className="p-2 rounded bg-bg-2/60 border border-border/60">
+                    <span className="text-accent font-bold block text-[11px]">LEVEL 1</span>
+                    <span className="text-ink-2">60s Cockpit</span>
+                  </div>
+                  <div className="p-2 rounded bg-bg-2/60 border border-border/60">
+                    <span className="text-accent font-bold block text-[11px]">LEVEL 2</span>
+                    <span className="text-ink-2">Flight Deck</span>
+                  </div>
+                  <div className="p-2 rounded bg-bg-2/60 border border-border/60">
+                    <span className="text-accent font-bold block text-[11px]">LEVEL 3</span>
+                    <span className="text-ink-2">Engine Room</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
         </section>
       )}
 
@@ -464,20 +505,41 @@ function TopTable({ title, rows }: { title: string; rows: RankingsOut["items"] }
         <p className="text-xs text-ink-2 py-4 text-center">No scored names yet.</p>
       ) : (
         <ul className="divide-y divide-border">
-          {rows.map((r) => (
-            <li key={r.company_id} className="flex items-center justify-between gap-4 py-2 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-mono text-[10px] text-ink-2 w-5 shrink-0">#{r.rank}</span>
-                <CompanyLink companyId={r.company_id} className="font-medium truncate">
-                  {r.name ?? r.company_id}
-                </CompanyLink>
-              </div>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <Score value={r.composite} />
-                <SignalBadge signal={r.signal} small />
-              </div>
-            </li>
-          ))}
+          {rows.map((r) => {
+            const rankBadge =
+              r.rank === 1
+                ? "border-amber-500/50 bg-amber-500/10 text-amber-400 font-bold"
+                : r.rank === 2
+                ? "border-slate-400/50 bg-slate-400/10 text-slate-300 font-semibold"
+                : r.rank === 3
+                ? "border-amber-700/50 bg-amber-700/10 text-amber-500 font-semibold"
+                : "border-border bg-bg-2/50 text-ink-2";
+
+            return (
+              <li key={r.company_id} className="flex items-center justify-between gap-3 py-2 text-xs hover:bg-bg-2/40 px-1 rounded transition-colors group">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`font-mono text-[10px] w-6 h-5 rounded flex items-center justify-center border shrink-0 ${rankBadge}`}>
+                    #{r.rank}
+                  </span>
+                  <CompanyLink companyId={r.company_id} className="font-medium truncate group-hover:text-accent transition-colors">
+                    {r.name ?? r.company_id}
+                  </CompanyLink>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="w-12 hidden sm:block">
+                    <div className="h-1.5 w-full rounded-full bg-bg-2 overflow-hidden">
+                      <div
+                        className="h-full bg-accent rounded-full"
+                        style={{ width: `${Math.min(100, ((r.composite ?? 0) / 10) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <Score value={r.composite} />
+                  <SignalBadge signal={r.signal} small />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Card>
@@ -501,23 +563,44 @@ function TopTableAll() {
         <p className="text-xs text-ink-2 py-4 text-center">No scored names yet.</p>
       ) : (
         <ul className="divide-y divide-border">
-          {rows.items.map((r) => (
-            <li key={r.company_id} className="flex items-center justify-between gap-4 py-2 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-mono text-[10px] text-ink-2 w-5 shrink-0">#{r.rank}</span>
-                <CompanyLink companyId={r.company_id} className="font-medium truncate">
-                  {r.name ?? r.company_id}
-                </CompanyLink>
-                <span className="font-mono text-[10px] text-info shrink-0">
-                  {(r as unknown as { currency?: string }).currency ?? ""}
-                </span>
-              </div>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <Score value={r.composite} />
-                <SignalBadge signal={r.signal} small />
-              </div>
-            </li>
-          ))}
+          {rows.items.map((r) => {
+            const rankBadge =
+              r.rank === 1
+                ? "border-amber-500/50 bg-amber-500/10 text-amber-400 font-bold"
+                : r.rank === 2
+                ? "border-slate-400/50 bg-slate-400/10 text-slate-300 font-semibold"
+                : r.rank === 3
+                ? "border-amber-700/50 bg-amber-700/10 text-amber-500 font-semibold"
+                : "border-border bg-bg-2/50 text-ink-2";
+
+            return (
+              <li key={r.company_id} className="flex items-center justify-between gap-3 py-2 text-xs hover:bg-bg-2/40 px-1 rounded transition-colors group">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`font-mono text-[10px] w-6 h-5 rounded flex items-center justify-center border shrink-0 ${rankBadge}`}>
+                    #{r.rank}
+                  </span>
+                  <CompanyLink companyId={r.company_id} className="font-medium truncate group-hover:text-accent transition-colors">
+                    {r.name ?? r.company_id}
+                  </CompanyLink>
+                  <span className="font-mono text-[10px] text-info px-1 py-0.2 rounded bg-info-weak border border-info/20 shrink-0">
+                    {(r as unknown as { currency?: string }).currency ?? ""}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="w-12 hidden sm:block">
+                    <div className="h-1.5 w-full rounded-full bg-bg-2 overflow-hidden">
+                      <div
+                        className="h-full bg-accent rounded-full"
+                        style={{ width: `${Math.min(100, ((r.composite ?? 0) / 10) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <Score value={r.composite} />
+                  <SignalBadge signal={r.signal} small />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Card>

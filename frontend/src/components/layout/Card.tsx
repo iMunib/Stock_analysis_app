@@ -46,11 +46,11 @@ export function Card({
   const toneBorder = toneBorders[tone] || "";
   const pad = paddingClasses[padding] || paddingClasses.md;
   const stagger = staggerIndex ? `animate-rise stagger-${staggerIndex}` : "";
-  const hoverClass = interactive ? "interactive-card cursor-pointer" : "";
+  const hoverClass = interactive ? "interactive-card cursor-pointer hover:border-border-strong hover:shadow-hover" : "";
 
   return (
     <div
-      className={`rounded-card border border-border bg-bg-1 shadow-card transition-colors ${toneBorder} ${pad} ${stagger} ${hoverClass} ${className}`}
+      className={`relative overflow-hidden rounded-card border border-border bg-bg-1 shadow-card transition-all duration-150 before:absolute before:inset-x-0 before:top-0 before:h-[1px] before:bg-gradient-to-r before:from-transparent before:via-accent/25 before:to-transparent before:pointer-events-none ${toneBorder} ${pad} ${stagger} ${hoverClass} ${className}`}
       {...rest}
     >
       {(title || action || infoTip) && (

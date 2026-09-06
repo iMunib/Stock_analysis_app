@@ -1,5 +1,6 @@
 import React from "react";
 import type { BeneishAnalysis } from "../../api/types";
+import InfoTip from "../InfoTip";
 
 interface BeneishCardProps {
   analysis?: BeneishAnalysis | null;
@@ -58,14 +59,14 @@ export const BeneishCard: React.FC<BeneishCardProps> = ({ analysis }) => {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
-              Beneish M-Score Forensic Screen
+              Beneish M-Score Forensic Screen <InfoTip term="Beneish" />
             </h3>
             <span className="text-xs px-2 py-0.5 rounded bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] font-mono">
               Threshold: -1.78
             </span>
           </div>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-            8-variable empirical model predicting probabilistic financial statement manipulation (Beneish 1999).
+            8-variable empirical model predicting probabilistic financial statement manipulation (Beneish 1999) <InfoTip term="M-Score" />.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -111,8 +112,8 @@ export const BeneishCard: React.FC<BeneishCardProps> = ({ analysis }) => {
                 className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-3 flex flex-col justify-between"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-semibold text-[var(--color-text-primary)]">
-                    {item.label}
+                  <span className="font-mono text-xs font-semibold text-[var(--color-text-primary)] inline-flex items-center gap-1">
+                    {item.label} <InfoTip term={item.label} />
                   </span>
                   <span
                     className={`font-mono text-xs font-bold ${

@@ -187,11 +187,163 @@ export default function Compare() {
           <p className="text-xs text-ink-2">
             Best value per column is highlighted with a gold accent band (min PE/PB/EV-EBITDA, max ROE/composite). Not reported in filing means the field is not on file.
           </p>
+          <CompareRadarOverlay rows={data.rows} />
           <CompareTrendOverlays ids={ids} />
           <CompareKPIDetail ids={ids} />
         </div>
       )}
     </Page>
+  );
+}
+
+function CompareRadarOverlay({ rows }: { rows: CompareOut["rows"] }) {
+  const foundRows = rows.filter((r) => r.found && (r.quality != null || r.value != null || r.growth != null || r.risk != null));
+  if (foundRows.length < 2) return null;
+
+  const cx = 130;
+  const cy = 130;
+  const maxR = 85;
+
+  const getR = (val: number | null | undefined) => {
+    if (val === null || val === undefined || isNaN(val)) return 0;
+    return (Math.max(0, Math.min(10, val)) / 10) * maxR;
+  };
+
+  const colors = [
+    "var(--accent)",
+    "var(--info)",
+    "var(--pos)",
+    "var(--warn)",
+    "var(--neg)",
+    "#a855f7",
+    "#06b6d4",
+    "#f43f5e",
+  ];
+
+  return (
+    <Card
+      title="Pillar Radar Comparison — Multi-Asset Overlay"
+      subtitle="Overlaid Quality · Value · Growth · Risk radar profiles across compared companies"
+      padding="md"
+    >
+      <div className="grid md:grid-cols-[280px_1fr] items-center gap-6">
+        <div className="flex justify-center">
+          <svg
+            viewBox="0 0 260 260"
+            width={260}
+            height={260}
+            role="img"
+            aria-label={`Pillar radar comparison overlay for ${foundRows.length} companies`}
+            className="overflow-visible select-none"
+          >
+            {/* Concentric Reference Polygons */}
+            {[0.25, 0.5, 0.75, 1.0].map((step) => {
+              const r = maxR * step;
+              return (
+                <polygon
+                  key={step}
+                  points={`${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`}
+                  fill="none"
+                  stroke="var(--border)"
+                  strokeWidth={step === 1.0 ? "1.5" : "1"}
+                  strokeDasharray={step === 1.0 ? undefined : "2 2"}
+                  opacity={step === 1.0 ? 0.9 : 0.5}
+                />
+              );
+            })}
+
+            {/* Cross Axes */}
+            <line x1={cx} y1={cy - maxR} x2={cx} y2={cy + maxR} stroke="var(--border-strong)" strokeWidth={1} />
+            <line x1={cx - maxR} y1={cy} x2={cx + maxR} y2={cy} stroke="var(--border-strong)" strokeWidth={1} />
+
+            {/* Axis Labels */}
+            <text x={cx} y={cy - maxR - 8} textAnchor="middle" className="font-mono text-[9px] uppercase font-bold fill-ink-1">
+              Quality
+            </text>
+            <text x={cx + maxR + 8} y={cy + 3} textAnchor="start" className="font-mono text-[9px] uppercase font-bold fill-ink-1">
+              Value
+            </text>
+            <text x={cx} y={cy + maxR + 14} textAnchor="middle" className="font-mono text-[9px] uppercase font-bold fill-ink-1">
+              Growth
+            </text>
+            <text x={cx - maxR - 8} y={cy + 3} textAnchor="end" className="font-mono text-[9px] uppercase font-bold fill-ink-1">
+              Risk
+            </text>
+
+            {/* Polygons for each company */}
+            {foundRows.map((r, idx) => {
+              const col = colors[idx % colors.length];
+              const qR = getR(r.quality);
+              const vR = getR(r.value);
+              const gR = getR(r.growth);
+              const rR = getR(r.risk);
+              const points = `${cx},${cy - qR} ${cx + vR},${cy} ${cx},${cy + gR} ${cx - rR},${cy}`;
+
+              return (
+                <g key={r.company_id}>
+                  <polygon
+                    points={points}
+                    fill={col}
+                    fillOpacity={0.15}
+                    stroke={col}
+                    strokeWidth={2}
+                    strokeLinejoin="round"
+                  />
+                  <circle cx={cx} cy={cy - qR} r={3} fill={col} stroke="var(--bg-1)" strokeWidth={1} />
+                  <circle cx={cx + vR} cy={cy} r={3} fill={col} stroke="var(--bg-1)" strokeWidth={1} />
+                  <circle cx={cx} cy={cy + gR} r={3} fill={col} stroke="var(--bg-1)" strokeWidth={1} />
+                  <circle cx={cx - rR} cy={cy} r={3} fill={col} stroke="var(--bg-1)" strokeWidth={1} />
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Legend / Pillar Score Matrix */}
+        <div className="grid sm:grid-cols-2 gap-3">
+          {foundRows.map((r, idx) => {
+            const col = colors[idx % colors.length];
+            return (
+              <div
+                key={r.company_id}
+                className="rounded-card border border-border bg-bg-0 p-3 flex flex-col justify-between space-y-2 hover:border-accent/40 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: col }} />
+                    <span className="font-bold text-xs text-ink-0 truncate">
+                      {r.name || r.company_id}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[10px] uppercase text-ink-2 px-1.5 py-0.5 rounded bg-bg-2">
+                    {r.currency}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-1.5 pt-1 text-center font-mono text-[10px]">
+                  <div className="rounded bg-bg-2/70 p-1 border border-border/60">
+                    <span className="text-ink-2 block text-[9px] uppercase">Q</span>
+                    <span className="font-semibold text-ink-0">{r.quality != null ? r.quality.toFixed(1) : "—"}</span>
+                  </div>
+                  <div className="rounded bg-bg-2/70 p-1 border border-border/60">
+                    <span className="text-ink-2 block text-[9px] uppercase">V</span>
+                    <span className="font-semibold text-ink-0">{r.value != null ? r.value.toFixed(1) : "—"}</span>
+                  </div>
+                  <div className="rounded bg-bg-2/70 p-1 border border-border/60">
+                    <span className="text-ink-2 block text-[9px] uppercase">G</span>
+                    <span className="font-semibold text-ink-0">{r.growth != null ? r.growth.toFixed(1) : "—"}</span>
+                  </div>
+                  <div className="rounded bg-bg-2/70 p-1 border border-border/60">
+                    <span className="text-ink-2 block text-[9px] uppercase">R</span>
+                    <span className="font-semibold text-ink-0">{r.risk != null ? r.risk.toFixed(1) : "—"}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
   );
 }
 

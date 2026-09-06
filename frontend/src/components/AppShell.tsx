@@ -7,6 +7,7 @@ import { getCompareSelection, COMPARE_EVENT } from "../lib/sessionCompare";
 import { Score, SignalBadge, useDebounced } from "./ui";
 import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./common/CommandPalette";
+import TerminalMarketTape from "./viz/TerminalMarketTape";
 
 function AlertDrawerContent() {
   const [events, setEvents] = React.useState<any[]>([]);
@@ -101,6 +102,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-0 text-ink-0">
+      <TerminalMarketTape />
       <header className="sticky top-0 z-20 border-b border-border bg-bg-1/90 backdrop-blur shadow-sm">
         <div className="w-full max-w-desk mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 py-2.5 flex items-center gap-4 sm:gap-6">
           <Link to="/" className="flex items-center gap-2.5 shrink-0 group">

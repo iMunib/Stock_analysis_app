@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { Card } from "../layout";
+import InfoTip from "../InfoTip";
 
 interface EPVCardProps {
   companyId: string;
@@ -24,8 +25,8 @@ export const EPVCard: React.FC<EPVCardProps> = ({ companyId }) => {
 
   if (data.status === "insufficient_data") {
     return (
-      <Card title="Greenwald Earnings Power Value (EPV)" subtitle="Reproduction-cost floor vs market cap">
-        <p className="text-xs text-ink-1">Insufficient data for EPV - {data.reason ?? "EBIT missing"}</p>
+      <Card title={<span>Greenwald Earnings Power Value (EPV) <InfoTip term="EPV" /></span>} subtitle="Reproduction-cost floor vs market cap">
+        <p className="text-xs text-ink-1">Insufficient data for EPV — {data.reason ?? "EBIT missing"} <InfoTip term="EBIT" /></p>
         <p className="text-[11px] font-mono text-ink-2 mt-1">{data.disclaimer}</p>
       </Card>
     );
@@ -45,22 +46,22 @@ export const EPVCard: React.FC<EPVCardProps> = ({ companyId }) => {
 
   return (
     <Card
-      title="Valuation Spectrum & Margin of Safety Floor"
+      title={<span>Valuation Spectrum & Margin of Safety Floor <InfoTip term="EPV" /></span>}
       subtitle="Greenwald Earnings Power Value — Normalized Earnings Power vs Reproduction Cost"
       padding="md"
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="p-2.5 rounded border border-border bg-bg-0">
-            <span className="font-mono text-[10px] uppercase text-ink-2 block">Normalized Earnings Power</span>
-            <span className="font-mono font-bold text-ink-0">{data.normalized_ebit != null ? `$${(data.normalized_ebit/1e9).toFixed(2)}B` : "Not reported in filing"} <span className="text-ink-2 text-[10px]">x (1-{(data.tax_rate*100).toFixed(0)}%) / {(data.wacc*100).toFixed(1)}%</span></span>
+            <span className="font-mono text-[10px] uppercase text-ink-2 block">Normalized Earnings Power <InfoTip term="EBIT" /></span>
+            <span className="font-mono font-bold text-ink-0">{data.normalized_ebit != null ? `$${(data.normalized_ebit/1e9).toFixed(2)}B` : "Not reported in filing"} <span className="text-ink-2 text-[10px]">x (1-{(data.tax_rate*100).toFixed(0)}%) / {(data.wacc*100).toFixed(1)}% <InfoTip term="WACC" /></span></span>
             <span className="text-[10px] text-ink-2 block">Median EBIT 5Y · {data.ebit_source}</span>
             {data.thin_history && <span className="text-[10px] text-warn">Thin history: assumption uses 1-2 points</span>}
           </div>
           <div className="p-2.5 rounded border border-border bg-bg-0">
-            <span className="font-mono text-[10px] uppercase text-ink-2 block">Earnings Power Value</span>
+            <span className="font-mono text-[10px] uppercase text-ink-2 block">Earnings Power Value <InfoTip term="EPV" /></span>
             <span className="font-mono font-bold text-ink-0">{epv != null ? `$${(epv/1e9).toFixed(2)}B` : "Not reported in filing"}</span>
-            <span className="text-[10px] text-ink-2 block">NOPAT / WACC · Franchise value</span>
+            <span className="text-[10px] text-ink-2 block">NOPAT <InfoTip term="NOPAT" /> / WACC <InfoTip term="WACC" /> · Franchise value</span>
           </div>
           <div className="p-2.5 rounded border border-border bg-bg-0">
             <span className="font-mono text-[10px] uppercase text-ink-2 block">Reproduction Cost Floor</span>
