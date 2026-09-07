@@ -75,67 +75,46 @@ jobs:
           key: ${{ secrets.OCI_SSH_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 10m
+          command_timeout: 15m
           script: |
             set -e
-            echo "=== Deploying to OCI: $(hostname) @ $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+            echo "=== Deploying to OCI: $(hostname) @$(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+
+            # Ensure host packages exist
+            if ! command -v git >/dev/null 2>&1; then
+              echo "Installing git..."
+              sudo apt-get update -y && sudo apt-get install -y git
+            fi
+
+            # Ensure directories exist and permissions are owned by ubuntu
+            sudo mkdir -p /home/ubuntu/app/data/backups
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/app
             cd /home/ubuntu/app
 
-            # Clone or fast-forward to origin/main
+            # Safe repository sync without deleting data/ or .env
             if [ ! -d ".git" ]; then
-              echo "No git repo — cloning fresh ..."
-              # Clone into temp then move to avoid 'destination exists' on non-empty dir
-              if [ -z "$(ls -A . 2>/dev/null)" ]; then
-                git clone https://github.com/iMunib/Stock_analysis_app.git .
-              else
-                echo "Directory not empty but no .git — backing up stray files"
-                mkdir -p /tmp/app_stash
-                # Preserve live state (never overwrite DB/env via git)
-                [ -f data/app.db ] && cp -a data/app.db /tmp/app_stash/app.db || true
-                [ -f .env ] && cp -a .env /tmp/app_stash/.env || true
-                rm -rf ./*
-                rm -rf ./.* 2>/dev/null || true
-                git clone https://github.com/iMunib/Stock_analysis_app.git .
-                [ -f /tmp/app_stash/app.db ] && cp -a /tmp/app_stash/app.db data/app.db || true
-                [ -f /tmp/app_stash/.env ] && cp -a /tmp/app_stash/.env .env || true
-                rm -rf /tmp/app_stash
-              fi
-            else
-              echo "Existing repo — fetching origin/main ..."
-              git fetch origin main
-              # Preserve untracked live files across hard reset
-              git reset --hard origin/main
+              echo "Initializing git repository..."
+              git init
+              git remote add origin https://github.com/iMunib/Stock_analysis_app.git
             fi
 
-            echo "Commit: $(git rev-parse --short HEAD) — $(git log -1 --oneline)"
-            echo "Ensuring data directories exist ..."
-            mkdir -p data/backups
+            echo "Fetching and syncing latest main..."
+            git fetch origin main
+            git reset --hard origin/main
 
-            # Guard: never let a DB-less deploy wipe production state
-            if [ ! -f data/app.db ]; then
-              echo "WARNING: data/app.db not found on server — expected after initial ship_to_oci.ps1."
-              echo "App will cold-boot from seed (720 rows) if compose starts without DB."
-            else
-              echo "data/app.db present — $(du -h data/app.db | cut -f1) — will be preserved (volume mount)."
-            fi
-            if [ ! -f .env ]; then
-              echo "WARNING: .env not found on server — copy .env.example to .env and set OPENROUTER_API_KEY."
-            fi
+            echo "Commit: $(git rev-parse --short HEAD)"
 
-            echo "Rebuilding and restarting containers ..."
+            # Ensure Docker Compose runs cleanly
             docker compose --profile frontend down || true
             docker compose --profile frontend up --build -d
 
-            echo "Waiting for API healthcheck ..."
+            echo "Waiting for healthcheck..."
             for i in $(seq 1 30); do
               if docker compose ps | grep -q "healthy\|Up"; then
-                echo "Containers:"
                 docker compose ps
                 break
               fi
               sleep 2
             done
-            docker compose ps
-            echo "Recent api logs:"
-            docker compose logs api --tail 30 || true
-            echo "=== Deploy complete ==="
+
+            echo "=== Deployment successful ==="
