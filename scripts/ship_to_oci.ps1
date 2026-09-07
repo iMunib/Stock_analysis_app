@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   One-click helper: bootstrap OCI Ubuntu instance + upload DB + upload .env.
@@ -82,7 +82,7 @@ Write-Host "`n=== [1/3] Bootstrapping OCI instance (swap, Docker, firewall) ==="
 if (Test-Path -LiteralPath $DefaultKey) {
   Write-Host "Running spec-compliant bootstrap (exact task command) ..." -ForegroundColor DarkGray
   # shellcheck - exact spec: ssh -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" ubuntu@$OciIp "curl -fsSL https://raw.githubusercontent.com/iMunib/Stock_analysis_app/main/scripts/setup_oci_server.sh -o setup.sh && chmod +x setup.sh && ./setup.sh"
-  & ssh -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" "ubuntu@$OciIp" "curl -fsSL https://raw.githubusercontent.com/iMunib/Stock_analysis_app/main/scripts/setup_oci_server.sh -o setup.sh && chmod +x setup.sh && ./setup.sh"
+  & ssh -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" "ubuntu@$OciIp" "curl -fsSL https://raw.githubusercontent.com/iMunib/Stock_analysis_app/main/scripts/setup_oci_server.sh -o setup.sh; chmod +x setup.sh; ./setup.sh"
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "Spec bootstrap via GitHub raw failed (repo may not yet have pushed script) — falling back to local upload ..."
   } else {
@@ -95,10 +95,10 @@ if (Test-Path -LiteralPath $SetupLocal) {
   Write-Host "Uploading local scripts/setup_oci_server.sh ..." -ForegroundColor DarkGray
   & scp @ScpOpts ($SetupLocal -replace '\\','/') "ubuntu@${OciIp}:/tmp/setup_oci_server.sh"
   if ($LASTEXITCODE -ne 0) { throw "scp setup_oci_server.sh failed" }
-  Invoke-Remote "chmod +x /tmp/setup_oci_server.sh && /tmp/setup_oci_server.sh"
+  Invoke-Remote "chmod +x /tmp/setup_oci_server.sh; /tmp/setup_oci_server.sh"
 } else {
   # Fallback: fetch from GitHub main (after first push)
-  Invoke-Remote "curl -fsSL https://raw.githubusercontent.com/iMunib/Stock_analysis_app/main/scripts/setup_oci_server.sh -o /tmp/setup_oci_server.sh && chmod +x /tmp/setup_oci_server.sh && /tmp/setup_oci_server.sh"
+  Invoke-Remote "curl -fsSL https://raw.githubusercontent.com/iMunib/Stock_analysis_app/main/scripts/setup_oci_server.sh -o /tmp/setup_oci_server.sh; chmod +x /tmp/setup_oci_server.sh; /tmp/setup_oci_server.sh"
 }
 
 # ---------------------------------------------------------------------------
@@ -107,7 +107,8 @@ if (Test-Path -LiteralPath $SetupLocal) {
 Write-Host "`n=== [2/3] Uploading data/app.db ===" -ForegroundColor Green
 if (Test-Path -LiteralPath $DbPath) {
   $DbSize = (Get-Item -LiteralPath $DbPath).Length
-  Write-Host "Local DB: $DbPath ($([math]::Round($DbSize/1MB,1)) MB)" -ForegroundColor DarkGray
+  $mb = [math]::Round($DbSize / 1MB, 1)
+  Write-Host "Local DB: $DbPath ($mb MB)" -ForegroundColor DarkGray
   Invoke-Remote "mkdir -p /home/ubuntu/app/data/backups"
   # Spec-compliant exact command (executed when default key exists):
   # scp -i "C:\Users\RehmanPC\Downloads\ssh-key-2026-09-06.key" "data/app.db" ubuntu@${OciIp}:/home/ubuntu/app/data/app.db
@@ -119,7 +120,7 @@ if (Test-Path -LiteralPath $DbPath) {
     & scp @ScpOpts $DbFwd "ubuntu@${OciIp}:/home/ubuntu/app/data/app.db"
     if ($LASTEXITCODE -ne 0) { throw "scp data/app.db failed" }
   }
-  Invoke-Remote "ls -lh /home/ubuntu/app/data/app.db && sqlite3 /home/ubuntu/app/data/app.db 'PRAGMA integrity_check;' 2>/dev/null | head -1 || echo '(sqlite3 not on host — check deferred to container)'"
+  Invoke-Remote "ls -lh /home/ubuntu/app/data/app.db; sqlite3 /home/ubuntu/app/data/app.db 'PRAGMA integrity_check;' 2>/dev/null | head -1; echo '(sqlite3 not on host — check deferred to container)'"
   Write-Host "DB upload complete." -ForegroundColor Green
 } else {
   Write-Host "Skipped — no local data/app.db" -ForegroundColor Yellow
@@ -140,7 +141,7 @@ if (Test-Path -LiteralPath $EnvPath) {
     & scp @ScpOpts $EnvFwd "ubuntu@${OciIp}:/home/ubuntu/app/.env"
     if ($LASTEXITCODE -ne 0) { throw "scp .env failed" }
   }
-  Invoke-Remote "ls -l /home/ubuntu/app/.env && wc -l /home/ubuntu/app/.env"
+  Invoke-Remote "ls -l /home/ubuntu/app/.env; wc -l /home/ubuntu/app/.env"
   Write-Host ".env upload complete." -ForegroundColor Green
 } else {
   Write-Host "Skipped — no local .env (create from .env.example)" -ForegroundColor Yellow
@@ -156,7 +157,7 @@ All done! Next steps on the OCI host (if not already deployed via GitHub Actions
   ssh -i "$SshKeyFwd" ubuntu@$OciIp
   cd /home/ubuntu/app
   # Clone or update repo (DB and .env are preserved — gitignored)
-  if [ ! -d .git ]; then git clone https://github.com/iMunib/Stock_analysis_app.git .; else git fetch origin main && git reset --hard origin/main; fi
+  if [ ! -d .git ]; then git clone https://github.com/iMunib/Stock_analysis_app.git .; else git fetch origin main; git reset --hard origin/main; fi
   docker compose --profile frontend up --build -d
   docker compose ps
   docker compose logs api --tail 50
